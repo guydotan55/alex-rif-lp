@@ -1,526 +1,273 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>צ'יבורשקה בישראל — רוסית לילדים</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;700;900&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>צ׳יבורשקה בישראל - רוסית לילדים</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --navy: #0d2240;
+    --gold: #f5c842;
+    --gold-soft: #ffe680;
+    --cream: #fdf6e3;
+    --text-light: #e8dfc8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--navy); color: var(--cream); font-family: 'Assistant', sans-serif; direction: rtl; overflow-x: hidden; min-height: 100vh; }
 
-    html {
-      direction: rtl;
-    }
+  .bg-letters { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .bg-letter { position: absolute; font-family: 'Secular One', sans-serif; color: rgba(245,200,66,0.08); animation: floatLetter linear infinite; user-select: none; }
+  @keyframes floatLetter {
+    0% { transform: translateY(110vh) rotate(0deg); opacity: 0; }
+    10% { opacity: 1; } 90% { opacity: 1; }
+    100% { transform: translateY(-15vh) rotate(20deg); opacity: 0; }
+  }
 
-    body {
-      direction: rtl;
-      font-family: 'Rubik', sans-serif;
-      background: linear-gradient(160deg, #0d1b3e 0%, #1a2f6b 60%, #0f2250 100%);
-      min-height: 100vh;
-      color: #fff;
-      overflow-x: hidden;
-      position: relative;
-    }
+  .container { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 0 20px; }
 
-    /* ===== Floating letters background ===== */
-    #floating-letters {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
-      overflow: hidden;
-    }
+  .hero { min-height: 100vh; display: flex; align-items: center; padding: 60px 0 40px; }
+  .hero-inner { display: flex; align-items: center; gap: 40px; width: 100%; }
+  .hero-text { flex: 1; }
 
-    #floating-letters span {
-      position: absolute;
-      color: #c8d8ff;
-      font-family: 'Rubik', sans-serif;
-      font-weight: 700;
-      animation: floatUp linear infinite;
-      user-select: none;
-    }
+  .badge { display: inline-block; background: var(--gold); color: var(--navy); font-family: 'Secular One', sans-serif; font-size: 0.85rem; padding: 6px 16px; border-radius: 20px; margin-bottom: 20px; animation: fadeInDown 0.8s ease both; }
+  .hero-title { font-family: 'Secular One', sans-serif; font-size: clamp(2.2rem, 5vw, 3.5rem); line-height: 1.15; color: #fff; margin-bottom: 12px; animation: fadeInDown 0.9s ease 0.1s both; }
+  .hero-title .highlight { color: var(--gold); text-shadow: 0 0 30px rgba(245,200,66,0.5); }
+  .hero-subtitle { font-size: clamp(1.1rem, 2.5vw, 1.4rem); font-weight: 700; color: var(--gold-soft); margin-bottom: 24px; animation: fadeInDown 0.9s ease 0.2s both; }
+  .hero-body { font-size: 1.05rem; line-height: 1.75; color: var(--text-light); max-width: 520px; animation: fadeInDown 0.9s ease 0.3s both; }
 
-    @keyframes floatUp {
-      0%   { transform: translateY(0) rotate(0deg); opacity: var(--op-start); }
-      50%  { opacity: var(--op-peak); }
-      100% { transform: translateY(-110vh) rotate(20deg); opacity: 0; }
-    }
+  .hero-mascot { flex-shrink: 0; width: 200px; display: flex; align-items: center; justify-content: center; animation: fadeInRight 1s ease 0.4s both; }
+  .mascot-circle { width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #8b5e3c, #3d1f0a); display: flex; align-items: center; justify-content: center; font-size: 7rem; border: 3px solid rgba(245,200,66,0.4); animation: pulse 3s ease-in-out infinite; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 60px rgba(245,200,66,0.3), 0 0 120px rgba(245,200,66,0.1); }
+    50% { box-shadow: 0 0 80px rgba(245,200,66,0.5), 0 0 160px rgba(245,200,66,0.2); }
+  }
 
-    /* ===== Layout ===== */
-    .page-wrapper {
-      position: relative;
-      z-index: 1;
-      max-width: 480px;
-      margin: 0 auto;
-      padding: 24px 16px 48px;
-    }
+  .divider { height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); margin: 0 0 60px; opacity: 0.4; }
+  .section { padding: 60px 0; }
+  .section-title { font-family: 'Secular One', sans-serif; font-size: clamp(1.6rem, 3vw, 2.2rem); color: var(--gold); margin-bottom: 36px; text-align: center; }
 
-    /* ===== Hero card ===== */
-    .hero-card {
-      background: #f5f0d8;
-      border-radius: 24px;
-      padding: 28px 24px 0;
-      text-align: center;
-      overflow: hidden;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.35);
-    }
+  .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 50px; }
+  .feature-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(245,200,66,0.15); border-radius: 16px; padding: 28px 22px; text-align: center; transition: transform 0.3s, border-color 0.3s, background 0.3s; }
+  .feature-card:hover { transform: translateY(-4px); border-color: rgba(245,200,66,0.4); background: rgba(255,255,255,0.07); }
+  .feature-icon { font-size: 2.4rem; margin-bottom: 14px; display: block; }
+  .feature-title { font-family: 'Secular One', sans-serif; font-size: 1.05rem; color: #fff; margin-bottom: 8px; }
+  .feature-desc { font-size: 0.9rem; color: var(--text-light); line-height: 1.6; }
 
-    .hero-title {
-      font-size: 2.4rem;
-      font-weight: 900;
-      color: #1a1a1a;
-      line-height: 1.15;
-      margin-bottom: 8px;
-      letter-spacing: -0.5px;
-    }
+  .price-box { background: linear-gradient(135deg, rgba(245,200,66,0.12), rgba(245,200,66,0.04)); border: 2px solid rgba(245,200,66,0.35); border-radius: 20px; padding: 36px; text-align: center; margin: 40px 0; }
+  .price-label { font-size: 1rem; color: var(--text-light); margin-bottom: 8px; }
+  .price-amount { font-family: 'Secular One', sans-serif; font-size: 3rem; color: var(--gold); text-shadow: 0 0 20px rgba(245,200,66,0.4); }
+  .price-period { font-size: 1rem; color: var(--text-light); }
 
-    .hero-subtitle {
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: #2a2a2a;
-      margin-bottom: 20px;
-    }
+  .cta-btn { display: block; width: 100%; max-width: 360px; margin: 0 auto 20px; background: var(--gold); color: var(--navy); font-family: 'Secular One', sans-serif; font-size: 1.2rem; padding: 18px 32px; border: none; border-radius: 50px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 6px 30px rgba(245,200,66,0.35); text-align: center; }
+  .cta-btn:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 10px 40px rgba(245,200,66,0.5); }
 
-    .hero-cta-btn {
-      display: inline-block;
-      background: #1a1a2e;
-      color: #fff;
-      font-family: 'Rubik', sans-serif;
-      font-size: 1.1rem;
-      font-weight: 700;
-      padding: 14px 36px;
-      border-radius: 50px;
-      border: none;
-      cursor: pointer;
-      margin-bottom: 24px;
-      transition: background 0.2s, transform 0.15s;
-      text-decoration: none;
-    }
+  .signup-form { display: none; max-width: 460px; margin: 0 auto; padding: 36px; background: rgba(255,255,255,0.04); border: 1px solid rgba(245,200,66,0.2); border-radius: 20px; animation: fadeInUp 0.5s ease both; }
+  .signup-form.visible { display: block; }
+  .form-label { display: block; font-size: 1rem; color: var(--text-light); margin-bottom: 12px; font-weight: 600; }
+  .form-input { width: 100%; padding: 14px 18px; background: rgba(255,255,255,0.07); border: 1.5px solid rgba(245,200,66,0.25); border-radius: 12px; color: #fff; font-size: 16px; font-family: 'Assistant', sans-serif; direction: ltr; text-align: left; outline: none; transition: border-color 0.2s; margin-bottom: 20px; }
+  .form-input:focus { border-color: var(--gold); }
+  .form-input::placeholder { color: rgba(255,255,255,0.3); }
+  .submit-btn { display: block; width: 100%; background: var(--gold); color: var(--navy); font-family: 'Secular One', sans-serif; font-size: 1.1rem; padding: 15px; border: none; border-radius: 12px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+  .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(245,200,66,0.4); }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-    .hero-cta-btn:hover,
-    .hero-cta-btn:active {
-      background: #0d1b3e;
-      transform: scale(1.03);
-    }
+  .thankyou { display: none; max-width: 460px; margin: 0 auto; padding: 40px; background: rgba(245,200,66,0.08); border: 1.5px solid rgba(245,200,66,0.35); border-radius: 20px; text-align: center; animation: fadeInUp 0.5s ease both; }
+  .thankyou.visible { display: block; }
+  .thankyou-icon { font-size: 3rem; margin-bottom: 16px; }
+  .thankyou h3 { font-family: 'Secular One', sans-serif; font-size: 1.4rem; color: var(--gold); margin-bottom: 14px; }
+  .thankyou p { color: var(--text-light); line-height: 1.7; font-size: 1rem; }
 
-    .hero-image-wrap {
-      margin: 0 -24px;
-      line-height: 0;
-    }
+  footer { text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.25); font-size: 0.85rem; position: relative; z-index: 1; }
 
-    .hero-image-wrap img {
-      width: 100%;
-      display: block;
-      border-radius: 0 0 24px 24px;
-      object-fit: cover;
-    }
+  @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeInRight { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* ===== Body section ===== */
-    .body-section {
-      margin-top: 32px;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-    }
-
-    .body-paragraph {
-      font-size: 1rem;
-      font-weight: 400;
-      line-height: 1.7;
-      color: #dde8ff;
-      text-align: right;
-    }
-
-    /* ===== Webinar card ===== */
-    .webinar-card {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(200,216,255,0.25);
-      border-radius: 18px;
-      padding: 20px;
-      margin-top: 8px;
-      backdrop-filter: blur(6px);
-    }
-
-    .webinar-card-text {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: #c8d8ff;
-      line-height: 1.6;
-      text-align: center;
-    }
-
-    /* ===== Price badge ===== */
-    .price-badge-wrap {
-      display: flex;
-      justify-content: center;
-      margin-top: 6px;
-    }
-
-    .price-badge {
-      background: linear-gradient(135deg, #f7c948 0%, #f0a500 100%);
-      color: #1a1a00;
-      font-size: 1rem;
-      font-weight: 900;
-      padding: 10px 28px;
-      border-radius: 50px;
-      text-align: center;
-      box-shadow: 0 4px 16px rgba(240,165,0,0.35);
-    }
-
-    /* ===== Form section ===== */
-    .form-section {
-      margin-top: 36px;
-      background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(200,216,255,0.2);
-      border-radius: 20px;
-      padding: 28px 20px;
-      backdrop-filter: blur(8px);
-    }
-
-    .form-title {
-      font-size: 1.5rem;
-      font-weight: 900;
-      color: #fff;
-      text-align: center;
-      margin-bottom: 20px;
-    }
-
-    .form-group {
-      margin-bottom: 14px;
-    }
-
-    .form-label {
-      display: block;
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: #c8d8ff;
-      margin-bottom: 6px;
-      text-align: right;
-    }
-
-    .form-input {
-      width: 100%;
-      padding: 14px 16px;
-      font-size: 16px; /* prevents iOS auto-zoom */
-      font-family: 'Rubik', sans-serif;
-      font-weight: 400;
-      background: rgba(255,255,255,0.12);
-      border: 1.5px solid rgba(200,216,255,0.3);
-      border-radius: 12px;
-      color: #fff;
-      direction: ltr;
-      text-align: left;
-      outline: none;
-      transition: border-color 0.2s, background 0.2s;
-    }
-
-    .form-input::placeholder {
-      color: rgba(200,216,255,0.5);
-    }
-
-    .form-input:focus {
-      border-color: #c8d8ff;
-      background: rgba(255,255,255,0.18);
-    }
-
-    .submit-btn {
-      width: 100%;
-      background: #f7c948;
-      color: #1a1a00;
-      font-family: 'Rubik', sans-serif;
-      font-size: 1.1rem;
-      font-weight: 900;
-      padding: 15px;
-      border: none;
-      border-radius: 50px;
-      cursor: pointer;
-      margin-top: 8px;
-      transition: background 0.2s, transform 0.15s;
-    }
-
-    .submit-btn:hover:not(:disabled) {
-      background: #f0a500;
-      transform: scale(1.02);
-    }
-
-    .submit-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .form-error {
-      color: #ff8a8a;
-      font-size: 0.88rem;
-      font-weight: 700;
-      text-align: center;
-      margin-top: 10px;
-      display: none;
-    }
-
-    /* ===== Thank you message ===== */
-    .thankyou-msg {
-      display: none;
-      text-align: center;
-      padding: 12px 0;
-    }
-
-    .thankyou-msg p {
-      font-size: 1rem;
-      font-weight: 700;
-      color: #b8ffcc;
-      line-height: 1.7;
-    }
-
-    .thankyou-icon {
-      font-size: 2.5rem;
-      margin-bottom: 12px;
-    }
-
-    /* ===== Footer ===== */
-    .footer {
-      text-align: center;
-      margin-top: 36px;
-      font-size: 0.82rem;
-      color: rgba(200,216,255,0.45);
-    }
-  </style>
+  @media (max-width: 600px) {
+    .hero-inner { flex-direction: column-reverse; text-align: center; }
+    .hero-body { margin: 0 auto; }
+    .mascot-circle { width: 120px; height: 120px; font-size: 4.5rem; }
+  }
+</style>
 </head>
 <body>
 
-  <!-- Floating background letters -->
-  <div id="floating-letters"></div>
+<div class="bg-letters" id="bgLetters"></div>
 
-  <div class="page-wrapper">
-
-    <!-- Hero card -->
-    <div class="hero-card">
-      <h1 class="hero-title">צ'יבורשקה בישראל</h1>
-      <p class="hero-subtitle">רוסית לילדים מגיע אליכם הביתה!</p>
-      <button class="hero-cta-btn" id="heroCta">אשמח לשמוע עוד</button>
-      <div class="hero-image-wrap">
-        <img src="רוסית לילדים.jpeg" alt="צ'יבורשקה וילד שמח לומד רוסית">
-      </div>
-    </div>
-
-    <!-- Body text -->
-    <div class="body-section">
-      <p class="body-paragraph">
-        רוצים שהילדים יוכלו לנהל שיחה ברוסית עם סבתא וסבא?
-      </p>
-      <p class="body-paragraph">
-        אנחנו מזמינים אתכם להעניק להם את נכסי צאן הברזל של התרבות שלנו, כחלק בלתי נפרד מהישראליות המגוונת שלהם.
-      </p>
-      <p class="body-paragraph">
-        פורמט חדשני ללימוד השפה באופן חווייתי מגיע לישראל — כל מה שאתם צריכים לעשות זה להתחבר לוובינר כיפי לשעה שבועית ולתת לילדים להנות.
-      </p>
-
-      <!-- Webinar info card -->
-      <div class="webinar-card">
-        <p class="webinar-card-text">
-          וובינר שבועי | מפגש חווייתי דו-לשוני לילדים<br>
-          לגילאי 5–10<br>
-          לימוד וחיזוק הרוסית דרך הצגות, משחקים, סיפורים וכיף
+<div class="container">
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-text">
+        <div class="badge">🇷🇺 🇮🇱 וובינר שבועי לילדים</div>
+        <h1 class="hero-title"><span class="highlight">צ׳יבורשקה</span><br>בישראל</h1>
+        <p class="hero-subtitle">רוסית לילדים — מגיע אליכם הביתה!</p>
+        <p class="hero-body">
+          רוצים שהילדים יוכלו לנהל שיחה ברוסית עם סבתא וסבא?<br><br>
+          אנחנו מזמינים אתכם להעניק להם את נכסי צאן הברזל של התרבות שלנו, כחלק בלתי נפרד מהישראליות המגוונת שלהם.
         </p>
       </div>
-
-      <!-- Price badge -->
-      <div class="price-badge-wrap">
-        <div class="price-badge">₪100 לחודש | דמי חברות בקהילה</div>
+      <div class="hero-mascot">
+        <div class="mascot-circle">🐻</div>
       </div>
     </div>
+  </section>
 
-    <!-- Lead form -->
-    <div class="form-section" id="formSection">
-      <h2 class="form-title">אשמח לשמוע עוד!</h2>
+  <div class="divider"></div>
 
-      <div id="formWrap">
-        <div class="form-group">
-          <label class="form-label" for="emailInput">כתובת מייל</label>
-          <input
-            type="email"
-            id="emailInput"
-            class="form-input"
-            placeholder="your@email.com"
-            autocomplete="email"
-            inputmode="email"
-          >
-        </div>
-        <button class="submit-btn" id="submitBtn">אישור</button>
-        <p class="form-error" id="formError"></p>
-      </div>
-
-      <div class="thankyou-msg" id="thankyouMsg">
-        <div class="thankyou-icon">✓</div>
-        <p>התקבל בהצלחה! אנחנו בוחנים כרגע את כמות המעוניינים במוצר. במידה ותהיה היענות מספקת, ניצור איתך קשר.</p>
-      </div>
+  <section class="section">
+    <h2 class="section-title">מה זה בדיוק?</h2>
+    <div class="features-grid">
+      <div class="feature-card"><span class="feature-icon">🎭</span><div class="feature-title">הצגות וסיפורים</div><div class="feature-desc">תוכן עשיר בשפה הרוסית שמגיע ישר מהמסורת</div></div>
+      <div class="feature-card"><span class="feature-icon">🎮</span><div class="feature-title">משחקים וכיף</div><div class="feature-desc">לימוד דרך משחק — כי ילדים לומדים כשהם שמחים</div></div>
+      <div class="feature-card"><span class="feature-icon">🌍</span><div class="feature-title">דו לשוני</div><div class="feature-desc">עברית ורוסית ביחד — גשר בין שתי התרבויות</div></div>
+      <div class="feature-card"><span class="feature-icon">📅</span><div class="feature-title">שעה בשבוע</div><div class="feature-desc">וובינר שבועי נוח מהבית, ללא נסיעות ולחץ</div></div>
     </div>
+    <div style="text-align:center; background: rgba(255,255,255,0.03); border-radius:16px; padding: 28px; border: 1px solid rgba(245,200,66,0.12);">
+      <p style="font-size: 1.1rem; line-height: 1.8; color: var(--text-light);">
+        <strong style="color:#fff;">מפגש חווייתי שבועי דו לשוני</strong> לילדים בגילאי <strong style="color: var(--gold);">5–10</strong><br>
+        ללימוד וחיזוק השפה הרוסית דרך הצגות, משחקים, סיפורים וכיף — כל מה שצריך זה להתחבר!
+      </p>
+    </div>
+  </section>
 
-    <footer class="footer">
-      <p>© 2026 צ'יבורשקה בישראל</p>
-    </footer>
-
+  <div class="price-box">
+    <div class="price-label">דמי חברות בקהילה</div>
+    <div class="price-amount">₪100</div>
+    <div class="price-period">לחודש בלבד</div>
   </div>
 
-  <!-- Supabase SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    // ===== Supabase init =====
-    const SUPABASE_URL = 'https://uaspcafukqvgiztzdnfu.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhc3BjYWZ1a3F2Z2l6dHpkbmZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MTA1NzcsImV4cCI6MjA4NzI4NjU3N30.BOqlLF8TQ7VabhsOrSgXyoLIwHCZP8M-LRt7Ok6FbWE';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  <section class="section" style="padding-top: 0;">
+    <button class="cta-btn" id="cta-btn" onclick="handleCtaClick()">😊 אשמח לשמוע עוד</button>
 
-    // ===== Session ID =====
-    const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    <div class="signup-form" id="signup-form">
+      <label class="form-label">מה כתובת המייל שלך?</label>
+      <input type="email" class="form-input" id="email-input" placeholder="your@email.com" autocomplete="email" inputmode="email">
+      <button class="submit-btn" id="submit-btn" onclick="submitForm()">אישור ✓</button>
+    </div>
 
-    // ===== Page load time =====
-    const PAGE_LOAD_TIME = Date.now();
+    <div class="thankyou" id="thankyou">
+      <div class="thankyou-icon">✨</div>
+      <h3>התקבל בהצלחה!</h3>
+      <p>אנחנו בוחנים כרגע את כמות המעוניינים במוצר.<br>במידה ותהיה היענות מספקת, ניצור איתך קשר.</p>
+    </div>
+  </section>
+</div>
 
-    // ===== Silent analytics helper =====
-    async function trackEvent(eventType, eventData) {
-      try {
-        await supabase.from('analytics_events').insert({
-          event_type: eventType,
-          session_id: SESSION_ID,
-          source: 'cheburashka',
-          event_data: eventData
-        });
-      } catch (e) {
-        // silent — never block UX
-      }
+<footer><p>צ׳יבורשקה בישראל © 2026 · רוסית לילדים מגיע אליכם הביתה</p></footer>
+
+<script>
+  // ── Supabase init ──────────────────────────────────────────────────
+  const SUPABASE_URL = 'https://uaspcafukqvgiztzdnfu.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhc3BjYWZ1a3F2Z2l6dHpkbmZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MTA1NzcsImV4cCI6MjA4NzI4NjU3N30.BOqlLF8TQ7VabhsOrSgXyoLIwHCZP8M-LRt7Ok6FbWE';
+  const { createClient } = supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ── Session & timing ───────────────────────────────────────────────
+  const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const PAGE_START = Date.now();
+
+  // ── Silent analytics helper ────────────────────────────────────────
+  async function trackEvent(eventType, eventData) {
+    try {
+      await db.from('analytics_events').insert({
+        event_type: eventType,
+        event_data: eventData,
+        session_id: SESSION_ID,
+        source: 'cheburashka'
+      });
+    } catch (e) { /* silent */ }
+  }
+
+  // ── Page view ─────────────────────────────────────────────────────
+  trackEvent('page_view', { referrer: document.referrer || 'direct', user_agent: navigator.userAgent });
+
+  // ── Time on page (on leave) ────────────────────────────────────────
+  window.addEventListener('pagehide', () => {
+    const seconds = Math.round((Date.now() - PAGE_START) / 1000);
+    fetch(SUPABASE_URL + '/rest/v1/analytics_events', {
+      method: 'POST',
+      keepalive: true,
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ event_type: 'time_on_page', event_data: { seconds }, session_id: SESSION_ID, source: 'cheburashka' })
+    });
+  });
+
+  // ── CTA click ─────────────────────────────────────────────────────
+  async function handleCtaClick() {
+    trackEvent('button_click', { button: 'hero_cta' });
+    document.getElementById('cta-btn').style.display = 'none';
+    const form = document.getElementById('signup-form');
+    form.classList.add('visible');
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // ── Submit email ───────────────────────────────────────────────────
+  async function submitForm() {
+    const emailInput = document.getElementById('email-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const email = emailInput.value.trim();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      emailInput.style.borderColor = '#ff6b6b';
+      emailInput.placeholder = 'נא להזין כתובת מייל תקינה';
+      return;
     }
 
-    // ===== Page view =====
-    trackEvent('page_view', {
-      referrer: document.referrer || null,
-      user_agent: navigator.userAgent
-    });
+    trackEvent('button_click', { button: 'submit' });
 
-    // ===== Time on page (unload) =====
-    window.addEventListener('pagehide', function() {
-      const seconds = Math.round((Date.now() - PAGE_LOAD_TIME) / 1000);
-      const body = JSON.stringify({
-        event_type: 'time_on_page',
-        session_id: SESSION_ID,
-        source: 'cheburashka',
-        event_data: { seconds }
-      });
-      fetch(SUPABASE_URL + '/rest/v1/analytics_events', {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שולח...';
+
+    try {
+      const { error } = await db.from('leads').insert({ email, source: 'cheburashka' });
+      if (error) throw error;
+
+      trackEvent('lead_captured', { email_domain: email.split('@')[1] });
+
+      // Send welcome email (fire-and-forget)
+      fetch('/api/send-email', {
         method: 'POST',
-        keepalive: true,
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-          'Prefer': 'return=minimal'
-        },
-        body: body
-      });
-    });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      }).catch(() => {});
 
-    // ===== Hero CTA button =====
-    document.getElementById('heroCta').addEventListener('click', function() {
-      trackEvent('button_click', { button: 'hero_cta' }); // event_data
-      document.getElementById('formSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    } catch (e) {
+      console.warn('Submit error:', e);
+    }
 
-    // ===== Form submit =====
-    document.getElementById('submitBtn').addEventListener('click', async function() {
-      const emailInput = document.getElementById('emailInput');
-      const submitBtn = document.getElementById('submitBtn');
-      const formError = document.getElementById('formError');
-      const email = emailInput.value.trim();
+    // Always show thank you
+    document.getElementById('signup-form').style.display = 'none';
+    const ty = document.getElementById('thankyou');
+    ty.classList.add('visible');
+    ty.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 
-      // Track click regardless of validation
-      trackEvent('button_click', { button: 'submit' });
+  document.getElementById('email-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') submitForm();
+    this.style.borderColor = '';
+  });
 
-      // Reset error
-      formError.style.display = 'none';
-      formError.textContent = '';
-
-      // Validate
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        formError.textContent = 'אנא הזינו כתובת מייל תקינה.';
-        formError.style.display = 'block';
-        return;
-      }
-
-      // Disable button
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'שולח...';
-
-      try {
-        const { error } = await supabase.from('leads').insert({
-          email: email,
-          source: 'cheburashka'
-        });
-
-        if (error) throw error;
-
-        // Track lead captured
-        const emailDomain = email.split('@')[1];
-        trackEvent('lead_captured', { email_domain: emailDomain });
-
-        // Send welcome email (fire-and-forget — don't block UX)
-        fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        }).catch(() => {}); // silent fail
-
-        // Show thank you
-        document.getElementById('formWrap').style.display = 'none';
-        document.getElementById('thankyouMsg').style.display = 'block';
-
-      } catch (err) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'אישור';
-        formError.textContent = 'משהו השתבש. נסה שוב.';
-        formError.style.display = 'block';
-      }
-    });
-
-    // ===== Floating letters =====
-    (function generateFloatingLetters() {
-      const hebrewLetters = 'אבגדהוזחטיכלמנסעפצקרשת';
-      const russianLetters = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ';
-      const allLetters = (hebrewLetters + russianLetters).split('');
-      const container = document.getElementById('floating-letters');
-
-      for (let i = 0; i < 30; i++) {
-        const span = document.createElement('span');
-        const letter = allLetters[Math.floor(Math.random() * allLetters.length)];
-        span.textContent = letter;
-
-        const leftPct = Math.random() * 100;
-        // Start from a random vertical position so not all emerge from bottom
-        const startTopPct = 20 + Math.random() * 100; // 20% to 120% of viewport
-        const fontSize = 14 + Math.floor(Math.random() * 27); // 14–40px
-        const duration = 4 + Math.random() * 6; // 4–10s
-        const delay = -(Math.random() * duration); // stagger by starting mid-cycle
-        const opStart = (0.08 + Math.random() * 0.10).toFixed(2);
-        const opPeak  = (0.12 + Math.random() * 0.06).toFixed(2);
-
-        span.style.cssText = `
-          left: ${leftPct}%;
-          top: ${startTopPct}%;
-          font-size: ${fontSize}px;
-          animation-duration: ${duration.toFixed(1)}s;
-          animation-delay: ${delay.toFixed(1)}s;
-          --op-start: ${opStart};
-          --op-peak: ${opPeak};
-          opacity: ${opStart};
-        `;
-
-        container.appendChild(span);
-      }
-    })();
-  </script>
+  // ── Background letters ─────────────────────────────────────────────
+  const letters = ['א','ב','ג','ד','ה','ו','ז','ת','А','Б','В','Г','Д','Е','З','И','К','Л','М','Н','П','Р','С','Т'];
+  const bgContainer = document.getElementById('bgLetters');
+  for (let i = 0; i < 35; i++) {
+    const el = document.createElement('div');
+    el.className = 'bg-letter';
+    el.textContent = letters[Math.floor(Math.random() * letters.length)];
+    el.style.left = Math.random() * 100 + '%';
+    el.style.fontSize = (Math.random() * 40 + 18) + 'px';
+    el.style.animationDuration = (Math.random() * 20 + 15) + 's';
+    el.style.animationDelay = -(Math.random() * 30) + 's';
+    bgContainer.appendChild(el);
+  }
+</script>
 </body>
 </html>

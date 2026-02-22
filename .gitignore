@@ -1,3 +1,7 @@
+# Project-specific exclusions
+.claude/
+docs/plans/
+
 # Logs
 logs
 *.log

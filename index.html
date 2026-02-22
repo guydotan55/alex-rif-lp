@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>צ'יבורשקה בישראל — רוסית לילדים</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      direction: rtl;
+    }
+
+    body {
+      direction: rtl;
+      font-family: 'Rubik', sans-serif;
+      background: linear-gradient(160deg, #0d1b3e 0%, #1a2f6b 60%, #0f2250 100%);
+      min-height: 100vh;
+      color: #fff;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* ===== Floating letters background ===== */
+    #floating-letters {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    #floating-letters span {
+      position: absolute;
+      color: #c8d8ff;
+      font-family: 'Rubik', sans-serif;
+      font-weight: 700;
+      animation: floatUp linear infinite;
+      user-select: none;
+    }
+
+    @keyframes floatUp {
+      0%   { transform: translateY(0) rotate(0deg); opacity: var(--op-start); }
+      50%  { opacity: var(--op-peak); }
+      100% { transform: translateY(-110vh) rotate(20deg); opacity: 0; }
+    }
+
+    /* ===== Layout ===== */
+    .page-wrapper {
+      position: relative;
+      z-index: 1;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    /* ===== Hero card ===== */
+    .hero-card {
+      background: #f5f0d8;
+      border-radius: 24px;
+      padding: 28px 24px 0;
+      text-align: center;
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.35);
+    }
+
+    .hero-title {
+      font-size: 2.4rem;
+      font-weight: 900;
+      color: #1a1a1a;
+      line-height: 1.15;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .hero-subtitle {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #2a2a2a;
+      margin-bottom: 20px;
+    }
+
+    .hero-cta-btn {
+      display: inline-block;
+      background: #1a1a2e;
+      color: #fff;
+      font-family: 'Rubik', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 14px 36px;
+      border-radius: 50px;
+      border: none;
+      cursor: pointer;
+      margin-bottom: 24px;
+      transition: background 0.2s, transform 0.15s;
+      text-decoration: none;
+    }
+
+    .hero-cta-btn:hover,
+    .hero-cta-btn:active {
+      background: #0d1b3e;
+      transform: scale(1.03);
+    }
+
+    .hero-image-wrap {
+      margin: 0 -24px;
+      line-height: 0;
+    }
+
+    .hero-image-wrap img {
+      width: 100%;
+      display: block;
+      border-radius: 0 0 24px 24px;
+      object-fit: cover;
+    }
+
+    /* ===== Body section ===== */
+    .body-section {
+      margin-top: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .body-paragraph {
+      font-size: 1rem;
+      font-weight: 400;
+      line-height: 1.7;
+      color: #dde8ff;
+      text-align: right;
+    }
+
+    /* ===== Webinar card ===== */
+    .webinar-card {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(200,216,255,0.25);
+      border-radius: 18px;
+      padding: 20px;
+      margin-top: 8px;
+      backdrop-filter: blur(6px);
+    }
+
+    .webinar-card-text {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #c8d8ff;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    /* ===== Price badge ===== */
+    .price-badge-wrap {
+      display: flex;
+      justify-content: center;
+      margin-top: 6px;
+    }
+
+    .price-badge {
+      background: linear-gradient(135deg, #f7c948 0%, #f0a500 100%);
+      color: #1a1a00;
+      font-size: 1rem;
+      font-weight: 900;
+      padding: 10px 28px;
+      border-radius: 50px;
+      text-align: center;
+      box-shadow: 0 4px 16px rgba(240,165,0,0.35);
+    }
+
+    /* ===== Form section ===== */
+    .form-section {
+      margin-top: 36px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(200,216,255,0.2);
+      border-radius: 20px;
+      padding: 28px 20px;
+      backdrop-filter: blur(8px);
+    }
+
+    .form-title {
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #c8d8ff;
+      margin-bottom: 6px;
+      text-align: right;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 16px; /* prevents iOS auto-zoom */
+      font-family: 'Rubik', sans-serif;
+      font-weight: 400;
+      background: rgba(255,255,255,0.12);
+      border: 1.5px solid rgba(200,216,255,0.3);
+      border-radius: 12px;
+      color: #fff;
+      direction: ltr;
+      text-align: left;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .form-input::placeholder {
+      color: rgba(200,216,255,0.5);
+    }
+
+    .form-input:focus {
+      border-color: #c8d8ff;
+      background: rgba(255,255,255,0.18);
+    }
+
+    .submit-btn {
+      width: 100%;
+      background: #f7c948;
+      color: #1a1a00;
+      font-family: 'Rubik', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 900;
+      padding: 15px;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s, transform 0.15s;
+    }
+
+    .submit-btn:hover:not(:disabled) {
+      background: #f0a500;
+      transform: scale(1.02);
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .form-error {
+      color: #ff8a8a;
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-align: center;
+      margin-top: 10px;
+      display: none;
+    }
+
+    /* ===== Thank you message ===== */
+    .thankyou-msg {
+      display: none;
+      text-align: center;
+      padding: 12px 0;
+    }
+
+    .thankyou-msg p {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #b8ffcc;
+      line-height: 1.7;
+    }
+
+    .thankyou-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+    }
+
+    /* ===== Footer ===== */
+    .footer {
+      text-align: center;
+      margin-top: 36px;
+      font-size: 0.82rem;
+      color: rgba(200,216,255,0.45);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Floating background letters -->
+  <div id="floating-letters"></div>
+
+  <div class="page-wrapper">
+
+    <!-- Hero card -->
+    <div class="hero-card">
+      <h1 class="hero-title">צ'יבורשקה בישראל</h1>
+      <p class="hero-subtitle">רוסית לילדים מגיע אליכם הביתה!</p>
+      <button class="hero-cta-btn" id="heroCta">אשמח לשמוע עוד</button>
+      <div class="hero-image-wrap">
+        <img src="רוסית לילדים.jpeg" alt="צ'יבורשקה וילד שמח לומד רוסית">
+      </div>
+    </div>
+
+    <!-- Body text -->
+    <div class="body-section">
+      <p class="body-paragraph">
+        רוצים שהילדים יוכלו לנהל שיחה ברוסית עם סבתא וסבא?
+      </p>
+      <p class="body-paragraph">
+        אנחנו מזמינים אתכם להעניק להם את נכסי צאן הברזל של התרבות שלנו, כחלק בלתי נפרד מהישראליות המגוונת שלהם.
+      </p>
+      <p class="body-paragraph">
+        פורמט חדשני ללימוד השפה באופן חווייתי מגיע לישראל — כל מה שאתם צריכים לעשות זה להתחבר לוובינר כיפי לשעה שבועית ולתת לילדים להנות.
+      </p>
+
+      <!-- Webinar info card -->
+      <div class="webinar-card">
+        <p class="webinar-card-text">
+          וובינר שבועי | מפגש חווייתי דו-לשוני לילדים<br>
+          לגילאי 5–10<br>
+          לימוד וחיזוק הרוסית דרך הצגות, משחקים, סיפורים וכיף
+        </p>
+      </div>
+
+      <!-- Price badge -->
+      <div class="price-badge-wrap">
+        <div class="price-badge">₪100 לחודש | דמי חברות בקהילה</div>
+      </div>
+    </div>
+
+    <!-- Lead form -->
+    <div class="form-section" id="formSection">
+      <h2 class="form-title">אשמח לשמוע עוד!</h2>
+
+      <div id="formWrap">
+        <div class="form-group">
+          <label class="form-label" for="emailInput">כתובת מייל</label>
+          <input
+            type="email"
+            id="emailInput"
+            class="form-input"
+            placeholder="your@email.com"
+            autocomplete="email"
+            inputmode="email"
+          >
+        </div>
+        <button class="submit-btn" id="submitBtn">אישור</button>
+        <p class="form-error" id="formError"></p>
+      </div>
+
+      <div class="thankyou-msg" id="thankyouMsg">
+        <div class="thankyou-icon">✓</div>
+        <p>התקבל בהצלחה! אנחנו בוחנים כרגע את כמות המעוניינים במוצר. במידה ותהיה היענות מספקת, ניצור איתך קשר.</p>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>© 2026 צ'יבורשקה בישראל</p>
+    </footer>
+
+  </div>
+
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // ===== Supabase init =====
+    const SUPABASE_URL = 'https://uaspcafukqvgiztzdnfu.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhc3BjYWZ1a3F2Z2l6dHpkbmZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MTA1NzcsImV4cCI6MjA4NzI4NjU3N30.BOqlLF8TQ7VabhsOrSgXyoLIwHCZP8M-LRt7Ok6FbWE';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ===== Session ID =====
+    const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+    // ===== Page load time =====
+    const PAGE_LOAD_TIME = Date.now();
+
+    // ===== Silent analytics helper =====
+    async function trackEvent(eventType, eventData) {
+      try {
+        await supabase.from('analytics_events').insert({
+          event_type: eventType,
+          session_id: SESSION_ID,
+          source: 'cheburashka',
+          event_data: eventData
+        });
+      } catch (e) {
+        // silent — never block UX
+      }
+    }
+
+    // ===== Page view =====
+    trackEvent('page_view', {
+      referrer: document.referrer || null,
+      user_agent: navigator.userAgent
+    });
+
+    // ===== Time on page (unload) =====
+    window.addEventListener('pagehide', function() {
+      const seconds = Math.round((Date.now() - PAGE_LOAD_TIME) / 1000);
+      const body = JSON.stringify({
+        event_type: 'time_on_page',
+        session_id: SESSION_ID,
+        source: 'cheburashka',
+        event_data: { seconds }
+      });
+      fetch(SUPABASE_URL + '/rest/v1/analytics_events', {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+          'Prefer': 'return=minimal'
+        },
+        body: body
+      });
+    });
+
+    // ===== Hero CTA button =====
+    document.getElementById('heroCta').addEventListener('click', function() {
+      trackEvent('button_click', { button: 'hero_cta' }); // event_data
+      document.getElementById('formSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // ===== Form submit =====
+    document.getElementById('submitBtn').addEventListener('click', async function() {
+      const emailInput = document.getElementById('emailInput');
+      const submitBtn = document.getElementById('submitBtn');
+      const formError = document.getElementById('formError');
+      const email = emailInput.value.trim();
+
+      // Track click regardless of validation
+      trackEvent('button_click', { button: 'submit' });
+
+      // Reset error
+      formError.style.display = 'none';
+      formError.textContent = '';
+
+      // Validate
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        formError.textContent = 'אנא הזינו כתובת מייל תקינה.';
+        formError.style.display = 'block';
+        return;
+      }
+
+      // Disable button
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'שולח...';
+
+      try {
+        const { error } = await supabase.from('leads').insert({
+          email: email,
+          source: 'cheburashka'
+        });
+
+        if (error) throw error;
+
+        // Track lead captured
+        const emailDomain = email.split('@')[1];
+        trackEvent('lead_captured', { email_domain: emailDomain });
+
+        // Send welcome email (fire-and-forget — don't block UX)
+        fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        }).catch(() => {}); // silent fail
+
+        // Show thank you
+        document.getElementById('formWrap').style.display = 'none';
+        document.getElementById('thankyouMsg').style.display = 'block';
+
+      } catch (err) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'אישור';
+        formError.textContent = 'משהו השתבש. נסה שוב.';
+        formError.style.display = 'block';
+      }
+    });
+
+    // ===== Floating letters =====
+    (function generateFloatingLetters() {
+      const hebrewLetters = 'אבגדהוזחטיכלמנסעפצקרשת';
+      const russianLetters = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ';
+      const allLetters = (hebrewLetters + russianLetters).split('');
+      const container = document.getElementById('floating-letters');
+
+      for (let i = 0; i < 30; i++) {
+        const span = document.createElement('span');
+        const letter = allLetters[Math.floor(Math.random() * allLetters.length)];
+        span.textContent = letter;
+
+        const leftPct = Math.random() * 100;
+        // Start from a random vertical position so not all emerge from bottom
+        const startTopPct = 20 + Math.random() * 100; // 20% to 120% of viewport
+        const fontSize = 14 + Math.floor(Math.random() * 27); // 14–40px
+        const duration = 4 + Math.random() * 6; // 4–10s
+        const delay = -(Math.random() * duration); // stagger by starting mid-cycle
+        const opStart = (0.08 + Math.random() * 0.10).toFixed(2);
+        const opPeak  = (0.12 + Math.random() * 0.06).toFixed(2);
+
+        span.style.cssText = `
+          left: ${leftPct}%;
+          top: ${startTopPct}%;
+          font-size: ${fontSize}px;
+          animation-duration: ${duration.toFixed(1)}s;
+          animation-delay: ${delay.toFixed(1)}s;
+          --op-start: ${opStart};
+          --op-peak: ${opPeak};
+          opacity: ${opStart};
+        `;
+
+        container.appendChild(span);
+      }
+    })();
+  </script>
+</body>
+</html>

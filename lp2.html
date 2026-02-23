@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מועדון המצוינות | 99 זה לא 100</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root { --blue: #2255cc; --red: #e63329; --dark: #0d0d0d; --light: #f8f8f5; --gold: #d4a820; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Heebo', sans-serif; background: var(--light); color: var(--dark); overflow-x: hidden; }
+  .hero { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; position: relative; overflow: hidden; }
+  .hero-left { background: var(--dark); display: flex; align-items: center; justify-content: center; padding: 60px 50px; position: relative; }
+  .hero-left::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 60%, rgba(34,85,204,0.25) 0%, transparent 65%); }
+  .brand-block { position: relative; z-index: 2; text-align: center; }
+  .logo-numbers { font-size: 110px; font-weight: 900; line-height: 1; letter-spacing: -4px; color: white; display: flex; align-items: center; justify-content: center; gap: 0; }
+  .logo-99 { color: white; }
+  .logo-divider { width: 50px; height: 50px; background: var(--red); clip-path: polygon(50% 0%, 100% 100%, 0% 100%); display: inline-block; margin: 0 4px; transform: rotate(90deg); flex-shrink: 0; align-self: center; }
+  .logo-100 { color: white; }
+  .logo-sub { color: rgba(255,255,255,0.5); font-size: 14px; letter-spacing: 2px; margin-top: 8px; text-transform: uppercase; }
+  .podcast-badge { display: inline-block; margin-top: 30px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 40px; padding: 8px 20px; font-size: 13px; color: rgba(255,255,255,0.7); letter-spacing: 1px; }
+  .diagonal-divider { position: absolute; left: -1px; top: 0; bottom: 0; width: 80px; background: var(--dark); clip-path: polygon(0 0, 40% 0, 100% 100%, 0 100%); z-index: 3; }
+  .hero-right { background: white; display: flex; flex-direction: column; justify-content: center; padding: 80px 70px 80px 100px; position: relative; }
+  .hero-right::after { content: ''; position: absolute; top: -40px; left: -40px; width: 200px; height: 200px; border-radius: 50%; background: rgba(34,85,204,0.04); pointer-events: none; }
+  .club-label { font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--blue); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+  .club-label::before { content: ''; display: block; width: 30px; height: 2px; background: var(--blue); }
+  h1 { font-size: 46px; font-weight: 900; line-height: 1.15; color: var(--dark); margin-bottom: 16px; }
+  h1 span { color: var(--blue); }
+  .subtitle { font-size: 20px; font-weight: 400; color: #555; line-height: 1.5; margin-bottom: 40px; border-right: 3px solid var(--red); padding-right: 16px; }
+  .cta-btn { display: inline-block; background: var(--blue); color: white; font-family: 'Heebo', sans-serif; font-size: 18px; font-weight: 700; padding: 18px 42px; border: none; cursor: pointer; transition: all 0.25s ease; position: relative; overflow: hidden; clip-path: polygon(0 0, 95% 0, 100% 100%, 0 100%); text-align: center; }
+  .cta-btn::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.15); transform: translateX(100%); transition: transform 0.3s ease; }
+  .cta-btn:hover::before { transform: translateX(0); }
+  .cta-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(34,85,204,0.35); }
+  .price-tag { display: inline-flex; align-items: center; gap: 8px; margin-top: 20px; font-size: 14px; color: #888; }
+  .price-tag strong { color: var(--dark); font-size: 16px; }
+  .content-section { background: var(--dark); padding: 90px 80px; color: white; position: relative; overflow: hidden; }
+  .content-section::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(ellipse at 80% 20%, rgba(34,85,204,0.2) 0%, transparent 50%), radial-gradient(ellipse at 10% 80%, rgba(230,51,41,0.1) 0%, transparent 50%); pointer-events: none; }
+  .section-inner { max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+  .section-label { font-size: 11px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; color: var(--blue); margin-bottom: 16px; }
+  .section-title { font-size: 38px; font-weight: 900; margin-bottom: 30px; line-height: 1.2; }
+  .description-text { font-size: 17px; line-height: 1.8; color: rgba(255,255,255,0.75); max-width: 700px; margin-bottom: 60px; }
+  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: rgba(255,255,255,0.06); }
+  .feature-card { background: rgba(10,10,10,0.85); padding: 40px 35px; position: relative; transition: background 0.3s; }
+  .feature-card:hover { background: rgba(34,85,204,0.12); }
+  .feature-num { font-size: 64px; font-weight: 900; color: rgba(34,85,204,0.2); line-height: 1; margin-bottom: 16px; letter-spacing: -2px; }
+  .feature-title { font-size: 18px; font-weight: 700; margin-bottom: 12px; color: white; }
+  .feature-desc { font-size: 14px; line-height: 1.7; color: rgba(255,255,255,0.55); }
+  .names-row { display: flex; gap: 20px; margin-top: 50px; flex-wrap: wrap; }
+  .name-chip { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 50px; padding: 10px 20px; font-size: 14px; color: rgba(255,255,255,0.8); }
+  .name-chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
+  .form-section { background: white; padding: 90px 80px; }
+  .form-inner { max-width: 600px; margin: 0 auto; text-align: center; }
+  .form-inner .section-label { text-align: center; }
+  .form-title { font-size: 34px; font-weight: 900; margin-bottom: 12px; color: var(--dark); }
+  .form-subtitle { font-size: 16px; color: #666; margin-bottom: 40px; line-height: 1.6; }
+  .email-form { display: flex; gap: 0; box-shadow: 0 4px 30px rgba(0,0,0,0.1); }
+  .email-input { flex: 1; padding: 18px 22px; font-family: 'Heebo', sans-serif; font-size: 16px; border: 2px solid #e0e0e0; border-left: none; border-radius: 0; outline: none; transition: border-color 0.2s; text-align: right; direction: rtl; background: #fafafa; }
+  .email-input:focus { border-color: var(--blue); background: white; }
+  .email-input::placeholder { color: #aaa; }
+  .submit-btn { background: var(--dark); color: white; font-family: 'Heebo', sans-serif; font-size: 15px; font-weight: 700; padding: 18px 30px; border: none; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+  .submit-btn:hover { background: var(--blue); }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .success-msg { display: none; background: linear-gradient(135deg, #0d0d0d 0%, #1a2a4a 100%); color: white; padding: 40px; border-radius: 4px; text-align: center; animation: fadeIn 0.5s ease; }
+  .success-msg.visible { display: block; }
+  .success-icon { font-size: 48px; margin-bottom: 16px; }
+  .success-msg h3 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+  .success-msg p { font-size: 15px; line-height: 1.8; color: rgba(255,255,255,0.75); }
+  .success-tagline { margin-top: 20px; font-size: 16px; font-weight: 700; color: var(--blue); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  footer { background: var(--dark); padding: 30px 80px; display: flex; align-items: center; justify-content: space-between; }
+  .footer-logo { font-size: 22px; font-weight: 900; color: white; display: flex; align-items: center; gap: 8px; }
+  .footer-logo .red { color: var(--red); }
+  footer p { font-size: 13px; color: rgba(255,255,255,0.35); }
+  .fade-up { opacity: 0; transform: translateY(30px); animation: fadeUp 0.7s ease forwards; }
+  .fade-up-d1 { animation-delay: 0.1s; } .fade-up-d2 { animation-delay: 0.25s; } .fade-up-d3 { animation-delay: 0.4s; } .fade-up-d4 { animation-delay: 0.55s; }
+  @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; } .hero-left { min-height: 40vh; } .diagonal-divider { display: none; } .hero-right { padding: 50px 30px; } h1 { font-size: 32px; } .logo-numbers { font-size: 72px; } .features-grid { grid-template-columns: 1fr; } .content-section { padding: 60px 30px; } .form-section { padding: 60px 30px; } .email-form { flex-direction: column; } .email-input { border-left: 2px solid #e0e0e0; border-bottom: none; } footer { flex-direction: column; gap: 12px; padding: 30px; }
+  }
+</style>
+</head>
+<body>
+<section class="hero">
+  <div class="hero-left">
+    <div class="brand-block">
+      <div class="logo-numbers"><span class="logo-99">99</span><span class="logo-divider"></span><span class="logo-100">100</span></div>
+      <div class="logo-sub">עם אלכס ריף</div>
+      <div class="podcast-badge">פודקאסט מצוינות ישראלית</div>
+    </div>
+    <div class="diagonal-divider"></div>
+  </div>
+  <div class="hero-right">
+    <div class="club-label fade-up fade-up-d1">מועדון מצוינות</div>
+    <h1 class="fade-up fade-up-d2">מועדון המצוינות<br>של <span>"99 זה לא 100"</span></h1>
+    <p class="subtitle fade-up fade-up-d3">פוגשים את האנשים שפיצחו את הקוד הישראלי.</p>
+    <div class="fade-up fade-up-d4">
+      <button class="cta-btn" id="cta-btn" onclick="scrollToForm()">אשמח לשמוע עוד על המועדון ברגע שיצא!</button>
+      <div class="price-tag"><strong>100 ₪ לחודש</strong> — דמי חברות במועדון</div>
+    </div>
+  </div>
+</section>
+<section class="content-section">
+  <div class="section-inner">
+    <div class="section-label">הסיפור שלנו</div>
+    <div class="section-title">הגיע הזמן לקחת<br>את השיח צעד אחד קדימה.</div>
+    <p class="description-text">הפודקאסט "99 זה לא 100" ימשיך להיות הבית הפתוח של כולנו. בכל שבוע, בחינם, עם הסיפורים שנותנים לנו השראה לשאוף ליותר. אבל הגיע הזמן להפוך את ההשראה לחיבור אמיתי.<br><br>אנחנו מקימים את מועדון המצוינות — מרחב שבו נפגשים כדי לבנות יחד קהילה מובילה, מגובשת ומשפיעה.</p>
+    <div class="features-grid">
+      <div class="feature-card"><div class="feature-num">01</div><div class="feature-title">לייב ונטוורקינג</div><div class="feature-desc">אחת לחודש, חברי המועדון נפגשים להקלטה חיה ואינטימית של הפודקאסט.</div></div>
+      <div class="feature-card"><div class="feature-num">02</div><div class="feature-title">נבחרת של מנהיגות</div><div class="feature-desc">נארח מנהיגים ומנהיגות ישראלים שצמחו מהשורשים שלנו והגיעו לפסגה.</div></div>
+      <div class="feature-card"><div class="feature-num">03</div><div class="feature-title">רשת של השפעה וגאווה</div><div class="feature-desc">המקום שבו כולנו נפגשים כדי לחזק אחד את השני וליצור נטוורקינג משמעותי.</div></div>
+    </div>
+    <div class="names-row">
+      <div class="name-chip"><div class="name-chip-dot"></div>ד"ר קירה רדינסקי</div>
+      <div class="name-chip"><div class="name-chip-dot"></div>ארטיום דולגופיאט</div>
+      <div class="name-chip"><div class="name-chip-dot"></div>אורלי שטרן</div>
+      <div class="name-chip"><div class="name-chip-dot"></div>ועוד רבים...</div>
+    </div>
+  </div>
+</section>
+<section class="form-section" id="form-section">
+  <div class="form-inner">
+    <div class="section-label">הצטרפו למועדון</div>
+    <h2 class="form-title">מסקרן? תנו לי פרטים!</h2>
+    <p class="form-subtitle">אנחנו בוחנים את מידת העניין כדי לוודא שנייצר את המפגשים הכי מעצימים. השאירו מייל ונחזור אליכם ברגע שהמועדון יוצא לדרך.</p>
+    <div id="form-wrapper">
+      <div class="email-form">
+        <input type="email" class="email-input" id="email-input" placeholder="כתובת המייל שלך" required>
+        <button class="submit-btn" id="submit-btn" onclick="submitForm()">אישור ←</button>
+      </div>
+    </div>
+    <div class="success-msg" id="success-msg">
+      <div class="success-icon">✓</div>
+      <h3>התקבל בהצלחה!</h3>
+      <p id="thankyou-text">אנחנו בוחנים כרגע את מידת העניין במועדון המצוינות. ברגע שתתקבל החלטה על השקת המהלך, ניצור איתך קשר.</p>
+      <div class="success-tagline">יחד, אנחנו הופכים את ה-99 ל-100. 🚀</div>
+    </div>
+  </div>
+</section>
+<footer>
+  <div class="footer-logo">99 <span class="red">|</span> 100</div>
+  <p>© 2026 פודקאסט 99 זה לא 100 עם אלכס ריף</p>
+</footer>
+
+<script>
+  // Supabase init
+  const SUPABASE_URL = 'https://uaspcafukqvgiztzdnfu.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhc3BjYWZ1a3F2Z2l6dHpkbmZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MTA1NzcsImV4cCI6MjA4NzI4NjU3N30.BOqlLF8TQ7VabhsOrSgXyoLIwHCZP8M-LRt7Ok6FbWE';
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Session tracking
+  const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const PAGE_START = Date.now();
+
+  // Silent event tracker
+  async function trackEvent(event_type, event_data) {
+    try {
+      await supabase.from('analytics_events').insert({
+        event_type,
+        event_data,
+        session_id: SESSION_ID,
+        source: 'alex-rif'
+      });
+    } catch (e) { /* silent */ }
+  }
+
+  // Page view on load
+  window.addEventListener('load', function () {
+    trackEvent('page_view', {
+      referrer: document.referrer || 'direct',
+      user_agent: navigator.userAgent
+    });
+  });
+
+  // Time on page via pagehide with keepalive fetch
+  window.addEventListener('pagehide', function () {
+    const seconds = Math.round((Date.now() - PAGE_START) / 1000);
+    const body = JSON.stringify({
+      event_type: 'time_on_page',
+      event_data: { seconds },
+      session_id: SESSION_ID,
+      source: 'alex-rif'
+    });
+    try {
+      fetch(SUPABASE_URL + '/rest/v1/analytics_events', {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: body
+      });
+    } catch (e) { /* silent */ }
+  });
+
+  // CTA button scroll with tracking
+  function scrollToForm() {
+    trackEvent('button_click', { button: 'hero_cta' });
+    document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // Last fold reach tracking
+  let lastFoldTracked = false;
+  const formSectionObserver = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting && !lastFoldTracked) {
+        lastFoldTracked = true;
+        trackEvent('last_fold_reach', {});
+      }
+    });
+  }, { threshold: 0.3 });
+  formSectionObserver.observe(document.getElementById('form-section'));
+
+  // Form submission
+  async function submitForm() {
+    const emailInput = document.getElementById('email-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const email = emailInput.value.trim();
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      emailInput.focus();
+      emailInput.style.borderColor = '#e63329';
+      return;
+    }
+    emailInput.style.borderColor = '';
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'שולח...';
+
+    // Track submit click
+    await trackEvent('button_click', { button: 'submit' });
+
+    // Insert lead
+    const { error } = await supabase.from('leads').insert({
+      email,
+      source: 'alex-rif'
+    });
+
+    if (error) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'אישור ←';
+      emailInput.style.borderColor = '#e63329';
+      return;
+    }
+
+    // Track lead captured
+    const email_domain = email.split('@')[1] || '';
+    trackEvent('lead_captured', { email_domain });
+
+    // Fire and forget send-email
+    fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, source: 'alex-rif' })
+    }).catch(function () { /* silent */ });
+
+    // Show success
+    document.getElementById('form-wrapper').style.display = 'none';
+    const successMsg = document.getElementById('success-msg');
+    successMsg.classList.add('visible');
+  }
+
+  // Scroll animations for feature cards and name chips
+  const animObserver = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.style.opacity = '1';
+        entry.target.style.transform = 'translateY(0)';
+        animObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15 });
+
+  document.querySelectorAll('.feature-card, .name-chip').forEach(function (el) {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(30px)';
+    el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+    animObserver.observe(el);
+  });
+
+  // Content loading from Supabase
+  async function loadContent() {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/lp_content?source=eq.alex-rif&select=key,value`, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      const rows = await res.json();
+      const content = {};
+      for (const r of rows) content[r.key] = r.value;
+      if (content.hero_title) document.querySelector('h1').innerHTML = content.hero_title.replace('"99 זה לא 100"', '<span>"99 זה לא 100"</span>');
+      if (content.hero_subtitle) document.querySelector('.subtitle').textContent = content.hero_subtitle;
+      if (content.cta_text) document.querySelector('.cta-btn').textContent = content.cta_text;
+      if (content.form_title) document.querySelector('.form-title').textContent = content.form_title;
+      if (content.form_subtitle) document.querySelector('.form-subtitle').textContent = content.form_subtitle;
+    } catch(e) { /* silent */ }
+  }
+  loadContent();
+</script>
+</body>
+</html>

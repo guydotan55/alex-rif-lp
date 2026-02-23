@@ -17,9 +17,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Pick settings keys based on source
+    const source = (req.body && req.body.source) || 'cheburashka';
+    const subjectKey = source === 'alex-rif' ? 'alex_rif_email_subject' : 'welcome_email_subject';
+    const bodyKey = source === 'alex-rif' ? 'alex_rif_email_body' : 'welcome_email_body';
+
     // Fetch email template from Supabase settings
     const settingsRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/settings?key=in.(welcome_email_subject,welcome_email_body)&select=key,value`,
+      `${SUPABASE_URL}/rest/v1/settings?key=in.(${subjectKey},${bodyKey})&select=key,value`,
       {
         headers: {
           apikey: SUPABASE_SERVICE_ROLE_KEY,

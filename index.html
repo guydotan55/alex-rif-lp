@@ -115,7 +115,9 @@
     </div>
   </section>
 
-  <div class="divider"></div>
+  <div style="text-align:center; padding: 32px 0 48px;">
+    <button class="cta-btn" id="mid-cta-btn" onclick="handleCtaClick()" style="display:inline-block; width:auto; padding: 18px 48px;">😊 אשמח לשמוע עוד</button>
+  </div>
 
   <section class="section">
     <h2 class="section-title">מה זה בדיוק?</h2>
@@ -139,7 +141,7 @@
     <div class="price-period">לחודש בלבד</div>
   </div>
 
-  <section class="section" style="padding-top: 0;">
+  <section class="section" id="formSection" style="padding-top: 0;">
     <button class="cta-btn" id="cta-btn" onclick="handleCtaClick()">😊 אשמח לשמוע עוד</button>
 
     <div class="signup-form" id="signup-form">
@@ -164,6 +166,22 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhc3BjYWZ1a3F2Z2l6dHpkbmZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MTA1NzcsImV4cCI6MjA4NzI4NjU3N30.BOqlLF8TQ7VabhsOrSgXyoLIwHCZP8M-LRt7Ok6FbWE';
   const { createClient } = supabase;
   const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Load editable content from Supabase
+  async function loadContent() {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/lp_content?source=eq.cheburashka&select=key,value`, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      const rows = await res.json();
+      const content = {};
+      for (const r of rows) content[r.key] = r.value;
+      if (content.hero_title) document.querySelector('.hero-title') && (document.querySelector('.hero-title').textContent = content.hero_title);
+      if (content.hero_subtitle) document.querySelector('.hero-subtitle') && (document.querySelector('.hero-subtitle').textContent = content.hero_subtitle);
+      if (content.cta_text) document.getElementById('cta-btn') && (document.getElementById('cta-btn').textContent = content.cta_text);
+    } catch(e) { /* silent */ }
+  }
+  loadContent();
 
   // ── Session & timing ───────────────────────────────────────────────
   const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -204,10 +222,25 @@
   async function handleCtaClick() {
     trackEvent('button_click', { button: 'hero_cta' });
     document.getElementById('cta-btn').style.display = 'none';
+    const midBtn = document.getElementById('mid-cta-btn');
+    if (midBtn) midBtn.style.display = 'none';
     const form = document.getElementById('signup-form');
     form.classList.add('visible');
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
+
+  // Last fold reach — fires once when form section enters viewport
+  let lastFoldTracked = false;
+  const lastFoldObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting && !lastFoldTracked) {
+        lastFoldTracked = true;
+        trackEvent('last_fold_reach', {});
+        lastFoldObserver.disconnect();
+      }
+    });
+  }, { threshold: 0.3 });
+  lastFoldObserver.observe(document.getElementById('formSection'));
 
   // ── Submit email ───────────────────────────────────────────────────
   async function submitForm() {

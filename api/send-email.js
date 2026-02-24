@@ -37,8 +37,8 @@ export default async function handler(req, res) {
     const settings = {};
     for (const row of settingsRows) settings[row.key] = row.value;
 
-    const subject = settings["welcome_email_subject"] || "קיבלנו את פרטיך!";
-    const bodyText = settings["welcome_email_body"] || "תודה שהתעניינת!";
+    const subject = settings[subjectKey] || "קיבלנו את פרטיך!";
+    const bodyText = settings[bodyKey] || "תודה שהתעניינת!";
 
     const bodyHtml = `
       <div dir="rtl" style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.7; color: #1a1a1a; max-width: 520px; margin: 0 auto; padding: 32px 24px;">

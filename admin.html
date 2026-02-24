@@ -299,27 +299,37 @@
         <div class="loading"><div class="spin"></div> טוען נתונים...</div>
       </div>
 
-      <!-- Leads table -->
-      <div class="card">
-        <div class="card-head">
-          <div class="card-title">לידים</div>
-          <div class="card-sub" id="leads-label">טוען...</div>
+      <!-- Leads tables — side by side per LP -->
+      <div class="lp-cols">
+
+        <div class="lp-card lp1">
+          <div class="lp-head">🐻 צ'יבורשקה בישראל — לידים</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>מייל</th><th>תאריך</th></tr></thead>
+              <tbody id="leads-tbody-cheb">
+                <tr><td colspan="2"><div class="loading"><div class="spin"></div> טוען...</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination" id="leads-pages-cheb"></div>
+          <div style="padding:10px 20px 14px; font-size:12px; color:var(--sub)" id="leads-label-cheb"></div>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>מייל</th>
-                <th>קמפיין</th>
-                <th>תאריך</th>
-              </tr>
-            </thead>
-            <tbody id="leads-tbody">
-              <tr><td colspan="3"><div class="loading"><div class="spin"></div> טוען לידים...</div></td></tr>
-            </tbody>
-          </table>
+
+        <div class="lp-card lp2">
+          <div class="lp-head">🎙️ 99 זה לא 100 — לידים</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>מייל</th><th>תאריך</th></tr></thead>
+              <tbody id="leads-tbody-alex">
+                <tr><td colspan="2"><div class="loading"><div class="spin"></div> טוען...</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination" id="leads-pages-alex"></div>
+          <div style="padding:10px 20px 14px; font-size:12px; color:var(--sub)" id="leads-label-alex"></div>
         </div>
-        <div class="pagination" id="leads-pages"></div>
+
       </div>
 
     </div>
@@ -607,46 +617,50 @@
       renderFunnelCard('lp2', '🎙️ 99 זה לא 100', s2);
   }
 
-  // ── LEADS TABLE ───────────────────────────────
+  // ── LEADS TABLES (per LP) ─────────────────────
+  let pageCheb = 1, pageAlex = 1;
+
   function renderLeads() {
-    const totalPages = Math.max(1, Math.ceil(allLeads.length / PAGE_SIZE));
-    if (currentPage > totalPages) currentPage = 1;
-    const page = allLeads.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
+    renderLeadsLP('cheburashka', 'cheb', pageCheb);
+    renderLeadsLP('alex-rif',    'alex', pageAlex);
+  }
 
-    document.getElementById('leads-label').textContent = allLeads.length + ' לידים סה"כ';
+  function renderLeadsLP(src, id, page) {
+    const leads = allLeads.filter(l => l.source === src);
+    const totalPages = Math.max(1, Math.ceil(leads.length / PAGE_SIZE));
+    if (page > totalPages) page = 1;
+    const slice = leads.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
 
-    if (allLeads.length === 0) {
-      document.getElementById('leads-tbody').innerHTML = '<tr><td colspan="3"><div class="empty">אין לידים עדיין</div></td></tr>';
-      document.getElementById('leads-pages').innerHTML = '';
+    document.getElementById('leads-label-' + id).textContent = leads.length + ' לידים';
+
+    const tbody = document.getElementById('leads-tbody-' + id);
+    if (leads.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2"><div class="empty">אין לידים עדיין</div></td></tr>';
+      document.getElementById('leads-pages-' + id).innerHTML = '';
       return;
     }
 
-    document.getElementById('leads-tbody').innerHTML = page.map(l => {
+    tbody.innerHTML = slice.map(l => {
       const d = new Date(l.created_at);
       const ds = d.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric'});
       const ts = d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
-      const badgeCls = l.source === 'cheburashka' ? 'badge-lp1' : l.source === 'alex-rif' ? 'badge-lp2' : 'badge-def';
-      const srcLabel = l.source === 'cheburashka' ? "צ'יבורשקה" : l.source === 'alex-rif' ? '99 זה לא 100' : (l.source || '—');
-      return `<tr>
-        <td class="ltr">${esc(l.email||'—')}</td>
-        <td><span class="badge ${badgeCls}">${esc(srcLabel)}</span></td>
-        <td class="ltr mono">${ds} ${ts}</td>
-      </tr>`;
+      return `<tr><td class="ltr">${esc(l.email||'—')}</td><td class="ltr mono">${ds} ${ts}</td></tr>`;
     }).join('');
 
-    renderPages(allLeads.length, totalPages);
+    renderPagesLP(id, page, totalPages);
   }
 
-  function renderPages(total, totalPages) {
-    const c = document.getElementById('leads-pages');
+  function renderPagesLP(id, page, totalPages) {
+    const c = document.getElementById('leads-pages-' + id);
     if (totalPages <= 1) { c.innerHTML = ''; return; }
-    let h = `<button class="pg-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>&#8250;</button>`;
-    pageRange(currentPage, totalPages).forEach(p => {
+    const setter = id === 'cheb' ? 'pageCheb' : 'pageAlex';
+    let h = `<button class="pg-btn" onclick="${setter}=${page-1};renderLeads()" ${page===1?'disabled':''}>&#8250;</button>`;
+    pageRange(page, totalPages).forEach(p => {
       h += p === '...'
         ? `<span style="color:var(--sub);padding:0 4px">…</span>`
-        : `<button class="pg-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`;
+        : `<button class="pg-btn ${p===page?'active':''}" onclick="${setter}=${p};renderLeads()">${p}</button>`;
     });
-    h += `<button class="pg-btn" onclick="goPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>&#8249;</button>`;
+    h += `<button class="pg-btn" onclick="${setter}=${page+1};renderLeads()" ${page===totalPages?'disabled':''}>&#8249;</button>`;
     c.innerHTML = h;
   }
 
@@ -656,8 +670,6 @@
     if (cur >= tot-3) return [1,'...',tot-4,tot-3,tot-2,tot-1,tot];
     return [1,'...',cur-1,cur,cur+1,'...',tot];
   }
-
-  function goPage(p) { currentPage = p; renderLeads(); window.scrollTo({top:0,behavior:'smooth'}); }
 
   // ── SETTINGS / EMAIL ──────────────────────────
   async function loadSettings() {

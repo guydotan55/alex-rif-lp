@@ -145,8 +145,7 @@ function stripMarkdownFences(text) {
  * Send admin notification email via Brevo (non-blocking, fire-and-forget).
  */
 function sendAdminNotification(project, userEmail) {
-  // TODO: Replace with actual admin email
-  const adminEmail = "admin@example.com";
+  const adminEmail = "guydotan55@gmail.com";
 
   const slug = project.slug || "no-slug";
   const language = project.language || "unknown";

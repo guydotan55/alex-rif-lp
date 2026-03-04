@@ -244,6 +244,21 @@
     .btn-save:hover { background: #5a52e0; }
     .btn-save:disabled { opacity: .6; cursor: not-allowed; }
 
+    /* ── STATUS BADGES ─────────────────────────── */
+    .badge-draft { background: rgba(108,99,255,.15); color: #8b83ff; }
+    .badge-published { background: rgba(34,197,94,.15); color: var(--green); }
+    .badge-archived { background: rgba(239,68,68,.12); color: #f87171; opacity: .7; }
+
+    .btn-action {
+      background: none; border: 1px solid var(--border); color: var(--sub);
+      font-family: 'Rubik',sans-serif; font-size: 12px; padding: 4px 10px;
+      border-radius: 6px; cursor: pointer; transition: all .2s; white-space: nowrap;
+    }
+    .btn-action:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-action.danger:hover { border-color: var(--red); color: #f87171; }
+    .btn-action:disabled { opacity: .4; cursor: not-allowed; }
+    .actions-cell { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
     /* ── MISC ──────────────────────────────────── */
     .loading { display: flex; align-items: center; justify-content: center; padding: 36px; color: var(--sub); font-size: 14px; gap: 10px; }
     .spin { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
@@ -288,6 +303,7 @@
     <button class="tab-btn active" onclick="switchTab('data')">📊 נתונים</button>
     <button class="tab-btn" onclick="switchTab('email')">✉️ מייל</button>
     <button class="tab-btn" onclick="switchTab('content')">📝 תוכן</button>
+    <button class="tab-btn" onclick="switchTab('projects')">🏗️ פרויקטים</button>
   </div>
 
   <!-- ── TAB: DATA ──────────────────────────────── -->
@@ -438,6 +454,38 @@
     </div>
   </div>
 
+  <!-- ── TAB: PROJECTS ──────────────────────────── -->
+  <div id="tab-projects" class="tab-pane">
+    <div class="page">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">כל הפרויקטים</div>
+            <div class="card-sub">דפי נחיתה שנוצרו דרך הפלטפורמה</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>שם הפרויקט</th>
+                <th>Slug</th>
+                <th>שפה</th>
+                <th>סטטוס</th>
+                <th>אימייל בעלים</th>
+                <th>תאריך יצירה</th>
+                <th>פעולות</th>
+              </tr>
+            </thead>
+            <tbody id="projects-tbody">
+              <tr><td colspan="7"><div class="loading"><div class="spin"></div> טוען פרויקטים...</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /dash -->
 
 <script>
@@ -485,7 +533,7 @@
   async function showDash() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('dash').style.display = 'block';
-    await Promise.all([ loadData(), loadSettings(), loadLpContent() ]);
+    await Promise.all([ loadData(), loadSettings(), loadLpContent(), loadProjects() ]);
   }
 
   // ── TABS ──────────────────────────────────────
@@ -754,6 +802,73 @@
     } finally {
       btn.disabled = false; btn.textContent = 'שמור';
     }
+  }
+
+  // ── PROJECTS ────────────────────────────────
+  let allProjects = [];
+
+  async function loadProjects() {
+    const tbody = document.getElementById('projects-tbody');
+    tbody.innerHTML = '<tr><td colspan="7"><div class="loading"><div class="spin"></div> טוען פרויקטים...</div></td></tr>';
+
+    const { data, error } = await sb.from('projects').select('*').order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('projects:', error);
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty">שגיאה בטעינת פרויקטים</div></td></tr>';
+      return;
+    }
+
+    allProjects = data || [];
+
+    if (allProjects.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty">אין פרויקטים עדיין</div></td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = allProjects.map(p => {
+      const d = new Date(p.created_at);
+      const ds = d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const ts = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+
+      const status = p.status || 'draft';
+      const badgeClass = status === 'published' ? 'badge-published' : status === 'archived' ? 'badge-archived' : 'badge-draft';
+      const statusLabel = status === 'published' ? 'פורסם' : status === 'archived' ? 'בארכיון' : 'טיוטה';
+
+      const langLabel = p.language === 'en' ? 'EN' : 'HE';
+
+      const ownerEmail = p.owner_email || p.user_email || '—';
+
+      let actions = '';
+      if (status === 'published' && p.slug) {
+        actions += `<a class="btn-action" href="/lp/${esc(p.slug)}" target="_blank">צפייה</a>`;
+      }
+      if (status === 'published') {
+        actions += `<button class="btn-action danger" onclick="unpublishProject('${esc(p.id)}')">הסרה</button>`;
+      }
+      if (!actions) actions = '<span style="color:var(--sub);font-size:12px">—</span>';
+
+      return `<tr>
+        <td>${esc(p.name || '—')}</td>
+        <td class="ltr mono">${esc(p.slug || '—')}</td>
+        <td>${esc(langLabel)}</td>
+        <td><span class="badge ${badgeClass}">${statusLabel}</span></td>
+        <td class="ltr">${esc(ownerEmail)}</td>
+        <td class="ltr mono">${ds} ${ts}</td>
+        <td><div class="actions-cell">${actions}</div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function unpublishProject(projectId) {
+    if (!confirm('להעביר את הפרויקט לארכיון?')) return;
+
+    const { error } = await sb.from('projects').update({ status: 'archived' }).eq('id', projectId);
+    if (error) {
+      alert('שגיאה: ' + error.message);
+      return;
+    }
+    await loadProjects();
   }
 
   // ── UTILS ─────────────────────────────────────

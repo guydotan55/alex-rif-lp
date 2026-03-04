@@ -1,1 +1,5 @@
-{}
+{
+  "rewrites": [
+    { "source": "/lp/:slug", "destination": "/api/serve-lp" }
+  ]
+}

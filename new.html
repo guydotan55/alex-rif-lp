@@ -1,0 +1,1811 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>צור דף נחיתה חדש | LP Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --navy: #0a1628;
+    --navy-light: #0f2037;
+    --navy-mid: #132a46;
+    --gold: #f5c842;
+    --gold-soft: #ffe680;
+    --gold-dim: rgba(245, 200, 66, 0.15);
+    --gold-glow: rgba(245, 200, 66, 0.08);
+    --cream: #f0e8d8;
+    --text: #c8bfa8;
+    --text-dim: #8a8270;
+    --white: #ffffff;
+    --error: #ff5252;
+    --success: #4caf50;
+    --radius: 14px;
+    --radius-sm: 10px;
+    --transition: 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Heebo', sans-serif;
+    background: var(--navy);
+    color: var(--cream);
+    direction: rtl;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ── Background decoration ─────────────────────────────── */
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+    opacity: 0.35;
+  }
+  .bg-grid::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(245, 200, 66, 0.06) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(245, 200, 66, 0.04) 0%, transparent 50%);
+  }
+  .bg-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(100px);
+    animation: orbFloat 20s ease-in-out infinite;
+  }
+  .bg-orb-1 { width: 400px; height: 400px; background: rgba(245, 200, 66, 0.05); top: -100px; right: -100px; animation-delay: 0s; }
+  .bg-orb-2 { width: 300px; height: 300px; background: rgba(245, 200, 66, 0.03); bottom: 10%; left: -80px; animation-delay: -7s; }
+  .bg-orb-3 { width: 200px; height: 200px; background: rgba(100, 150, 255, 0.03); top: 50%; right: 20%; animation-delay: -14s; }
+  @keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -20px) scale(1.05); }
+    66% { transform: translate(-20px, 30px) scale(0.95); }
+  }
+
+  /* ── Layout ────────────────────────────────────────────── */
+  .shell {
+    position: relative;
+    z-index: 1;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 24px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ────────────────────────────────────────────── */
+  .header {
+    padding: 32px 0 24px;
+    text-align: center;
+  }
+  .header-brand {
+    font-size: 0.8rem;
+    font-weight: 300;
+    color: var(--text-dim);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .header-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--white);
+    letter-spacing: -0.5px;
+  }
+  .header-title span { color: var(--gold); }
+
+  /* ── Mode Toggle ───────────────────────────────────────── */
+  .mode-toggle {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 28px;
+    gap: 0;
+  }
+  .mode-btn {
+    background: transparent;
+    border: 1.5px solid rgba(245, 200, 66, 0.2);
+    color: var(--text-dim);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 10px 28px;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+  }
+  .mode-btn:first-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: none; }
+  .mode-btn:last-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+  .mode-btn.active {
+    background: var(--gold);
+    color: var(--navy);
+    border-color: var(--gold);
+    font-weight: 700;
+  }
+  .mode-btn:not(.active):hover {
+    border-color: rgba(245, 200, 66, 0.4);
+    color: var(--cream);
+  }
+
+  /* ── Progress bar ──────────────────────────────────────── */
+  .progress-wrap {
+    margin-bottom: 36px;
+  }
+  .progress-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    direction: ltr;
+  }
+  .progress-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(245, 200, 66, 0.12);
+    border: 1.5px solid rgba(245, 200, 66, 0.2);
+    transition: var(--transition);
+    cursor: pointer;
+  }
+  .progress-dot.active {
+    background: var(--gold);
+    border-color: var(--gold);
+    box-shadow: 0 0 12px rgba(245, 200, 66, 0.5);
+    transform: scale(1.2);
+  }
+  .progress-dot.done {
+    background: var(--gold);
+    border-color: var(--gold);
+    opacity: 0.6;
+  }
+  .progress-line {
+    width: 20px;
+    height: 2px;
+    background: rgba(245, 200, 66, 0.12);
+    transition: background var(--transition);
+  }
+  .progress-line.done {
+    background: rgba(245, 200, 66, 0.5);
+  }
+  .progress-bar-track {
+    width: 100%;
+    height: 3px;
+    background: rgba(245, 200, 66, 0.08);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold), var(--gold-soft));
+    border-radius: 3px;
+    transition: width 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    box-shadow: 0 0 10px rgba(245, 200, 66, 0.4);
+  }
+  .progress-label {
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-top: 10px;
+  }
+
+  /* ── Step card ─────────────────────────────────────────── */
+  .step-card {
+    flex: 1;
+    display: none;
+    animation: stepIn 0.45s ease both;
+  }
+  .step-card.active { display: block; }
+  @keyframes stepIn {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes stepOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-24px); }
+  }
+
+  .step-header {
+    margin-bottom: 28px;
+  }
+  .step-num {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    background: var(--gold-dim);
+    padding: 5px 14px;
+    border-radius: 20px;
+    margin-bottom: 12px;
+  }
+  .step-title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--white);
+    line-height: 1.3;
+    margin-bottom: 6px;
+  }
+  .step-subtitle {
+    font-size: 0.92rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  /* ── Form elements ─────────────────────────────────────── */
+  .field {
+    margin-bottom: 22px;
+  }
+  .field-label {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--cream);
+    margin-bottom: 8px;
+  }
+  .field-hint {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    display: block;
+  }
+  .field-input, .field-textarea, .field-select {
+    width: 100%;
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1.5px solid rgba(245, 200, 66, 0.15);
+    border-radius: var(--radius-sm);
+    color: var(--white);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+  }
+  .field-input:focus, .field-textarea:focus, .field-select:focus {
+    border-color: var(--gold);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 3px rgba(245, 200, 66, 0.08);
+  }
+  .field-input::placeholder, .field-textarea::placeholder {
+    color: rgba(255, 255, 255, 0.2);
+  }
+  .field-input.error, .field-textarea.error {
+    border-color: var(--error);
+    box-shadow: 0 0 0 3px rgba(255, 82, 82, 0.1);
+  }
+  .field-error {
+    font-size: 0.78rem;
+    color: var(--error);
+    margin-top: 6px;
+    display: none;
+  }
+  .field-error.visible { display: block; }
+
+  .field-textarea {
+    resize: vertical;
+    min-height: 90px;
+    line-height: 1.7;
+  }
+
+  .field-select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23f5c842' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: left 16px center;
+  }
+
+  /* Language toggle */
+  .lang-toggle {
+    display: flex;
+    gap: 0;
+    margin-top: 8px;
+  }
+  .lang-btn {
+    flex: 1;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1.5px solid rgba(245, 200, 66, 0.15);
+    color: var(--text-dim);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+  }
+  .lang-btn:first-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: none; }
+  .lang-btn:last-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+  .lang-btn.active {
+    background: var(--gold-dim);
+    border-color: var(--gold);
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  /* Feature items (step 2) */
+  .feature-item {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(245, 200, 66, 0.1);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 14px;
+    position: relative;
+    animation: stepIn 0.3s ease both;
+  }
+  .feature-item .remove-btn {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 82, 82, 0.3);
+    background: rgba(255, 82, 82, 0.08);
+    color: var(--error);
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    line-height: 1;
+  }
+  .feature-item .remove-btn:hover {
+    background: rgba(255, 82, 82, 0.2);
+    border-color: var(--error);
+  }
+  .add-feature-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: 1.5px dashed rgba(245, 200, 66, 0.3);
+    border-radius: var(--radius-sm);
+    color: var(--gold);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    padding: 12px 24px;
+    cursor: pointer;
+    transition: var(--transition);
+    width: 100%;
+    justify-content: center;
+  }
+  .add-feature-btn:hover {
+    border-color: var(--gold);
+    background: var(--gold-glow);
+  }
+
+  /* Tone chips (step 5) */
+  .tone-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .tone-chip {
+    padding: 10px 20px;
+    border-radius: 30px;
+    border: 1.5px solid rgba(245, 200, 66, 0.15);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+  .tone-chip:hover {
+    border-color: rgba(245, 200, 66, 0.4);
+    background: var(--gold-glow);
+  }
+  .tone-chip.active {
+    background: var(--gold);
+    color: var(--navy);
+    border-color: var(--gold);
+    font-weight: 700;
+  }
+
+  /* Color mode radios */
+  .color-mode-group {
+    display: flex;
+    gap: 0;
+    margin-top: 8px;
+    margin-bottom: 14px;
+  }
+  .color-mode-btn {
+    flex: 1;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1.5px solid rgba(245, 200, 66, 0.15);
+    color: var(--text-dim);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+  }
+  .color-mode-btn:first-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: none; }
+  .color-mode-btn:last-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+  .color-mode-btn.active {
+    background: var(--gold-dim);
+    border-color: var(--gold);
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  /* Image upload */
+  .upload-zone {
+    border: 2px dashed rgba(245, 200, 66, 0.2);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--gold);
+    background: var(--gold-glow);
+  }
+  .upload-zone.has-image {
+    padding: 16px;
+    border-style: solid;
+    border-color: rgba(245, 200, 66, 0.3);
+  }
+  .upload-icon {
+    font-size: 2.2rem;
+    margin-bottom: 12px;
+    display: block;
+    opacity: 0.6;
+  }
+  .upload-text {
+    font-size: 0.9rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .upload-text strong { color: var(--gold); }
+  .upload-preview {
+    display: none;
+    width: 100%;
+    max-height: 240px;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+  }
+  .upload-zone.has-image .upload-preview { display: block; }
+  .upload-zone.has-image .upload-placeholder { display: none; }
+  .upload-progress {
+    display: none;
+    margin-top: 12px;
+  }
+  .upload-progress-bar {
+    height: 3px;
+    background: rgba(245, 200, 66, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .upload-progress-fill {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+  .upload-status {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+  .upload-status.success { color: var(--success); }
+  .upload-status.error { color: var(--error); }
+
+  /* Toggle switch */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0;
+  }
+  .toggle-label {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--cream);
+  }
+  .toggle-switch {
+    width: 52px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    position: relative;
+    cursor: pointer;
+    transition: background var(--transition);
+    border: none;
+    padding: 0;
+  }
+  .toggle-switch.on { background: var(--gold); }
+  .toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 22px;
+    height: 22px;
+    background: white;
+    border-radius: 50%;
+    transition: transform var(--transition);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+  .toggle-switch.on::after { transform: translateX(-24px); }
+
+  /* Auth tab toggle */
+  .auth-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+  }
+  .auth-tab {
+    flex: 1;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1.5px solid rgba(245, 200, 66, 0.15);
+    color: var(--text-dim);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+  }
+  .auth-tab:first-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: none; }
+  .auth-tab:last-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+  .auth-tab.active {
+    background: var(--gold-dim);
+    border-color: var(--gold);
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  .magic-link-msg {
+    display: none;
+    background: var(--gold-glow);
+    border: 1px solid rgba(245, 200, 66, 0.15);
+    border-radius: var(--radius-sm);
+    padding: 20px;
+    text-align: center;
+    color: var(--text);
+    font-size: 0.9rem;
+    line-height: 1.7;
+  }
+  .magic-link-msg .icon { font-size: 1.6rem; display: block; margin-bottom: 8px; }
+
+  /* Terms checkbox */
+  .terms-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 16px;
+    margin-bottom: 8px;
+  }
+  .terms-check {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    accent-color: var(--gold);
+    cursor: pointer;
+  }
+  .terms-text {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .terms-text a { color: var(--gold); text-decoration: none; }
+
+  /* ── Skip button ───────────────────────────────────────── */
+  .skip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    color: var(--text-dim);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.82rem;
+    padding: 8px 18px;
+    cursor: pointer;
+    transition: var(--transition);
+    margin-top: 8px;
+  }
+  .skip-btn:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    color: var(--text);
+  }
+
+  /* ── Navigation ────────────────────────────────────────── */
+  .nav-bar {
+    display: flex;
+    gap: 12px;
+    padding: 28px 0 40px;
+    margin-top: auto;
+  }
+  .nav-btn {
+    flex: 1;
+    padding: 16px 24px;
+    border-radius: var(--radius-sm);
+    font-family: 'Heebo', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    border: none;
+    text-align: center;
+  }
+  .nav-btn-back {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    flex: 0.4;
+  }
+  .nav-btn-back:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .nav-btn-next {
+    background: var(--gold);
+    color: var(--navy);
+    box-shadow: 0 4px 20px rgba(245, 200, 66, 0.25);
+  }
+  .nav-btn-next:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(245, 200, 66, 0.4);
+  }
+  .nav-btn-next:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+  .nav-btn-submit {
+    background: linear-gradient(135deg, var(--gold), #e8b820);
+    color: var(--navy);
+    box-shadow: 0 4px 20px rgba(245, 200, 66, 0.25);
+    font-size: 1.05rem;
+  }
+  .nav-btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(245, 200, 66, 0.4);
+  }
+  .nav-btn-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* ── Spinner ───────────────────────────────────────────── */
+  .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2.5px solid rgba(10, 22, 40, 0.3);
+    border-top-color: var(--navy);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-inline-end: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Brief mode ────────────────────────────────────────── */
+  .brief-mode {
+    display: none;
+  }
+  .brief-mode.active { display: block; }
+  .questionnaire-mode { display: block; }
+  .questionnaire-mode.hidden { display: none; }
+
+  /* ── Global error toast ────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--error);
+    color: white;
+    padding: 14px 28px;
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+    font-weight: 500;
+    z-index: 1000;
+    opacity: 0;
+    transition: transform 0.4s ease, opacity 0.4s ease;
+    max-width: 90%;
+    text-align: center;
+  }
+  .toast.visible {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  .toast.success { background: var(--success); }
+
+  /* ── Color picker ──────────────────────────────────────── */
+  .color-input-row {
+    display: none;
+    gap: 12px;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .color-input-row.visible { display: flex; }
+  .color-input-row input[type="color"] {
+    width: 48px;
+    height: 40px;
+    border: 1.5px solid rgba(245, 200, 66, 0.2);
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+    padding: 2px;
+  }
+
+  /* ── Responsive ────────────────────────────────────────── */
+  @media (max-width: 600px) {
+    .shell { padding: 0 16px; }
+    .header { padding: 24px 0 16px; }
+    .header-title { font-size: 1.3rem; }
+    .step-title { font-size: 1.35rem; }
+    .feature-item { padding: 16px; }
+    .nav-bar { padding: 20px 0 32px; }
+    .nav-btn { padding: 14px 16px; font-size: 0.92rem; }
+    .nav-btn-back { flex: 0.35; }
+    .tone-chips { gap: 8px; }
+    .tone-chip { padding: 8px 16px; font-size: 0.82rem; }
+    .upload-zone { padding: 28px 16px; }
+    .mode-toggle { margin-bottom: 20px; }
+    .mode-btn { padding: 8px 20px; font-size: 0.8rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid">
+  <div class="bg-orb bg-orb-1"></div>
+  <div class="bg-orb bg-orb-2"></div>
+  <div class="bg-orb bg-orb-3"></div>
+</div>
+
+<div class="shell">
+  <!-- Header -->
+  <header class="header">
+    <div class="header-brand">LP Builder</div>
+    <h1 class="header-title">בואו ניצור את <span>דף הנחיתה</span> שלכם</h1>
+  </header>
+
+  <!-- Mode Toggle -->
+  <div class="mode-toggle">
+    <button class="mode-btn active" onclick="setMode('questionnaire')">שאלון מודרך</button>
+    <button class="mode-btn" onclick="setMode('brief')">בריף חופשי</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- QUESTIONNAIRE MODE                                      -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="questionnaire-mode" id="questionnaireMode">
+    <!-- Progress -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-steps" id="progressSteps"></div>
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">שלב 1 מתוך 7</div>
+    </div>
+
+    <!-- ── Step 1: Basics ──────────────────────────────────── -->
+    <div class="step-card active" data-step="1">
+      <div class="step-header">
+        <div class="step-num">שלב 1 מתוך 7</div>
+        <h2 class="step-title">בואו נתחיל מהבסיס</h2>
+        <p class="step-subtitle">ספרו לנו קצת על העסק או הפרויקט שלכם</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label">שם העסק / הפרויקט *</label>
+        <input type="text" class="field-input" id="businessName" placeholder="למשל: סטודיו לעיצוב גרפי" required>
+        <div class="field-error" id="err-businessName">נא להזין שם עסק</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">שפת הדף</label>
+        <div class="lang-toggle">
+          <button type="button" class="lang-btn active" data-lang="he" onclick="setLang('he', this)">עברית (RTL)</button>
+          <button type="button" class="lang-btn" data-lang="en" onclick="setLang('en', this)">English (LTR)</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">מה אתם עושים? *</label>
+        <span class="field-hint">תארו במשפט או שניים את מה שהעסק מציע</span>
+        <textarea class="field-textarea" id="whatYouDo" rows="3" placeholder="למשל: אנחנו מעצבים חוויות דיגיטליות שמחברות מותגים לקהל שלהם"></textarea>
+        <div class="field-error" id="err-whatYouDo">נא לתאר מה העסק עושה</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">מי קהל היעד שלכם? *</label>
+        <textarea class="field-textarea" id="targetAudience" rows="3" placeholder="למשל: בעלי עסקים קטנים ובינוניים שמחפשים נוכחות דיגיטלית מקצועית"></textarea>
+        <div class="field-error" id="err-targetAudience">נא לתאר את קהל היעד</div>
+      </div>
+    </div>
+
+    <!-- ── Step 2: Story & Value ───────────────────────────── -->
+    <div class="step-card" data-step="2">
+      <div class="step-header">
+        <div class="step-num">שלב 2 מתוך 7</div>
+        <h2 class="step-title">הסיפור והערך שלכם</h2>
+        <p class="step-subtitle">כאן אנחנו בונים את הלב של הדף</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label">הכותרת הראשית — מה התועלת המרכזית? *</label>
+        <span class="field-hint">משפט חזק אחד שגורם למבקר להישאר</span>
+        <input type="text" class="field-input" id="mainBenefit" placeholder="למשל: הפכו את הרעיון שלכם למותג שמוכר">
+        <div class="field-error" id="err-mainBenefit">נא להזין כותרת ראשית</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">הסיפור שלכם — ה"למה" הרגשי *</label>
+        <span class="field-hint">2-3 פסקאות שמסבירות למה אתם עושים את מה שאתם עושים</span>
+        <textarea class="field-textarea" id="story" rows="6" placeholder="ספרו את הסיפור שלכם — מה גרם לכם להתחיל, מה מניע אתכם, למה זה חשוב לכם"></textarea>
+        <div class="field-error" id="err-story">נא לכתוב את הסיפור שלכם</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">פיצ'רים / יתרונות מרכזיים</label>
+        <span class="field-hint">הוסיפו עד 4 יתרונות עם כותרת ותיאור קצר</span>
+        <div id="featuresContainer">
+          <div class="feature-item" data-feature="0">
+            <div class="field">
+              <input type="text" class="field-input" placeholder="כותרת היתרון" data-field="feature-title">
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <textarea class="field-textarea" rows="2" placeholder="תיאור קצר" data-field="feature-desc"></textarea>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="add-feature-btn" id="addFeatureBtn" onclick="addFeature()">+ הוסיפו יתרון נוסף</button>
+      </div>
+    </div>
+
+    <!-- ── Step 3: Social Proof ────────────────────────────── -->
+    <div class="step-card" data-step="3">
+      <div class="step-header">
+        <div class="step-num">שלב 3 מתוך 7</div>
+        <h2 class="step-title">הוכחה חברתית</h2>
+        <p class="step-subtitle">שמות, המלצות, תגים — הכל עוזר לבנות אמון (אופציונלי)</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label">שמות בולטים / המלצות / שותפויות</label>
+        <textarea class="field-textarea" id="socialProof" rows="4" placeholder="למשל: עבדנו עם אמזון, גוגל, ופייסבוק. או: 'השירות הכי מקצועי שפגשתי' — דנה כהן, מנכ"לית XYZ"></textarea>
+      </div>
+
+      <div class="field">
+        <label class="field-label">תגים, הסמכות, או הישגים</label>
+        <textarea class="field-textarea" id="badges" rows="3" placeholder="למשל: Google Partner, Forbes 30 under 30, 500+ לקוחות מרוצים"></textarea>
+      </div>
+
+      <button type="button" class="skip-btn" onclick="goNext()">דלגו על שלב זה &larr;</button>
+    </div>
+
+    <!-- ── Step 4: Offer & CTA ─────────────────────────────── -->
+    <div class="step-card" data-step="4">
+      <div class="step-header">
+        <div class="step-num">שלב 4 מתוך 7</div>
+        <h2 class="step-title">ההצעה וקריאה לפעולה</h2>
+        <p class="step-subtitle">מה ההצעה שלכם, ומה אתם רוצים שהמבקר יעשה</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label">מחיר *</label>
+        <span class="field-hint">הסכום + תקופה</span>
+        <input type="text" class="field-input" id="price" placeholder="למשל: ₪199/חודש" dir="rtl">
+        <div class="field-error" id="err-price">נא להזין מחיר</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">תיאור מחיר</label>
+        <textarea class="field-textarea" id="priceDesc" rows="2" placeholder="למשל: כולל גישה מלאה + תמיכה אישית"></textarea>
+      </div>
+
+      <div class="field">
+        <label class="field-label">טקסט כפתור CTA *</label>
+        <input type="text" class="field-input" id="ctaText" placeholder="הצטרפו עכשיו">
+        <div class="field-error" id="err-ctaText">נא להזין טקסט לכפתור</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">הודעת תודה לאחר הרשמה *</label>
+        <textarea class="field-textarea" id="thankyouMsg" rows="3" placeholder="תודה! נחזור אליכם בהקדם"></textarea>
+        <div class="field-error" id="err-thankyouMsg">נא להזין הודעת תודה</div>
+      </div>
+    </div>
+
+    <!-- ── Step 5: Visual Identity ─────────────────────────── -->
+    <div class="step-card" data-step="5">
+      <div class="step-header">
+        <div class="step-num">שלב 5 מתוך 7</div>
+        <h2 class="step-title">הזהות החזותית</h2>
+        <p class="step-subtitle">תמונה, צבעים וטון הדיבור של הדף</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label">תמונת מותג *</label>
+        <span class="field-hint">העלו תמונה שמייצגת את העסק (לוגו, תמונת מוצר, וכו')</span>
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+          <div class="upload-placeholder">
+            <span class="upload-icon">&#x1F4F7;</span>
+            <div class="upload-text">גררו תמונה לכאן או <strong>לחצו לבחירה</strong><br><span style="font-size:0.78rem;color:var(--text-dim)">JPG, PNG, WebP — עד 5MB</span></div>
+          </div>
+          <img class="upload-preview" id="uploadPreview" alt="Preview">
+        </div>
+        <input type="file" id="fileInput" accept="image/*" hidden>
+        <div class="upload-progress" id="uploadProgress">
+          <div class="upload-progress-bar"><div class="upload-progress-fill" id="uploadProgressFill"></div></div>
+          <div class="upload-status" id="uploadStatus">מעלה...</div>
+        </div>
+        <div class="field-error" id="err-image">נא להעלות תמונה</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">העדפת צבעים</label>
+        <div class="color-mode-group">
+          <button type="button" class="color-mode-btn active" onclick="setColorMode('auto', this)">אוטומטי מהתמונה</button>
+          <button type="button" class="color-mode-btn" onclick="setColorMode('specify', this)">בחירה ידנית</button>
+        </div>
+        <div class="color-input-row" id="colorInputRow">
+          <input type="color" id="colorPicker" value="#f5c842">
+          <input type="text" class="field-input" id="colorHex" placeholder="#f5c842" style="flex:1; margin-bottom:0;" dir="ltr">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">טון הדיבור</label>
+        <div class="tone-chips" id="toneChips">
+          <button type="button" class="tone-chip" data-tone="playful" onclick="setTone('playful', this)">שובב</button>
+          <button type="button" class="tone-chip active" data-tone="professional" onclick="setTone('professional', this)">מקצועי</button>
+          <button type="button" class="tone-chip" data-tone="warm" onclick="setTone('warm', this)">חמים</button>
+          <button type="button" class="tone-chip" data-tone="bold" onclick="setTone('bold', this)">נועז</button>
+          <button type="button" class="tone-chip" data-tone="minimalist" onclick="setTone('minimalist', this)">מינימליסטי</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Step 6: Email Settings ──────────────────────────── -->
+    <div class="step-card" data-step="6">
+      <div class="step-header">
+        <div class="step-num">שלב 6 מתוך 7</div>
+        <h2 class="step-title">הגדרות אימייל</h2>
+        <p class="step-subtitle">הגדירו מייל ברוכים הבאים אוטומטי לנרשמים</p>
+      </div>
+
+      <div class="toggle-row">
+        <span class="toggle-label">שליחת מייל אוטומטי לנרשמים?</span>
+        <button type="button" class="toggle-switch on" id="emailToggle" onclick="toggleEmail()"></button>
+      </div>
+
+      <div id="emailFields">
+        <div class="field">
+          <label class="field-label">נושא המייל</label>
+          <input type="text" class="field-input" id="emailSubject" placeholder="ברוכים הבאים! הנה מה שמחכה לכם" value="ברוכים הבאים!">
+        </div>
+
+        <div class="field">
+          <label class="field-label">תוכן המייל</label>
+          <textarea class="field-textarea" id="emailBody" rows="5" placeholder="כתבו את תוכן המייל שהנרשמים יקבלו...">שלום רב,
+
+תודה שנרשמתם! אנחנו שמחים שהצטרפתם אלינו.
+נחזור אליכם בהקדם עם כל הפרטים.
+
+בברכה,
+הצוות</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Step 7: Account ─────────────────────────────────── -->
+    <div class="step-card" data-step="7">
+      <div class="step-header">
+        <div class="step-num">שלב 7 מתוך 7</div>
+        <h2 class="step-title">יצירת חשבון</h2>
+        <p class="step-subtitle">צרו חשבון כדי לנהל את דף הנחיתה שלכם</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label">כתובת אימייל *</label>
+        <input type="email" class="field-input" id="authEmail" placeholder="your@email.com" dir="ltr" style="text-align:left;" autocomplete="email">
+        <div class="field-error" id="err-authEmail">נא להזין כתובת אימייל תקינה</div>
+      </div>
+
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" onclick="setAuthMode('password', this)">סיסמה</button>
+        <button type="button" class="auth-tab" onclick="setAuthMode('magic', this)">קישור קסם</button>
+      </div>
+
+      <div id="passwordFields">
+        <div class="field">
+          <label class="field-label">סיסמה *</label>
+          <input type="password" class="field-input" id="authPassword" placeholder="לפחות 6 תווים" dir="ltr" style="text-align:left;" autocomplete="new-password">
+          <div class="field-error" id="err-authPassword">הסיסמה חייבת להכיל לפחות 6 תווים</div>
+        </div>
+        <div class="field">
+          <label class="field-label">אישור סיסמה *</label>
+          <input type="password" class="field-input" id="authPasswordConfirm" placeholder="הזינו שוב את הסיסמה" dir="ltr" style="text-align:left;" autocomplete="new-password">
+          <div class="field-error" id="err-authPasswordConfirm">הסיסמאות אינן תואמות</div>
+        </div>
+      </div>
+
+      <div class="magic-link-msg" id="magicLinkMsg">
+        <span class="icon">&#x2728;</span>
+        נשלח אליכם קישור התחברות לאימייל.<br>
+        ללא צורך בסיסמה!
+      </div>
+
+      <div class="terms-row">
+        <input type="checkbox" class="terms-check" id="termsCheck" checked>
+        <label class="terms-text" for="termsCheck">אני מסכים/ה ל<a href="#">תנאי השימוש</a> ו<a href="#">מדיניות הפרטיות</a></label>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="nav-bar" id="navBar">
+      <button class="nav-btn nav-btn-back" id="backBtn" onclick="goBack()" style="display:none">חזרה</button>
+      <button class="nav-btn nav-btn-next" id="nextBtn" onclick="goNext()">המשך</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- BRIEF MODE                                              -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="brief-mode" id="briefMode">
+    <div class="step-header" style="margin-bottom:28px;">
+      <div class="step-num">מצב בריף</div>
+      <h2 class="step-title">ספרו לנו הכל בחופשיות</h2>
+      <p class="step-subtitle">כתבו בריף חופשי על העסק, הקהל, ההצעה, והסגנון — אנחנו נעשה את השאר</p>
+    </div>
+
+    <div class="field">
+      <label class="field-label">הבריף שלכם *</label>
+      <textarea class="field-textarea" id="briefText" rows="12" placeholder="ספרו הכל — שם העסק, מה אתם עושים, מי הקהל, מה ההצעה, מה הסגנון שאתם רוצים... ככל שתספרו יותר, הדף יהיה טוב יותר."></textarea>
+      <div class="field-error" id="err-briefText">נא לכתוב בריף</div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">תמונת מותג *</label>
+      <div class="upload-zone" id="briefUploadZone" onclick="document.getElementById('briefFileInput').click()">
+        <div class="upload-placeholder">
+          <span class="upload-icon">&#x1F4F7;</span>
+          <div class="upload-text">גררו תמונה לכאן או <strong>לחצו לבחירה</strong><br><span style="font-size:0.78rem;color:var(--text-dim)">JPG, PNG, WebP — עד 5MB</span></div>
+        </div>
+        <img class="upload-preview" id="briefUploadPreview" alt="Preview">
+      </div>
+      <input type="file" id="briefFileInput" accept="image/*" hidden>
+      <div class="upload-progress" id="briefUploadProgress">
+        <div class="upload-progress-bar"><div class="upload-progress-fill" id="briefUploadProgressFill"></div></div>
+        <div class="upload-status" id="briefUploadStatus">מעלה...</div>
+      </div>
+      <div class="field-error" id="err-briefImage">נא להעלות תמונה</div>
+    </div>
+
+    <div style="height:1px; background:rgba(245,200,66,0.1); margin: 28px 0;"></div>
+
+    <div class="step-header" style="margin-bottom:20px;">
+      <h2 class="step-title" style="font-size:1.3rem;">יצירת חשבון</h2>
+    </div>
+
+    <div class="field">
+      <label class="field-label">כתובת אימייל *</label>
+      <input type="email" class="field-input" id="briefAuthEmail" placeholder="your@email.com" dir="ltr" style="text-align:left;" autocomplete="email">
+      <div class="field-error" id="err-briefAuthEmail">נא להזין כתובת אימייל תקינה</div>
+    </div>
+
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab active" onclick="setBriefAuthMode('password', this)">סיסמה</button>
+      <button type="button" class="auth-tab" onclick="setBriefAuthMode('magic', this)">קישור קסם</button>
+    </div>
+
+    <div id="briefPasswordFields">
+      <div class="field">
+        <label class="field-label">סיסמה *</label>
+        <input type="password" class="field-input" id="briefAuthPassword" placeholder="לפחות 6 תווים" dir="ltr" style="text-align:left;" autocomplete="new-password">
+        <div class="field-error" id="err-briefAuthPassword">הסיסמה חייבת להכיל לפחות 6 תווים</div>
+      </div>
+      <div class="field">
+        <label class="field-label">אישור סיסמה *</label>
+        <input type="password" class="field-input" id="briefAuthPasswordConfirm" placeholder="הזינו שוב את הסיסמה" dir="ltr" style="text-align:left;" autocomplete="new-password">
+        <div class="field-error" id="err-briefAuthPasswordConfirm">הסיסמאות אינן תואמות</div>
+      </div>
+    </div>
+
+    <div class="magic-link-msg" id="briefMagicLinkMsg">
+      <span class="icon">&#x2728;</span>
+      נשלח אליכם קישור התחברות לאימייל.<br>
+      ללא צורך בסיסמה!
+    </div>
+
+    <div class="terms-row">
+      <input type="checkbox" class="terms-check" id="briefTermsCheck" checked>
+      <label class="terms-text" for="briefTermsCheck">אני מסכים/ה ל<a href="#">תנאי השימוש</a> ו<a href="#">מדיניות הפרטיות</a></label>
+    </div>
+
+    <div class="nav-bar">
+      <button class="nav-btn nav-btn-submit" id="briefSubmitBtn" onclick="submitBrief()" style="flex:1">&#x2728; צרו לי דף נחיתה</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// Supabase Init
+// ═══════════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://uaspcafukqvgiztzdnfu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhc3BjYWZ1a3F2Z2l6dHpkbmZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MTA1NzcsImV4cCI6MjA4NzI4NjU3N30.BOqlLF8TQ7VabhsOrSgXyoLIwHCZP8M-LRt7Ok6FbWE';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ═══════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════
+let currentStep = 1;
+const totalSteps = 7;
+let currentMode = 'questionnaire';
+let selectedLang = 'he';
+let selectedTone = 'professional';
+let colorMode = 'auto';
+let emailEnabled = true;
+let authMode = 'password';
+let briefAuthMode = 'password';
+let uploadedImageUrl = null;
+let briefUploadedImageUrl = null;
+let featureCount = 1;
+
+// ═══════════════════════════════════════════════════════════════
+// Progress bar init
+// ═══════════════════════════════════════════════════════════════
+function initProgress() {
+  const container = document.getElementById('progressSteps');
+  container.innerHTML = '';
+  for (let i = 1; i <= totalSteps; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'progress-dot' + (i === 1 ? ' active' : '');
+    dot.dataset.step = i;
+    dot.onclick = () => { if (i < currentStep) goToStep(i); };
+    container.appendChild(dot);
+    if (i < totalSteps) {
+      const line = document.createElement('div');
+      line.className = 'progress-line';
+      line.dataset.afterStep = i;
+      container.appendChild(line);
+    }
+  }
+  updateProgress();
+}
+
+function updateProgress() {
+  const dots = document.querySelectorAll('.progress-dot');
+  const lines = document.querySelectorAll('.progress-line');
+  dots.forEach(d => {
+    const s = parseInt(d.dataset.step);
+    d.className = 'progress-dot';
+    if (s === currentStep) d.classList.add('active');
+    else if (s < currentStep) d.classList.add('done');
+  });
+  lines.forEach(l => {
+    const s = parseInt(l.dataset.afterStep);
+    l.className = 'progress-line' + (s < currentStep ? ' done' : '');
+  });
+  const pct = ((currentStep - 1) / (totalSteps - 1)) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = `שלב ${currentStep} מתוך ${totalSteps}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Step Navigation
+// ═══════════════════════════════════════════════════════════════
+function goToStep(step) {
+  if (step < 1 || step > totalSteps) return;
+
+  const currentCard = document.querySelector('.step-card.active');
+  if (currentCard) {
+    currentCard.style.animation = 'stepOut 0.2s ease forwards';
+    setTimeout(() => {
+      currentCard.classList.remove('active');
+      currentCard.style.animation = '';
+      currentStep = step;
+      showStep();
+    }, 200);
+  } else {
+    currentStep = step;
+    showStep();
+  }
+}
+
+function showStep() {
+  const card = document.querySelector(`.step-card[data-step="${currentStep}"]`);
+  if (card) {
+    card.classList.add('active');
+    card.style.animation = 'stepIn 0.45s ease both';
+  }
+  updateProgress();
+  updateNavButtons();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateNavButtons() {
+  const backBtn = document.getElementById('backBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  backBtn.style.display = currentStep === 1 ? 'none' : 'block';
+
+  if (currentStep === totalSteps) {
+    nextBtn.className = 'nav-btn nav-btn-submit';
+    nextBtn.innerHTML = '&#x2728; צרו לי דף נחיתה';
+    nextBtn.onclick = submitQuestionnaire;
+  } else {
+    nextBtn.className = 'nav-btn nav-btn-next';
+    nextBtn.textContent = 'המשך';
+    nextBtn.onclick = goNext;
+  }
+}
+
+function goNext() {
+  if (!validateStep(currentStep)) return;
+  if (currentStep < totalSteps) goToStep(currentStep + 1);
+}
+
+function goBack() {
+  if (currentStep > 1) goToStep(currentStep - 1);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Validation
+// ═══════════════════════════════════════════════════════════════
+function clearErrors() {
+  document.querySelectorAll('.field-input.error, .field-textarea.error').forEach(el => el.classList.remove('error'));
+  document.querySelectorAll('.field-error').forEach(el => el.classList.remove('visible'));
+}
+
+function showError(fieldId, errId) {
+  const field = document.getElementById(fieldId);
+  const err = document.getElementById(errId);
+  if (field) field.classList.add('error');
+  if (err) err.classList.add('visible');
+  if (field) field.focus();
+  return false;
+}
+
+function validateStep(step) {
+  clearErrors();
+  if (step === 1) {
+    if (!document.getElementById('businessName').value.trim()) return showError('businessName', 'err-businessName');
+    if (!document.getElementById('whatYouDo').value.trim()) return showError('whatYouDo', 'err-whatYouDo');
+    if (!document.getElementById('targetAudience').value.trim()) return showError('targetAudience', 'err-targetAudience');
+  }
+  if (step === 2) {
+    if (!document.getElementById('mainBenefit').value.trim()) return showError('mainBenefit', 'err-mainBenefit');
+    if (!document.getElementById('story').value.trim()) return showError('story', 'err-story');
+  }
+  // Step 3 is optional
+  if (step === 4) {
+    if (!document.getElementById('price').value.trim()) return showError('price', 'err-price');
+    if (!document.getElementById('ctaText').value.trim()) return showError('ctaText', 'err-ctaText');
+    if (!document.getElementById('thankyouMsg').value.trim()) return showError('thankyouMsg', 'err-thankyouMsg');
+  }
+  if (step === 5) {
+    if (!uploadedImageUrl) {
+      document.getElementById('err-image').classList.add('visible');
+      return false;
+    }
+  }
+  // Step 6 has no required validation
+  if (step === 7) {
+    return validateAuth();
+  }
+  return true;
+}
+
+function validateAuth() {
+  const email = document.getElementById('authEmail').value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError('authEmail', 'err-authEmail');
+  if (authMode === 'password') {
+    const pw = document.getElementById('authPassword').value;
+    if (pw.length < 6) return showError('authPassword', 'err-authPassword');
+    if (pw !== document.getElementById('authPasswordConfirm').value) return showError('authPasswordConfirm', 'err-authPasswordConfirm');
+  }
+  return true;
+}
+
+function validateBrief() {
+  clearErrors();
+  if (!document.getElementById('briefText').value.trim()) return showError('briefText', 'err-briefText');
+  if (!briefUploadedImageUrl) {
+    document.getElementById('err-briefImage').classList.add('visible');
+    return false;
+  }
+  const email = document.getElementById('briefAuthEmail').value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError('briefAuthEmail', 'err-briefAuthEmail');
+  if (briefAuthMode === 'password') {
+    const pw = document.getElementById('briefAuthPassword').value;
+    if (pw.length < 6) return showError('briefAuthPassword', 'err-briefAuthPassword');
+    if (pw !== document.getElementById('briefAuthPasswordConfirm').value) return showError('briefAuthPasswordConfirm', 'err-briefAuthPasswordConfirm');
+  }
+  return true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Mode toggle
+// ═══════════════════════════════════════════════════════════════
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.mode-btn[onclick*="${mode}"]`).classList.add('active');
+  if (mode === 'questionnaire') {
+    document.getElementById('questionnaireMode').classList.remove('hidden');
+    document.getElementById('briefMode').classList.remove('active');
+  } else {
+    document.getElementById('questionnaireMode').classList.add('hidden');
+    document.getElementById('briefMode').classList.add('active');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Language toggle
+// ═══════════════════════════════════════════════════════════════
+function setLang(lang, btn) {
+  selectedLang = lang;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Features
+// ═══════════════════════════════════════════════════════════════
+function addFeature() {
+  if (featureCount >= 4) return;
+  const container = document.getElementById('featuresContainer');
+  const idx = featureCount;
+  featureCount++;
+  const item = document.createElement('div');
+  item.className = 'feature-item';
+  item.dataset.feature = idx;
+  item.innerHTML = `
+    <button type="button" class="remove-btn" onclick="removeFeature(this)">&times;</button>
+    <div class="field">
+      <input type="text" class="field-input" placeholder="כותרת היתרון" data-field="feature-title">
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <textarea class="field-textarea" rows="2" placeholder="תיאור קצר" data-field="feature-desc"></textarea>
+    </div>
+  `;
+  container.appendChild(item);
+  if (featureCount >= 4) document.getElementById('addFeatureBtn').style.display = 'none';
+}
+
+function removeFeature(btn) {
+  const item = btn.closest('.feature-item');
+  item.style.animation = 'stepOut 0.2s ease forwards';
+  setTimeout(() => {
+    item.remove();
+    featureCount--;
+    if (featureCount < 4) document.getElementById('addFeatureBtn').style.display = '';
+  }, 200);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Tone
+// ═══════════════════════════════════════════════════════════════
+function setTone(tone, btn) {
+  selectedTone = tone;
+  document.querySelectorAll('.tone-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Color mode
+// ═══════════════════════════════════════════════════════════════
+function setColorMode(mode, btn) {
+  colorMode = mode;
+  document.querySelectorAll('.color-mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('colorInputRow').classList.toggle('visible', mode === 'specify');
+}
+
+// Sync color picker <-> text
+document.getElementById('colorPicker').addEventListener('input', function() {
+  document.getElementById('colorHex').value = this.value;
+});
+document.getElementById('colorHex').addEventListener('input', function() {
+  if (/^#[0-9a-fA-F]{6}$/.test(this.value)) {
+    document.getElementById('colorPicker').value = this.value;
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Email toggle
+// ═══════════════════════════════════════════════════════════════
+function toggleEmail() {
+  emailEnabled = !emailEnabled;
+  const toggle = document.getElementById('emailToggle');
+  toggle.classList.toggle('on', emailEnabled);
+  document.getElementById('emailFields').style.display = emailEnabled ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Auth mode
+// ═══════════════════════════════════════════════════════════════
+function setAuthMode(mode, btn) {
+  authMode = mode;
+  document.querySelectorAll('#questionnaireMode .auth-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('passwordFields').style.display = mode === 'password' ? 'block' : 'none';
+  document.getElementById('magicLinkMsg').style.display = mode === 'magic' ? 'block' : 'none';
+}
+
+function setBriefAuthMode(mode, btn) {
+  briefAuthMode = mode;
+  document.querySelectorAll('#briefMode .auth-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('briefPasswordFields').style.display = mode === 'password' ? 'block' : 'none';
+  document.getElementById('briefMagicLinkMsg').style.display = mode === 'magic' ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Image Upload
+// ═══════════════════════════════════════════════════════════════
+function setupUpload(zoneId, inputId, previewId, progressId, fillId, statusId, isQuestionnaireMode) {
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  const preview = document.getElementById(previewId);
+
+  // Drag events
+  ['dragenter', 'dragover'].forEach(e => {
+    zone.addEventListener(e, (ev) => { ev.preventDefault(); zone.classList.add('dragover'); });
+  });
+  ['dragleave', 'drop'].forEach(e => {
+    zone.addEventListener(e, (ev) => { ev.preventDefault(); zone.classList.remove('dragover'); });
+  });
+  zone.addEventListener('drop', (ev) => {
+    const files = ev.dataTransfer.files;
+    if (files.length) handleFile(files[0]);
+  });
+
+  input.addEventListener('change', () => {
+    if (input.files.length) handleFile(input.files[0]);
+  });
+
+  function handleFile(file) {
+    if (!file.type.startsWith('image/')) {
+      showToast('נא לבחור קובץ תמונה');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('הקובץ גדול מדי — עד 5MB');
+      return;
+    }
+
+    // Preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      preview.src = e.target.result;
+      zone.classList.add('has-image');
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to Supabase Storage
+    uploadToStorage(file, isQuestionnaireMode, progressId, fillId, statusId);
+  }
+}
+
+async function uploadToStorage(file, isQuestionnaire, progressId, fillId, statusId) {
+  const progressEl = document.getElementById(progressId);
+  const fillEl = document.getElementById(fillId);
+  const statusEl = document.getElementById(statusId);
+
+  progressEl.style.display = 'block';
+  fillEl.style.width = '10%';
+  statusEl.textContent = 'מעלה...';
+  statusEl.className = 'upload-status';
+
+  const ext = file.name.split('.').pop() || 'jpg';
+  const fileName = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const filePath = `uploads/${fileName}`;
+
+  try {
+    fillEl.style.width = '40%';
+
+    const { data, error } = await sb.storage
+      .from('lp-images')
+      .upload(filePath, file, { contentType: file.type, upsert: true });
+
+    if (error) throw error;
+
+    fillEl.style.width = '80%';
+
+    const { data: urlData } = sb.storage
+      .from('lp-images')
+      .getPublicUrl(filePath);
+
+    const publicUrl = urlData.publicUrl;
+
+    if (isQuestionnaire) {
+      uploadedImageUrl = publicUrl;
+    } else {
+      briefUploadedImageUrl = publicUrl;
+    }
+
+    fillEl.style.width = '100%';
+    statusEl.textContent = 'הועלה בהצלחה!';
+    statusEl.className = 'upload-status success';
+
+    // Clear image error if visible
+    if (isQuestionnaire) {
+      document.getElementById('err-image').classList.remove('visible');
+    } else {
+      document.getElementById('err-briefImage').classList.remove('visible');
+    }
+  } catch (err) {
+    console.error('Upload error:', err);
+    fillEl.style.width = '100%';
+    statusEl.textContent = 'שגיאה בהעלאה — נסו שוב';
+    statusEl.className = 'upload-status error';
+  }
+}
+
+// Init both upload zones
+setupUpload('uploadZone', 'fileInput', 'uploadPreview', 'uploadProgress', 'uploadProgressFill', 'uploadStatus', true);
+setupUpload('briefUploadZone', 'briefFileInput', 'briefUploadPreview', 'briefUploadProgress', 'briefUploadProgressFill', 'briefUploadStatus', false);
+
+// ═══════════════════════════════════════════════════════════════
+// Slug Generation
+// ═══════════════════════════════════════════════════════════════
+function generateSlug(name) {
+  // Hebrew to Latin transliteration (basic)
+  const hebrewMap = {
+    'א': 'a', 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z',
+    'ח': 'ch', 'ט': 't', 'י': 'y', 'כ': 'k', 'ך': 'k', 'ל': 'l', 'מ': 'm',
+    'ם': 'm', 'נ': 'n', 'ן': 'n', 'ס': 's', 'ע': 'a', 'פ': 'p', 'ף': 'p',
+    'צ': 'ts', 'ץ': 'ts', 'ק': 'k', 'ר': 'r', 'ש': 'sh', 'ת': 't',
+    '׳': '', '״': ''
+  };
+
+  let slug = '';
+  for (const ch of name.toLowerCase()) {
+    if (hebrewMap[ch]) slug += hebrewMap[ch];
+    else if (/[a-z0-9]/.test(ch)) slug += ch;
+    else if (ch === ' ' || ch === '-' || ch === '_') slug += '-';
+  }
+
+  slug = slug.replace(/-+/g, '-').replace(/^-|-$/g, '');
+  if (!slug) slug = 'project';
+
+  // Add unique suffix
+  const suffix = Math.random().toString(36).slice(2, 6);
+  return slug + '-' + suffix;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Collect Data
+// ═══════════════════════════════════════════════════════════════
+function collectFeatures() {
+  const features = [];
+  document.querySelectorAll('#featuresContainer .feature-item').forEach(item => {
+    const title = item.querySelector('[data-field="feature-title"]').value.trim();
+    const desc = item.querySelector('[data-field="feature-desc"]').value.trim();
+    if (title || desc) features.push({ title, description: desc });
+  });
+  return features;
+}
+
+function collectQuestionnaireData() {
+  return {
+    business_name: document.getElementById('businessName').value.trim(),
+    language: selectedLang,
+    what_you_do: document.getElementById('whatYouDo').value.trim(),
+    target_audience: document.getElementById('targetAudience').value.trim(),
+    main_benefit: document.getElementById('mainBenefit').value.trim(),
+    story: document.getElementById('story').value.trim(),
+    features: collectFeatures(),
+    social_proof: document.getElementById('socialProof').value.trim(),
+    badges: document.getElementById('badges').value.trim(),
+    price: document.getElementById('price').value.trim(),
+    price_description: document.getElementById('priceDesc').value.trim(),
+    cta_text: document.getElementById('ctaText').value.trim(),
+    thankyou_message: document.getElementById('thankyouMsg').value.trim(),
+    color_mode: colorMode,
+    color_value: colorMode === 'specify' ? document.getElementById('colorHex').value.trim() : null,
+    tone: selectedTone,
+    mode: 'questionnaire'
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Submit — Questionnaire mode
+// ═══════════════════════════════════════════════════════════════
+async function submitQuestionnaire() {
+  if (!validateStep(7)) return;
+
+  const btn = document.getElementById('nextBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>יוצר את הדף...';
+
+  try {
+    const email = document.getElementById('authEmail').value.trim();
+    let session;
+
+    if (authMode === 'password') {
+      const password = document.getElementById('authPassword').value;
+      const { data, error } = await sb.auth.signUp({ email, password });
+      if (error) throw new Error(error.message);
+      session = data.session;
+      // If email confirmation required, session may be null
+      if (!session) {
+        // Try to sign in immediately in case confirmation is disabled
+        const { data: signInData, error: signInError } = await sb.auth.signInWithPassword({ email, password });
+        if (signInError) {
+          showToast('החשבון נוצר! בדקו את האימייל לאישור, ואז התחברו.', true);
+          btn.disabled = false;
+          btn.innerHTML = '&#x2728; צרו לי דף נחיתה';
+          return;
+        }
+        session = signInData.session;
+      }
+    } else {
+      const { error } = await sb.auth.signInWithOtp({ email });
+      if (error) throw new Error(error.message);
+      showToast('שלחנו קישור לאימייל שלכם! לחצו עליו כדי להמשיך.', true);
+      btn.disabled = false;
+      btn.innerHTML = '&#x2728; צרו לי דף נחיתה';
+      return;
+    }
+
+    // Create project
+    const data = collectQuestionnaireData();
+    const slug = generateSlug(data.business_name);
+
+    const { data: project, error: projectError } = await sb.from('projects').insert({
+      user_id: session.user.id,
+      slug: slug,
+      name: data.business_name,
+      language: data.language,
+      status: 'draft',
+      questionnaire_data: data,
+      image_url: uploadedImageUrl,
+      email_enabled: emailEnabled,
+      email_subject: emailEnabled ? document.getElementById('emailSubject').value.trim() : null,
+      email_body: emailEnabled ? document.getElementById('emailBody').value.trim() : null
+    }).select().single();
+
+    if (projectError) throw new Error(projectError.message);
+
+    showToast('הדף נוצר בהצלחה!', true);
+
+    // Redirect
+    setTimeout(() => {
+      window.location.href = `/dashboard?project_id=${project.id}&generate=true`;
+    }, 800);
+
+  } catch (err) {
+    console.error('Submit error:', err);
+    showToast(err.message || 'אירעה שגיאה — נסו שוב');
+    btn.disabled = false;
+    btn.innerHTML = '&#x2728; צרו לי דף נחיתה';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Submit — Brief mode
+// ═══════════════════════════════════════════════════════════════
+async function submitBrief() {
+  if (!validateBrief()) return;
+
+  const btn = document.getElementById('briefSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>יוצר את הדף...';
+
+  try {
+    const email = document.getElementById('briefAuthEmail').value.trim();
+    let session;
+
+    if (briefAuthMode === 'password') {
+      const password = document.getElementById('briefAuthPassword').value;
+      const { data, error } = await sb.auth.signUp({ email, password });
+      if (error) throw new Error(error.message);
+      session = data.session;
+      if (!session) {
+        const { data: signInData, error: signInError } = await sb.auth.signInWithPassword({ email, password });
+        if (signInError) {
+          showToast('החשבון נוצר! בדקו את האימייל לאישור, ואז התחברו.', true);
+          btn.disabled = false;
+          btn.innerHTML = '&#x2728; צרו לי דף נחיתה';
+          return;
+        }
+        session = signInData.session;
+      }
+    } else {
+      const { error } = await sb.auth.signInWithOtp({ email });
+      if (error) throw new Error(error.message);
+      showToast('שלחנו קישור לאימייל שלכם! לחצו עליו כדי להמשיך.', true);
+      btn.disabled = false;
+      btn.innerHTML = '&#x2728; צרו לי דף נחיתה';
+      return;
+    }
+
+    const briefText = document.getElementById('briefText').value.trim();
+    const slug = generateSlug('brief-' + Date.now());
+
+    const { data: project, error: projectError } = await sb.from('projects').insert({
+      user_id: session.user.id,
+      slug: slug,
+      name: 'Brief Project',
+      language: 'he',
+      status: 'draft',
+      questionnaire_data: { mode: 'brief', brief: briefText },
+      image_url: briefUploadedImageUrl,
+      email_enabled: false,
+      email_subject: null,
+      email_body: null
+    }).select().single();
+
+    if (projectError) throw new Error(projectError.message);
+
+    showToast('הדף נוצר בהצלחה!', true);
+
+    setTimeout(() => {
+      window.location.href = `/dashboard?project_id=${project.id}&generate=true`;
+    }, 800);
+
+  } catch (err) {
+    console.error('Submit error:', err);
+    showToast(err.message || 'אירעה שגיאה — נסו שוב');
+    btn.disabled = false;
+    btn.innerHTML = '&#x2728; צרו לי דף נחיתה';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Toast
+// ═══════════════════════════════════════════════════════════════
+function showToast(msg, isSuccess) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'toast' + (isSuccess ? ' success' : '');
+  requestAnimationFrame(() => toast.classList.add('visible'));
+  setTimeout(() => toast.classList.remove('visible'), 4000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Focus effects — clear errors on input
+// ═══════════════════════════════════════════════════════════════
+document.querySelectorAll('.field-input, .field-textarea').forEach(el => {
+  el.addEventListener('focus', function() {
+    this.classList.remove('error');
+    const errEl = this.parentElement.querySelector('.field-error');
+    if (errEl) errEl.classList.remove('visible');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════════
+initProgress();
+</script>
+</body>
+</html>

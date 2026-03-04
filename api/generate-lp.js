@@ -245,7 +245,7 @@ export default async function handler(req, res) {
     // 4. Build messages for Claude API
     const systemPrompt = buildSystemPrompt();
 
-    // Build user message content — text brief + optional image
+    // Build user message content — text brief + optional image + optional brief file
     const userContent = [];
 
     // If project has an image URL, include it as multimodal input
@@ -259,16 +259,39 @@ export default async function handler(req, res) {
           url: imageUrl,
         },
       });
+    }
+
+    // If a brief file was uploaded (PDF/DOCX), include it as a document
+    const q = project.questionnaire_data || {};
+    const briefFileUrl = q.brief_file_url;
+
+    if (briefFileUrl) {
       userContent.push({
-        type: "text",
-        text: `Here is the inspiration image for the design. Use its color palette, mood, and visual style as the basis for the landing page design.\n\n--- BRIEF ---\n${briefText}`,
-      });
-    } else {
-      userContent.push({
-        type: "text",
-        text: `--- BRIEF ---\n${briefText}\n\n(No inspiration image was provided. Create a visually striking design using a modern, professional color palette that matches the brand's tone.)`,
+        type: "document",
+        source: {
+          type: "url",
+          url: briefFileUrl,
+        },
+        title: "Uploaded brief document",
       });
     }
+
+    // Add the text brief
+    let briefIntro = "";
+    if (imageUrl) {
+      briefIntro = "Here is the inspiration image for the design. Use its color palette, mood, and visual style as the basis for the landing page design.";
+    }
+    if (briefFileUrl) {
+      briefIntro += (briefIntro ? "\n" : "") + "A brief document has been attached above — incorporate its content into the landing page design.";
+    }
+    if (!imageUrl && !briefFileUrl) {
+      briefIntro = "(No inspiration image was provided. Create a visually striking design using a modern, professional color palette that matches the brand's tone.)";
+    }
+
+    userContent.push({
+      type: "text",
+      text: `${briefIntro}\n\n--- BRIEF ---\n${briefText}`,
+    });
 
     // 5. Call Claude API with streaming for large output
     const client = new Anthropic();

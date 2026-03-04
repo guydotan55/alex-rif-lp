@@ -249,10 +249,8 @@ export default async function handler(req, res) {
     // Build user message content — text brief + optional image
     const userContent = [];
 
-    // If project has an inspiration image URL, include it as multimodal input
-    const imageUrl =
-      (project.questionnaire_data && project.questionnaire_data.inspiration_image_url) ||
-      project.inspiration_image_url;
+    // If project has an image URL, include it as multimodal input
+    const imageUrl = project.image_url;
 
     if (imageUrl) {
       userContent.push({
@@ -279,7 +277,7 @@ export default async function handler(req, res) {
     const stream = client.messages.stream({
       model: "claude-opus-4-6",
       max_tokens: 16000,
-      thinking: { type: "enabled", budget_tokens: 5000 },
+      thinking: { type: "adaptive" },
       system: systemPrompt,
       messages: [
         {

@@ -759,6 +759,73 @@
     padding: 2px;
   }
 
+  /* ── Remix button ─────────────────────────────────────── */
+  .remix-btn {
+    background: rgba(245, 200, 66, 0.15);
+    border: 1px solid rgba(245, 200, 66, 0.3);
+    color: #f5c842;
+    font-size: 16px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .remix-btn:hover {
+    background: rgba(245, 200, 66, 0.25);
+    border-color: #f5c842;
+  }
+  .remix-btn.loading {
+    opacity: 0.6;
+    cursor: wait;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+  .remix-btn.done {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #22c55e;
+  }
+  .undo-remix {
+    background: none;
+    border: none;
+    color: #9b9bb5;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 8px;
+    text-decoration: underline;
+  }
+  .undo-remix:hover { color: #f0f0f5; }
+
+  /* ── File upload ─────────────────────────────────────── */
+  .file-upload-area {
+    margin-bottom: 20px;
+  }
+  .file-drop-zone {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .file-select-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px dashed rgba(255,255,255,0.2);
+    color: #f0f0f5;
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .file-select-btn:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: #f5c842;
+  }
+
   /* ── Responsive ────────────────────────────────────────── */
   @media (max-width: 600px) {
     .shell { padding: 0 16px; }
@@ -832,14 +899,20 @@
       </div>
 
       <div class="field">
-        <label class="field-label">מה אתם עושים? *</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <label class="field-label" style="margin-bottom:0">מה אתם עושים? *</label>
+          <button type="button" class="remix-btn" onclick="remixField(this, 'whatYouDo')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+        </div>
         <span class="field-hint">תארו במשפט או שניים את מה שהעסק מציע</span>
         <textarea class="field-textarea" id="whatYouDo" rows="3" placeholder="למשל: אנחנו מעצבים חוויות דיגיטליות שמחברות מותגים לקהל שלהם"></textarea>
         <div class="field-error" id="err-whatYouDo">נא לתאר מה העסק עושה</div>
       </div>
 
       <div class="field">
-        <label class="field-label">מי קהל היעד שלכם? *</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <label class="field-label" style="margin-bottom:0">מי קהל היעד שלכם? *</label>
+          <button type="button" class="remix-btn" onclick="remixField(this, 'targetAudience')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+        </div>
         <textarea class="field-textarea" id="targetAudience" rows="3" placeholder="למשל: בעלי עסקים קטנים ובינוניים שמחפשים נוכחות דיגיטלית מקצועית"></textarea>
         <div class="field-error" id="err-targetAudience">נא לתאר את קהל היעד</div>
       </div>
@@ -854,14 +927,20 @@
       </div>
 
       <div class="field">
-        <label class="field-label">הכותרת הראשית — מה התועלת המרכזית? *</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <label class="field-label" style="margin-bottom:0">הכותרת הראשית — מה התועלת המרכזית? *</label>
+          <button type="button" class="remix-btn" onclick="remixField(this, 'mainBenefit')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+        </div>
         <span class="field-hint">משפט חזק אחד שגורם למבקר להישאר</span>
         <input type="text" class="field-input" id="mainBenefit" placeholder="למשל: הפכו את הרעיון שלכם למותג שמוכר">
         <div class="field-error" id="err-mainBenefit">נא להזין כותרת ראשית</div>
       </div>
 
       <div class="field">
-        <label class="field-label">הסיפור שלכם — ה"למה" הרגשי *</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <label class="field-label" style="margin-bottom:0">הסיפור שלכם — ה"למה" הרגשי *</label>
+          <button type="button" class="remix-btn" onclick="remixField(this, 'story')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+        </div>
         <span class="field-hint">2-3 פסקאות שמסבירות למה אתם עושים את מה שאתם עושים</span>
         <textarea class="field-textarea" id="story" rows="6" placeholder="ספרו את הסיפור שלכם — מה גרם לכם להתחיל, מה מניע אתכם, למה זה חשוב לכם"></textarea>
         <div class="field-error" id="err-story">נא לכתוב את הסיפור שלכם</div>
@@ -873,9 +952,17 @@
         <div id="featuresContainer">
           <div class="feature-item" data-feature="0">
             <div class="field">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                <label class="field-label" style="margin-bottom:0; font-size:0.82rem; color:var(--text-dim);">כותרת</label>
+                <button type="button" class="remix-btn" onclick="remixField(this, 'feature_title_0')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+              </div>
               <input type="text" class="field-input" placeholder="כותרת היתרון" data-field="feature-title">
             </div>
             <div class="field" style="margin-bottom:0">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                <label class="field-label" style="margin-bottom:0; font-size:0.82rem; color:var(--text-dim);">תיאור</label>
+                <button type="button" class="remix-btn" onclick="remixField(this, 'feature_desc_0')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+              </div>
               <textarea class="field-textarea" rows="2" placeholder="תיאור קצר" data-field="feature-desc"></textarea>
             </div>
           </div>
@@ -893,12 +980,18 @@
       </div>
 
       <div class="field">
-        <label class="field-label">שמות בולטים / המלצות / שותפויות</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <label class="field-label" style="margin-bottom:0">שמות בולטים / המלצות / שותפויות</label>
+          <button type="button" class="remix-btn" onclick="remixField(this, 'socialProof')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+        </div>
         <textarea class="field-textarea" id="socialProof" rows="4" placeholder="למשל: עבדנו עם אמזון, גוגל, ופייסבוק. או: 'השירות הכי מקצועי שפגשתי' — דנה כהן, מנכ"לית XYZ"></textarea>
       </div>
 
       <div class="field">
-        <label class="field-label">תגים, הסמכות, או הישגים</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <label class="field-label" style="margin-bottom:0">תגים, הסמכות, או הישגים</label>
+          <button type="button" class="remix-btn" onclick="remixField(this, 'badges')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+        </div>
         <textarea class="field-textarea" id="badges" rows="3" placeholder="למשל: Google Partner, Forbes 30 under 30, 500+ לקוחות מרוצים"></textarea>
       </div>
 
@@ -921,18 +1014,27 @@
       </div>
 
       <div class="field">
-        <label class="field-label">תיאור מחיר</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <label class="field-label" style="margin-bottom:0">תיאור מחיר</label>
+          <button type="button" class="remix-btn" onclick="remixField(this, 'priceDesc')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+        </div>
         <textarea class="field-textarea" id="priceDesc" rows="2" placeholder="למשל: כולל גישה מלאה + תמיכה אישית"></textarea>
       </div>
 
       <div class="field">
-        <label class="field-label">טקסט כפתור CTA *</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <label class="field-label" style="margin-bottom:0">טקסט כפתור CTA *</label>
+          <button type="button" class="remix-btn" onclick="remixField(this, 'ctaText')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+        </div>
         <input type="text" class="field-input" id="ctaText" placeholder="הצטרפו עכשיו">
         <div class="field-error" id="err-ctaText">נא להזין טקסט לכפתור</div>
       </div>
 
       <div class="field">
-        <label class="field-label">הודעת תודה לאחר הרשמה *</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <label class="field-label" style="margin-bottom:0">הודעת תודה לאחר הרשמה *</label>
+          <button type="button" class="remix-btn" onclick="remixField(this, 'thankyouMsg')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+        </div>
         <textarea class="field-textarea" id="thankyouMsg" rows="3" placeholder="תודה! נחזור אליכם בהקדם"></textarea>
         <div class="field-error" id="err-thankyouMsg">נא להזין הודעת תודה</div>
       </div>
@@ -1081,8 +1183,21 @@
       <p class="step-subtitle">כתבו בריף חופשי על העסק, הקהל, ההצעה, והסגנון — אנחנו נעשה את השאר</p>
     </div>
 
+    <div class="file-upload-area" id="brief-file-area">
+      <label class="field-label">&#x1F4CE; העלה קובץ בריף (אופציונלי)</label>
+      <p style="font-size:13px; color:#9b9bb5; margin-bottom:12px;">PDF, Word, או טקסט — התוכן ישולב בבריף</p>
+      <div class="file-drop-zone" id="brief-file-drop">
+        <input type="file" id="brief_file" accept=".txt,.pdf,.doc,.docx" style="display:none" />
+        <button type="button" class="file-select-btn" onclick="document.getElementById('brief_file').click()">&#x1F4C1; בחר קובץ</button>
+        <span id="brief-file-name" style="margin-right:12px; font-size:13px; color:#9b9bb5;"></span>
+      </div>
+    </div>
+
     <div class="field">
-      <label class="field-label">הבריף שלכם *</label>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+        <label class="field-label" style="margin-bottom:0">הבריף שלכם *</label>
+        <button type="button" class="remix-btn" onclick="remixField(this, 'briefText')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+      </div>
       <textarea class="field-textarea" id="briefText" rows="12" placeholder="ספרו הכל — שם העסק, מה אתם עושים, מי הקהל, מה ההצעה, מה הסגנון שאתם רוצים... ככל שתספרו יותר, הדף יהיה טוב יותר."></textarea>
       <div class="field-error" id="err-briefText">נא לכתוב בריף</div>
     </div>
@@ -1389,9 +1504,17 @@ function addFeature() {
   item.innerHTML = `
     <button type="button" class="remove-btn" onclick="removeFeature(this)">&times;</button>
     <div class="field">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+        <label class="field-label" style="margin-bottom:0; font-size:0.82rem; color:var(--text-dim);">כותרת</label>
+        <button type="button" class="remix-btn" onclick="remixField(this, 'feature_title_${idx}')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+      </div>
       <input type="text" class="field-input" placeholder="כותרת היתרון" data-field="feature-title">
     </div>
     <div class="field" style="margin-bottom:0">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+        <label class="field-label" style="margin-bottom:0; font-size:0.82rem; color:var(--text-dim);">תיאור</label>
+        <button type="button" class="remix-btn" onclick="remixField(this, 'feature_desc_${idx}')" title="שפר תשובה עם AI">&#x2728; שפר</button>
+      </div>
       <textarea class="field-textarea" rows="2" placeholder="תיאור קצר" data-field="feature-desc"></textarea>
     </div>
   `;
@@ -1751,13 +1874,20 @@ async function submitBrief() {
     const briefText = document.getElementById('briefText').value.trim();
     const slug = generateSlug('brief-' + Date.now());
 
+    // If a brief file was uploaded (PDF/DOCX), include its URL
+    const briefFileUrl = document.getElementById('brief_file')?.dataset?.uploadedUrl;
+    const briefData = { mode: 'brief', brief: briefText };
+    if (briefFileUrl) {
+      briefData.brief_file_url = briefFileUrl;
+    }
+
     const { data: project, error: projectError } = await sb.from('projects').insert({
       user_id: session.user.id,
       slug: slug,
       name: 'Brief Project',
       language: 'he',
       status: 'draft',
-      questionnaire_data: { mode: 'brief', brief: briefText },
+      questionnaire_data: briefData,
       image_url: briefUploadedImageUrl,
       email_enabled: false,
       email_subject: null,
@@ -1790,6 +1920,138 @@ function showToast(msg, isSuccess) {
   requestAnimationFrame(() => toast.classList.add('visible'));
   setTimeout(() => toast.classList.remove('visible'), 4000);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// AI Remix
+// ═══════════════════════════════════════════════════════════════
+let remixOriginals = {}; // store originals for undo
+
+async function remixField(btn, fieldName) {
+  // Find the input/textarea associated with this field
+  let input;
+  if (fieldName.startsWith('feature_title_') || fieldName.startsWith('feature_desc_')) {
+    // Dynamic feature fields
+    const idx = fieldName.split('_').pop();
+    const suffix = fieldName.startsWith('feature_title_') ? 'feature-title' : 'feature-desc';
+    input = btn.closest('.feature-item, [data-feature]')?.querySelector(`[data-field="${suffix}"]`)
+      || document.querySelector(`#${fieldName}`);
+  } else {
+    input = document.getElementById(fieldName) || document.querySelector(`[name="${fieldName}"]`);
+  }
+
+  if (!input || !input.value.trim()) {
+    // Shake the button or show hint
+    btn.style.transform = 'translateX(-3px)';
+    setTimeout(() => btn.style.transform = '', 100);
+    return;
+  }
+
+  // Store original for undo
+  remixOriginals[fieldName] = input.value;
+
+  // Build context from filled fields
+  const context = {
+    name: document.getElementById('businessName')?.value || '',
+    what_you_do: document.getElementById('whatYouDo')?.value || '',
+    language: selectedLang || 'he'
+  };
+
+  // Map field names for features
+  let apiField = fieldName;
+  if (fieldName.startsWith('feature_title_')) apiField = 'feature_title';
+  if (fieldName.startsWith('feature_desc_')) apiField = 'feature_description';
+
+  btn.classList.add('loading');
+  btn.disabled = true;
+  const originalEmoji = btn.textContent;
+  btn.textContent = '\u23F3';
+
+  try {
+    const res = await fetch('/api/remix-answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field: apiField, answer: input.value, context })
+    });
+
+    const data = await res.json();
+    if (data.remixed) {
+      input.value = data.remixed;
+      btn.textContent = '\u2705';
+      btn.classList.remove('loading');
+      btn.classList.add('done');
+
+      // Add undo button
+      let undoBtn = btn.nextElementSibling;
+      if (!undoBtn || !undoBtn.classList.contains('undo-remix')) {
+        undoBtn = document.createElement('button');
+        undoBtn.type = 'button';
+        undoBtn.className = 'undo-remix';
+        undoBtn.textContent = '\u05D1\u05D8\u05DC';
+        undoBtn.onclick = () => {
+          input.value = remixOriginals[fieldName];
+          undoBtn.remove();
+          btn.textContent = '\u2728 \u05E9\u05E4\u05E8';
+          btn.classList.remove('done');
+        };
+        btn.after(undoBtn);
+      }
+
+      // Reset button after 3 seconds
+      setTimeout(() => {
+        btn.textContent = '\u2728 \u05E9\u05E4\u05E8';
+        btn.classList.remove('done');
+        btn.disabled = false;
+      }, 3000);
+    } else {
+      throw new Error(data.error || 'Remix failed');
+    }
+  } catch (err) {
+    console.error('Remix error:', err);
+    btn.textContent = '\u274C';
+    setTimeout(() => {
+      btn.textContent = '\u2728 \u05E9\u05E4\u05E8';
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }, 2000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Brief File Upload
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('brief_file').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const nameEl = document.getElementById('brief-file-name');
+  nameEl.textContent = '\uD83D\uDCC4 ' + file.name;
+
+  const textarea = document.getElementById('briefText');
+
+  if (file.name.endsWith('.txt')) {
+    // Read text files directly
+    const text = await file.text();
+    textarea.value = (textarea.value ? textarea.value + '\n\n---\n\n' : '') + text;
+  } else {
+    // For PDF/DOCX, upload to Supabase Storage and store URL
+    nameEl.textContent = '\u23F3 \u05DE\u05E2\u05DC\u05D4 ' + file.name + '...';
+
+    try {
+      const fileName = `briefs/${Date.now()}-${file.name}`;
+      const { data, error } = await sb.storage.from('lp-images').upload(fileName, file);
+      if (error) throw error;
+
+      const { data: urlData } = sb.storage.from('lp-images').getPublicUrl(fileName);
+
+      // Store the URL - will be saved in questionnaire_data.brief_file_url
+      document.getElementById('brief_file').dataset.uploadedUrl = urlData.publicUrl;
+      nameEl.textContent = '\u2705 ' + file.name + ' \u05D4\u05D5\u05E2\u05DC\u05D4 \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4';
+    } catch (err) {
+      console.error('Upload error:', err);
+      nameEl.textContent = '\u274C \u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D4\u05E2\u05DC\u05D0\u05D4: ' + err.message;
+    }
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // Focus effects — clear errors on input

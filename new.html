@@ -854,7 +854,7 @@
 
 <div class="shell">
   <!-- Login Section -->
-  <div id="loginSection" style="display:none;">
+  <div id="loginSection">
     <header class="header">
       <div class="header-brand">LP Builder</div>
       <h1 class="header-title">בואו ניצור את <span>דף הנחיתה</span> שלכם</h1>
@@ -863,6 +863,7 @@
       <div style="background:var(--navy-light); border:1.5px solid rgba(245,200,66,0.15); border-radius:var(--radius); padding:32px 28px;">
         <h2 style="font-size:1.2rem; font-weight:700; color:var(--white); margin-bottom:6px; text-align:center;">התחברות</h2>
         <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:24px; text-align:center;">הזינו את פרטי החשבון שלכם</p>
+        <form onsubmit="event.preventDefault(); loginAndContinue()">
         <div class="field">
           <label class="field-label">אימייל</label>
           <input type="email" class="field-input" id="loginEmail" placeholder="your@email.com" dir="ltr" style="text-align:left;" autocomplete="email">
@@ -873,8 +874,9 @@
           <input type="password" class="field-input" id="loginPassword" placeholder="הסיסמה שלכם" dir="ltr" style="text-align:left;" autocomplete="current-password">
           <div class="field-error" id="err-loginPassword">נא להזין סיסמה</div>
         </div>
-        <button class="nav-btn nav-btn-submit" id="loginBtn" onclick="loginAndContinue()" style="width:100%; margin-top:8px;">התחברות</button>
+        <button type="submit" class="nav-btn nav-btn-submit" id="loginBtn" style="width:100%; margin-top:8px;">התחברות</button>
         <div class="field-error" id="err-loginGeneral" style="text-align:center; margin-top:12px;">שגיאה בהתחברות</div>
+        </form>
       </div>
     </div>
   </div>
@@ -1975,7 +1977,11 @@ async function loginAndContinue() {
 }
 
 async function logout() {
-  await sb.auth.signOut();
+  try {
+    await sb.auth.signOut();
+  } catch (err) {
+    showToast('שגיאה בהתנתקות: ' + (err.message || err), 'error');
+  }
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('loginSection').style.display = '';
 }

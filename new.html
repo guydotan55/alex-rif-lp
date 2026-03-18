@@ -853,9 +853,41 @@
 </div>
 
 <div class="shell">
+  <!-- Login Section -->
+  <div id="loginSection" style="display:none;">
+    <header class="header">
+      <div class="header-brand">LP Builder</div>
+      <h1 class="header-title">בואו ניצור את <span>דף הנחיתה</span> שלכם</h1>
+    </header>
+    <div style="max-width:400px; margin:0 auto; padding:40px 0;">
+      <div style="background:var(--navy-light); border:1.5px solid rgba(245,200,66,0.15); border-radius:var(--radius); padding:32px 28px;">
+        <h2 style="font-size:1.2rem; font-weight:700; color:var(--white); margin-bottom:6px; text-align:center;">התחברות</h2>
+        <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:24px; text-align:center;">הזינו את פרטי החשבון שלכם</p>
+        <div class="field">
+          <label class="field-label">אימייל</label>
+          <input type="email" class="field-input" id="loginEmail" placeholder="your@email.com" dir="ltr" style="text-align:left;" autocomplete="email">
+          <div class="field-error" id="err-loginEmail">נא להזין כתובת אימייל תקינה</div>
+        </div>
+        <div class="field">
+          <label class="field-label">סיסמה</label>
+          <input type="password" class="field-input" id="loginPassword" placeholder="הסיסמה שלכם" dir="ltr" style="text-align:left;" autocomplete="current-password">
+          <div class="field-error" id="err-loginPassword">נא להזין סיסמה</div>
+        </div>
+        <button class="nav-btn nav-btn-submit" id="loginBtn" onclick="loginAndContinue()" style="width:100%; margin-top:8px;">התחברות</button>
+        <div class="field-error" id="err-loginGeneral" style="text-align:center; margin-top:12px;">שגיאה בהתחברות</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content (hidden until logged in) -->
+  <div id="mainContent" style="display:none;">
+
   <!-- Header -->
   <header class="header">
-    <div class="header-brand">LP Builder</div>
+    <div class="header-brand" style="display:flex; align-items:center; justify-content:center; gap:16px;">
+      <span>LP Builder</span>
+      <button onclick="logout()" style="background:none; border:1px solid rgba(255,255,255,0.15); border-radius:6px; color:var(--text-dim); font-family:'Heebo',sans-serif; font-size:0.72rem; padding:4px 12px; cursor:pointer; transition:var(--transition);" onmouseover="this.style.borderColor='rgba(255,255,255,0.3)';this.style.color='var(--cream)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';this.style.color='var(--text-dim)'">התנתק</button>
+    </div>
     <h1 class="header-title">בואו ניצור את <span>דף הנחיתה</span> שלכם</h1>
   </header>
 
@@ -873,13 +905,13 @@
     <div class="progress-wrap" id="progressWrap">
       <div class="progress-steps" id="progressSteps"></div>
       <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
-      <div class="progress-label" id="progressLabel">שלב 1 מתוך 7</div>
+      <div class="progress-label" id="progressLabel">שלב 1 מתוך 6</div>
     </div>
 
     <!-- ── Step 1: Basics ──────────────────────────────────── -->
     <div class="step-card active" data-step="1">
       <div class="step-header">
-        <div class="step-num">שלב 1 מתוך 7</div>
+        <div class="step-num">שלב 1 מתוך 6</div>
         <h2 class="step-title">בואו נתחיל מהבסיס</h2>
         <p class="step-subtitle">ספרו לנו קצת על העסק או הפרויקט שלכם</p>
       </div>
@@ -921,7 +953,7 @@
     <!-- ── Step 2: Story & Value ───────────────────────────── -->
     <div class="step-card" data-step="2">
       <div class="step-header">
-        <div class="step-num">שלב 2 מתוך 7</div>
+        <div class="step-num">שלב 2 מתוך 6</div>
         <h2 class="step-title">הסיפור והערך שלכם</h2>
         <p class="step-subtitle">כאן אנחנו בונים את הלב של הדף</p>
       </div>
@@ -974,7 +1006,7 @@
     <!-- ── Step 3: Social Proof ────────────────────────────── -->
     <div class="step-card" data-step="3">
       <div class="step-header">
-        <div class="step-num">שלב 3 מתוך 7</div>
+        <div class="step-num">שלב 3 מתוך 6</div>
         <h2 class="step-title">הוכחה חברתית</h2>
         <p class="step-subtitle">שמות, המלצות, תגים — הכל עוזר לבנות אמון (אופציונלי)</p>
       </div>
@@ -1001,7 +1033,7 @@
     <!-- ── Step 4: Offer & CTA ─────────────────────────────── -->
     <div class="step-card" data-step="4">
       <div class="step-header">
-        <div class="step-num">שלב 4 מתוך 7</div>
+        <div class="step-num">שלב 4 מתוך 6</div>
         <h2 class="step-title">ההצעה וקריאה לפעולה</h2>
         <p class="step-subtitle">מה ההצעה שלכם, ומה אתם רוצים שהמבקר יעשה</p>
       </div>
@@ -1043,7 +1075,7 @@
     <!-- ── Step 5: Visual Identity ─────────────────────────── -->
     <div class="step-card" data-step="5">
       <div class="step-header">
-        <div class="step-num">שלב 5 מתוך 7</div>
+        <div class="step-num">שלב 5 מתוך 6</div>
         <h2 class="step-title">הזהות החזותית</h2>
         <p class="step-subtitle">תמונה, צבעים וטון הדיבור של הדף</p>
       </div>
@@ -1093,7 +1125,7 @@
     <!-- ── Step 6: Email Settings ──────────────────────────── -->
     <div class="step-card" data-step="6">
       <div class="step-header">
-        <div class="step-num">שלב 6 מתוך 7</div>
+        <div class="step-num">שלב 6 מתוך 6</div>
         <h2 class="step-title">הגדרות אימייל</h2>
         <p class="step-subtitle">הגדירו מייל ברוכים הבאים אוטומטי לנרשמים</p>
       </div>
@@ -1119,50 +1151,6 @@
 בברכה,
 הצוות</textarea>
         </div>
-      </div>
-    </div>
-
-    <!-- ── Step 7: Account ─────────────────────────────────── -->
-    <div class="step-card" data-step="7">
-      <div class="step-header">
-        <div class="step-num">שלב 7 מתוך 7</div>
-        <h2 class="step-title">יצירת חשבון</h2>
-        <p class="step-subtitle">צרו חשבון כדי לנהל את דף הנחיתה שלכם</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label">כתובת אימייל *</label>
-        <input type="email" class="field-input" id="authEmail" placeholder="your@email.com" dir="ltr" style="text-align:left;" autocomplete="email">
-        <div class="field-error" id="err-authEmail">נא להזין כתובת אימייל תקינה</div>
-      </div>
-
-      <div class="auth-tabs">
-        <button type="button" class="auth-tab active" onclick="setAuthMode('password', this)">סיסמה</button>
-        <button type="button" class="auth-tab" onclick="setAuthMode('magic', this)">קישור קסם</button>
-      </div>
-
-      <div id="passwordFields">
-        <div class="field">
-          <label class="field-label">סיסמה *</label>
-          <input type="password" class="field-input" id="authPassword" placeholder="לפחות 6 תווים" dir="ltr" style="text-align:left;" autocomplete="new-password">
-          <div class="field-error" id="err-authPassword">הסיסמה חייבת להכיל לפחות 6 תווים</div>
-        </div>
-        <div class="field">
-          <label class="field-label">אישור סיסמה *</label>
-          <input type="password" class="field-input" id="authPasswordConfirm" placeholder="הזינו שוב את הסיסמה" dir="ltr" style="text-align:left;" autocomplete="new-password">
-          <div class="field-error" id="err-authPasswordConfirm">הסיסמאות אינן תואמות</div>
-        </div>
-      </div>
-
-      <div class="magic-link-msg" id="magicLinkMsg">
-        <span class="icon">&#x2728;</span>
-        נשלח אליכם קישור התחברות לאימייל.<br>
-        ללא צורך בסיסמה!
-      </div>
-
-      <div class="terms-row">
-        <input type="checkbox" class="terms-check" id="termsCheck" checked>
-        <label class="terms-text" for="termsCheck">אני מסכים/ה ל<a href="#">תנאי השימוש</a> ו<a href="#">מדיניות הפרטיות</a></label>
       </div>
     </div>
 
@@ -1219,51 +1207,12 @@
       <div class="field-error" id="err-briefImage">נא להעלות תמונה</div>
     </div>
 
-    <div style="height:1px; background:rgba(245,200,66,0.1); margin: 28px 0;"></div>
-
-    <div class="step-header" style="margin-bottom:20px;">
-      <h2 class="step-title" style="font-size:1.3rem;">יצירת חשבון</h2>
-    </div>
-
-    <div class="field">
-      <label class="field-label">כתובת אימייל *</label>
-      <input type="email" class="field-input" id="briefAuthEmail" placeholder="your@email.com" dir="ltr" style="text-align:left;" autocomplete="email">
-      <div class="field-error" id="err-briefAuthEmail">נא להזין כתובת אימייל תקינה</div>
-    </div>
-
-    <div class="auth-tabs">
-      <button type="button" class="auth-tab active" onclick="setBriefAuthMode('password', this)">סיסמה</button>
-      <button type="button" class="auth-tab" onclick="setBriefAuthMode('magic', this)">קישור קסם</button>
-    </div>
-
-    <div id="briefPasswordFields">
-      <div class="field">
-        <label class="field-label">סיסמה *</label>
-        <input type="password" class="field-input" id="briefAuthPassword" placeholder="לפחות 6 תווים" dir="ltr" style="text-align:left;" autocomplete="new-password">
-        <div class="field-error" id="err-briefAuthPassword">הסיסמה חייבת להכיל לפחות 6 תווים</div>
-      </div>
-      <div class="field">
-        <label class="field-label">אישור סיסמה *</label>
-        <input type="password" class="field-input" id="briefAuthPasswordConfirm" placeholder="הזינו שוב את הסיסמה" dir="ltr" style="text-align:left;" autocomplete="new-password">
-        <div class="field-error" id="err-briefAuthPasswordConfirm">הסיסמאות אינן תואמות</div>
-      </div>
-    </div>
-
-    <div class="magic-link-msg" id="briefMagicLinkMsg">
-      <span class="icon">&#x2728;</span>
-      נשלח אליכם קישור התחברות לאימייל.<br>
-      ללא צורך בסיסמה!
-    </div>
-
-    <div class="terms-row">
-      <input type="checkbox" class="terms-check" id="briefTermsCheck" checked>
-      <label class="terms-text" for="briefTermsCheck">אני מסכים/ה ל<a href="#">תנאי השימוש</a> ו<a href="#">מדיניות הפרטיות</a></label>
-    </div>
-
     <div class="nav-bar">
       <button class="nav-btn nav-btn-submit" id="briefSubmitBtn" onclick="submitBrief()" style="flex:1">&#x2728; צרו לי דף נחיתה</button>
     </div>
   </div>
+
+  </div><!-- /mainContent -->
 </div>
 
 <!-- Toast -->
@@ -1281,14 +1230,12 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // State
 // ═══════════════════════════════════════════════════════════════
 let currentStep = 1;
-const totalSteps = 7;
+const totalSteps = 6;
 let currentMode = 'questionnaire';
 let selectedLang = 'he';
 let selectedTone = 'professional';
 let colorMode = 'auto';
 let emailEnabled = true;
-let authMode = 'password';
-let briefAuthMode = 'password';
 let uploadedImageUrl = null;
 let briefUploadedImageUrl = null;
 let featureCount = 1;
@@ -1431,20 +1378,6 @@ function validateStep(step) {
     }
   }
   // Step 6 has no required validation
-  if (step === 7) {
-    return validateAuth();
-  }
-  return true;
-}
-
-function validateAuth() {
-  const email = document.getElementById('authEmail').value.trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError('authEmail', 'err-authEmail');
-  if (authMode === 'password') {
-    const pw = document.getElementById('authPassword').value;
-    if (pw.length < 6) return showError('authPassword', 'err-authPassword');
-    if (pw !== document.getElementById('authPasswordConfirm').value) return showError('authPasswordConfirm', 'err-authPasswordConfirm');
-  }
   return true;
 }
 
@@ -1454,13 +1387,6 @@ function validateBrief() {
   if (!briefUploadedImageUrl) {
     document.getElementById('err-briefImage').classList.add('visible');
     return false;
-  }
-  const email = document.getElementById('briefAuthEmail').value.trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError('briefAuthEmail', 'err-briefAuthEmail');
-  if (briefAuthMode === 'password') {
-    const pw = document.getElementById('briefAuthPassword').value;
-    if (pw.length < 6) return showError('briefAuthPassword', 'err-briefAuthPassword');
-    if (pw !== document.getElementById('briefAuthPasswordConfirm').value) return showError('briefAuthPasswordConfirm', 'err-briefAuthPasswordConfirm');
   }
   return true;
 }
@@ -1569,25 +1495,6 @@ function toggleEmail() {
   const toggle = document.getElementById('emailToggle');
   toggle.classList.toggle('on', emailEnabled);
   document.getElementById('emailFields').style.display = emailEnabled ? 'block' : 'none';
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Auth mode
-// ═══════════════════════════════════════════════════════════════
-function setAuthMode(mode, btn) {
-  authMode = mode;
-  document.querySelectorAll('#questionnaireMode .auth-tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('passwordFields').style.display = mode === 'password' ? 'block' : 'none';
-  document.getElementById('magicLinkMsg').style.display = mode === 'magic' ? 'block' : 'none';
-}
-
-function setBriefAuthMode(mode, btn) {
-  briefAuthMode = mode;
-  document.querySelectorAll('#briefMode .auth-tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('briefPasswordFields').style.display = mode === 'password' ? 'block' : 'none';
-  document.getElementById('briefMagicLinkMsg').style.display = mode === 'magic' ? 'block' : 'none';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1764,37 +1671,15 @@ function collectQuestionnaireData() {
 // Submit — Questionnaire mode
 // ═══════════════════════════════════════════════════════════════
 async function submitQuestionnaire() {
-  if (!validateStep(7)) return;
-
   const btn = document.getElementById('nextBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>יוצר את הדף...';
 
   try {
-    const email = document.getElementById('authEmail').value.trim();
-    let session;
-
-    if (authMode === 'password') {
-      const password = document.getElementById('authPassword').value;
-      const { data, error } = await sb.auth.signUp({ email, password });
-      if (error) throw new Error(error.message);
-      session = data.session;
-      // If email confirmation required, session may be null
-      if (!session) {
-        // Try to sign in immediately in case confirmation is disabled
-        const { data: signInData, error: signInError } = await sb.auth.signInWithPassword({ email, password });
-        if (signInError) {
-          showToast('החשבון נוצר! בדקו את האימייל לאישור, ואז התחברו.', true);
-          btn.disabled = false;
-          btn.innerHTML = '&#x2728; צרו לי דף נחיתה';
-          return;
-        }
-        session = signInData.session;
-      }
-    } else {
-      const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + '/new' } });
-      if (error) throw new Error(error.message);
-      showToast('שלחנו קישור לאימייל שלכם! לחצו עליו כדי להמשיך.', true);
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+      document.getElementById('loginSection').style.display = '';
+      document.getElementById('mainContent').style.display = 'none';
       btn.disabled = false;
       btn.innerHTML = '&#x2728; צרו לי דף נחיתה';
       return;
@@ -1845,28 +1730,10 @@ async function submitBrief() {
   btn.innerHTML = '<span class="spinner"></span>יוצר את הדף...';
 
   try {
-    const email = document.getElementById('briefAuthEmail').value.trim();
-    let session;
-
-    if (briefAuthMode === 'password') {
-      const password = document.getElementById('briefAuthPassword').value;
-      const { data, error } = await sb.auth.signUp({ email, password });
-      if (error) throw new Error(error.message);
-      session = data.session;
-      if (!session) {
-        const { data: signInData, error: signInError } = await sb.auth.signInWithPassword({ email, password });
-        if (signInError) {
-          showToast('החשבון נוצר! בדקו את האימייל לאישור, ואז התחברו.', true);
-          btn.disabled = false;
-          btn.innerHTML = '&#x2728; צרו לי דף נחיתה';
-          return;
-        }
-        session = signInData.session;
-      }
-    } else {
-      const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + '/new' } });
-      if (error) throw new Error(error.message);
-      showToast('שלחנו קישור לאימייל שלכם! לחצו עליו כדי להמשיך.', true);
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+      document.getElementById('loginSection').style.display = '';
+      document.getElementById('mainContent').style.display = 'none';
       btn.disabled = false;
       btn.innerHTML = '&#x2728; צרו לי דף נחיתה';
       return;
@@ -2066,9 +1933,69 @@ document.querySelectorAll('.field-input, .field-textarea').forEach(el => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// Login / Logout / Session check
+// ═══════════════════════════════════════════════════════════════
+async function loginAndContinue() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+
+  // Clear previous errors
+  document.querySelectorAll('#loginSection .field-error').forEach(el => el.classList.remove('visible'));
+  document.querySelectorAll('#loginSection .field-input').forEach(el => el.classList.remove('error'));
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    document.getElementById('loginEmail').classList.add('error');
+    document.getElementById('err-loginEmail').classList.add('visible');
+    return;
+  }
+  if (!password) {
+    document.getElementById('loginPassword').classList.add('error');
+    document.getElementById('err-loginPassword').classList.add('visible');
+    return;
+  }
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>מתחבר...';
+
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('mainContent').style.display = '';
+  } catch (err) {
+    console.error('Login error:', err);
+    const errEl = document.getElementById('err-loginGeneral');
+    errEl.textContent = err.message || 'שגיאה בהתחברות';
+    errEl.classList.add('visible');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'התחברות';
+  }
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('loginSection').style.display = '';
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════════════════════════
 initProgress();
+
+// Session check on load
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('mainContent').style.display = '';
+  } else {
+    document.getElementById('loginSection').style.display = '';
+    document.getElementById('mainContent').style.display = 'none';
+  }
+})();
 </script>
 </body>
 </html>

@@ -61,26 +61,42 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    // 4. Create user via Supabase Admin API
-    const createRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+    // 4. Invite user via Supabase invite endpoint (sends magic link email)
+    let newUser;
+    const inviteRes = await fetch(`${SUPABASE_URL}/auth/v1/invite`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': SUPABASE_SERVICE_ROLE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        'apikey': SUPABASE_SERVICE_ROLE_KEY
       },
-      body: JSON.stringify({
-        email,
-        email_confirm: true,
-        password: generateTempPassword()
-      })
+      body: JSON.stringify({ email })
     });
 
-    if (!createRes.ok) {
-      const errData = await createRes.json();
-      return res.status(400).json({ error: errData.msg || errData.message || 'Failed to create user' });
+    if (inviteRes.ok) {
+      newUser = await inviteRes.json();
+    } else {
+      // Fallback: create user with email_confirm: false so Supabase sends confirmation email
+      const createRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({
+          email,
+          email_confirm: false,
+          password: generateTempPassword()
+        })
+      });
+
+      if (!createRes.ok) {
+        const errData = await createRes.json();
+        return res.status(400).json({ error: errData.msg || errData.message || 'Failed to create user' });
+      }
+      newUser = await createRes.json();
     }
-    const newUser = await createRes.json();
 
     // 5. Create user_profiles row
     const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
@@ -93,7 +109,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         user_id: newUser.id,
-        is_manager: !!is_manager
+        is_manager: !!is_manager,
+        email: email
       })
     });
 
@@ -105,6 +122,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
+      message: 'Invitation email sent. The user will receive an email to set up their account.',
       user: {
         id: newUser.id,
         email: newUser.email,

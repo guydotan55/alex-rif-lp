@@ -1191,12 +1191,12 @@ async function showDashboard() {
   // Fetch or auto-create user profile
   if (session?.user?.id) {
     const { data: profile } = await sb.from('user_profiles')
-      .select('is_manager')
+      .select('is_manager, email')
       .eq('user_id', session.user.id)
       .single();
 
     if (!profile) {
-      await sb.from('user_profiles').insert({ user_id: session.user.id, is_manager: false });
+      await sb.from('user_profiles').insert({ user_id: session.user.id, is_manager: false, email: session.user.email });
       isManager = false;
     } else {
       isManager = profile.is_manager || false;
@@ -1233,6 +1233,15 @@ async function loadProjects() {
   }
 
   projects = data || [];
+
+  // Fetch owner emails for manager view
+  if (isManager && projects.length > 0) {
+    const userIds = [...new Set(projects.map(p => p.user_id))];
+    const { data: allProfiles } = await sb.from('user_profiles').select('user_id, email').in('user_id', userIds);
+    const emailMap = {};
+    (allProfiles || []).forEach(p => emailMap[p.user_id] = p.email);
+    projects.forEach(p => p.owner_email = emailMap[p.user_id] || 'Unknown');
+  }
 
   if (projects.length === 0) {
     list.innerHTML = `

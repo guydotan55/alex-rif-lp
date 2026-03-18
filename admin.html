@@ -264,6 +264,23 @@
     .spin { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .empty { text-align: center; padding: 36px; color: var(--sub); font-size: 14px; }
+
+    /* ── TOGGLE SWITCH ────────────────────────── */
+    .toggle {
+      position: relative; display: inline-block; width: 40px; height: 22px; cursor: pointer;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0; background: var(--border); border-radius: 11px;
+      transition: background .2s;
+    }
+    .toggle-slider::before {
+      content: ''; position: absolute; width: 16px; height: 16px;
+      left: 3px; bottom: 3px; background: var(--sub); border-radius: 50%;
+      transition: transform .2s, background .2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--accent); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(18px); background: #fff; }
   </style>
 </head>
 <body>
@@ -304,6 +321,7 @@
     <button class="tab-btn" onclick="switchTab('email')">✉️ מייל</button>
     <button class="tab-btn" onclick="switchTab('content')">📝 תוכן</button>
     <button class="tab-btn" onclick="switchTab('projects')">🏗️ פרויקטים</button>
+    <button class="tab-btn" onclick="switchTab('users')">👥 משתמשים</button>
   </div>
 
   <!-- ── TAB: DATA ──────────────────────────────── -->
@@ -486,6 +504,66 @@
     </div>
   </div>
 
+  <!-- ── TAB: USERS ───────────────────────────── -->
+  <div id="tab-users" class="tab-pane">
+    <div class="page">
+
+      <!-- Invite Form -->
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">הזמנת משתמש חדש</div>
+            <div class="card-sub">שלח הזמנה למשתמש חדש למערכת</div>
+          </div>
+        </div>
+        <div style="padding: 20px 24px;">
+          <div class="field-grid">
+            <div>
+              <label class="field-label">כתובת מייל</label>
+              <input class="field-input" id="invite-email" type="email" placeholder="user@example.com" style="direction:ltr;text-align:left" />
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:16px;">
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sub);cursor:pointer;padding-bottom:12px;">
+                <input type="checkbox" id="invite-manager" style="width:16px;height:16px;accent-color:var(--accent);" />
+                גישת מנהל
+              </label>
+              <button class="btn-save" id="invite-btn" onclick="inviteUser()" style="margin-bottom:4px;">הזמן משתמש</button>
+            </div>
+          </div>
+          <div class="err-msg" id="invite-err" style="margin-top:0"></div>
+          <div class="ok-msg" id="invite-ok" style="margin-top:0"></div>
+        </div>
+      </div>
+
+      <!-- Users Table -->
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">כל המשתמשים</div>
+            <div class="card-sub">ניהול משתמשים והרשאות</div>
+          </div>
+          <button class="btn-action" onclick="loadUsers()">רענן</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>מייל</th>
+                <th>מנהל</th>
+                <th>תאריך הצטרפות</th>
+                <th>פרויקטים</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="4"><div class="loading"><div class="spin"></div> טוען משתמשים...</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 </div><!-- /dash -->
 
 <script>
@@ -533,7 +611,7 @@
   async function showDash() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('dash').style.display = 'block';
-    await Promise.all([ loadData(), loadSettings(), loadLpContent(), loadProjects() ]);
+    await Promise.all([ loadData(), loadSettings(), loadLpContent(), loadProjects(), loadUsers() ]);
   }
 
   // ── TABS ──────────────────────────────────────
@@ -874,6 +952,129 @@
   // ── UTILS ─────────────────────────────────────
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── USERS MANAGEMENT ──────────────────────────
+  let allUsers = [];
+
+  async function getAccessToken() {
+    const { data: { session } } = await sb.auth.getSession();
+    return session?.access_token || '';
+  }
+
+  async function loadUsers() {
+    const tbody = document.getElementById('users-tbody');
+    tbody.innerHTML = '<tr><td colspan="4"><div class="loading"><div class="spin"></div> טוען משתמשים...</div></td></tr>';
+
+    try {
+      const token = await getAccessToken();
+      const res = await fetch('/api/admin-users', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to load users');
+      }
+      const data = await res.json();
+      allUsers = data.users || [];
+
+      if (allUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4"><div class="empty">אין משתמשים</div></td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = allUsers.map(u => {
+        const d = new Date(u.created_at);
+        const ds = d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const checked = u.is_manager ? 'checked' : '';
+        return `<tr>
+          <td class="ltr">${esc(u.email || '—')}</td>
+          <td>
+            <label class="toggle">
+              <input type="checkbox" ${checked} onchange="toggleManager('${esc(u.id)}', this.checked)" />
+              <span class="toggle-slider"></span>
+            </label>
+          </td>
+          <td class="ltr mono">${ds}</td>
+          <td>${u.projects_count}</td>
+        </tr>`;
+      }).join('');
+    } catch (err) {
+      console.error('loadUsers error:', err);
+      tbody.innerHTML = '<tr><td colspan="4"><div class="empty">שגיאה בטעינת משתמשים: ' + esc(err.message) + '</div></td></tr>';
+    }
+  }
+
+  async function toggleManager(userId, isManager) {
+    try {
+      const token = await getAccessToken();
+      const res = await fetch('/api/admin-users', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ user_id: userId, is_manager: isManager })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to update');
+      }
+    } catch (err) {
+      alert('שגיאה בעדכון הרשאה: ' + err.message);
+      await loadUsers(); // Reload to revert visual state
+    }
+  }
+
+  async function inviteUser() {
+    const email = document.getElementById('invite-email').value.trim();
+    const isManager = document.getElementById('invite-manager').checked;
+    const btn = document.getElementById('invite-btn');
+    const errEl = document.getElementById('invite-err');
+    const okEl = document.getElementById('invite-ok');
+
+    errEl.style.display = 'none';
+    okEl.style.display = 'none';
+
+    if (!email) {
+      errEl.textContent = 'נא להזין כתובת מייל';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'שולח...';
+
+    try {
+      const token = await getAccessToken();
+      const res = await fetch('/api/invite-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ email, is_manager: isManager })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to invite user');
+      }
+
+      okEl.textContent = 'המשתמש הוזמן בהצלחה: ' + email;
+      okEl.style.display = 'block';
+      document.getElementById('invite-email').value = '';
+      document.getElementById('invite-manager').checked = false;
+      setTimeout(() => okEl.style.display = 'none', 5000);
+
+      await loadUsers();
+    } catch (err) {
+      errEl.textContent = 'שגיאה: ' + err.message;
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'הזמן משתמש';
+    }
   }
 </script>
 </body>

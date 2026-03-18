@@ -1177,6 +1177,8 @@ document.getElementById('l-email').addEventListener('keydown', e => { if (e.key 
   if (session) showDashboard();
 })();
 
+let isManager = false;
+
 async function showDashboard() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
@@ -1184,6 +1186,21 @@ async function showDashboard() {
   const { data: { session } } = await sb.auth.getSession();
   if (session?.user?.email) {
     document.getElementById('user-email').textContent = session.user.email;
+  }
+
+  // Fetch or auto-create user profile
+  if (session?.user?.id) {
+    const { data: profile } = await sb.from('user_profiles')
+      .select('is_manager')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (!profile) {
+      await sb.from('user_profiles').insert({ user_id: session.user.id, is_manager: false });
+      isManager = false;
+    } else {
+      isManager = profile.is_manager || false;
+    }
   }
 
   await loadProjects();
@@ -1201,7 +1218,14 @@ async function loadProjects() {
   const list = document.getElementById('project-list');
   list.innerHTML = '<div class="sidebar-loading"><div class="loading-block"><div class="small-spin"></div> טוען פרויקטים...</div></div>';
 
-  const { data, error } = await sb.from('projects').select('*').order('created_at', { ascending: false });
+  let query = sb.from('projects').select('*').order('created_at', { ascending: false });
+  if (!isManager) {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user?.id) {
+      query = query.eq('user_id', session.user.id);
+    }
+  }
+  const { data, error } = await query;
   if (error) {
     list.innerHTML = '<div class="sidebar-empty">שגיאה בטעינת פרויקטים</div>';
     console.error('projects:', error);
@@ -1219,7 +1243,9 @@ async function loadProjects() {
     return;
   }
 
-  list.innerHTML = projects.map(p => `
+  list.innerHTML = projects.map(p => {
+    const ownerLine = isManager && p.owner_email ? `<div class="project-card-meta" style="opacity:.6;font-size:11px;">${esc(p.owner_email)}</div>` : '';
+    return `
     <div class="project-card ${selectedProject?.id === p.id ? 'active' : ''}"
          onclick="selectProject('${p.id}')" data-project-id="${p.id}">
       <div class="project-card-name">
@@ -1227,8 +1253,9 @@ async function loadProjects() {
         <span class="status-badge badge-${p.status || 'draft'}">${statusLabel(p.status)}</span>
       </div>
       <div class="project-card-meta">${formatDate(p.created_at)}</div>
-    </div>
-  `).join('');
+      ${ownerLine}
+    </div>`;
+  }).join('');
 }
 
 function statusLabel(s) {

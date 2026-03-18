@@ -906,16 +906,12 @@
       <p>Dashboard</p>
     </div>
 
-    <div id="login-form-password">
+    <div id="login-form-magic">
       <div class="field-group">
         <label>כתובת מייל</label>
         <input type="email" id="l-email" class="field-input" placeholder="your@email.com" autocomplete="email" />
       </div>
-      <div class="field-group">
-        <label>סיסמה</label>
-        <input type="password" id="l-pass" class="field-input" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" autocomplete="current-password" />
-      </div>
-      <button class="btn-primary" id="l-btn" onclick="doLogin()">התחברות</button>
+      <button class="btn-primary" id="l-btn" onclick="doLogin()">שלחו לי קישור</button>
     </div>
 
     <div class="err-msg" id="l-err"></div>
@@ -1137,18 +1133,20 @@ const PAGE_SIZE = 20;
 // ── Auth ──────────────────────────────────────────────────
 async function doLogin() {
   const email = document.getElementById('l-email').value.trim();
-  const pass = document.getElementById('l-pass').value;
   const btn = document.getElementById('l-btn');
   const err = document.getElementById('l-err');
   err.style.display = 'none';
-  if (!email || !pass) { showErr('נא למלא מייל וסיסמה'); return; }
-  btn.disabled = true; btn.textContent = 'מתחבר...';
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (!email) { showErr('נא למלא כתובת מייל'); return; }
+  btn.disabled = true; btn.textContent = 'שולח...';
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin + '/dashboard' }
+  });
   if (error) {
-    showErr(error.message.includes('Invalid') ? 'מייל או סיסמה שגויים.' : 'שגיאת התחברות: ' + error.message);
-    btn.disabled = false; btn.textContent = 'התחברות';
+    showErr('שגיאה: ' + error.message);
+    btn.disabled = false; btn.textContent = 'שלחו לי קישור';
   } else {
-    showDashboard();
+    document.getElementById('login-form-magic').innerHTML = '<p style="text-align:center;color:var(--gold);font-size:1rem;padding:16px 0;">שלחנו קישור לאימייל שלכם!<br>לחצו עליו כדי להיכנס.</p>';
   }
 }
 
@@ -1163,14 +1161,12 @@ async function doLogout() {
   await sb.auth.signOut();
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('l-pass').value = '';
   selectedProject = null;
   projects = [];
 }
 
 // Enter to submit
-document.getElementById('l-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-document.getElementById('l-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('l-pass').focus(); });
+document.getElementById('l-email').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
 // Session check on load
 (async () => {

@@ -862,21 +862,18 @@
     <div style="max-width:400px; margin:0 auto; padding:40px 0;">
       <div style="background:var(--navy-light); border:1.5px solid rgba(245,200,66,0.15); border-radius:var(--radius); padding:32px 28px;">
         <h2 style="font-size:1.2rem; font-weight:700; color:var(--white); margin-bottom:6px; text-align:center;">התחברות</h2>
-        <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:24px; text-align:center;">הזינו את פרטי החשבון שלכם</p>
+        <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:24px; text-align:center;">הזינו את האימייל שלכם ונשלח קישור כניסה</p>
+        <div id="loginForm">
         <form onsubmit="event.preventDefault(); loginAndContinue()">
         <div class="field">
           <label class="field-label">אימייל</label>
           <input type="email" class="field-input" id="loginEmail" placeholder="your@email.com" dir="ltr" style="text-align:left;" autocomplete="email">
           <div class="field-error" id="err-loginEmail">נא להזין כתובת אימייל תקינה</div>
         </div>
-        <div class="field">
-          <label class="field-label">סיסמה</label>
-          <input type="password" class="field-input" id="loginPassword" placeholder="הסיסמה שלכם" dir="ltr" style="text-align:left;" autocomplete="current-password">
-          <div class="field-error" id="err-loginPassword">נא להזין סיסמה</div>
-        </div>
-        <button type="submit" class="nav-btn nav-btn-submit" id="loginBtn" style="width:100%; margin-top:8px;">התחברות</button>
+        <button type="submit" class="nav-btn nav-btn-submit" id="loginBtn" style="width:100%; margin-top:8px;">שלחו לי קישור</button>
         <div class="field-error" id="err-loginGeneral" style="text-align:center; margin-top:12px;">שגיאה בהתחברות</div>
         </form>
+        </div>
       </div>
     </div>
   </div>
@@ -1940,7 +1937,6 @@ document.querySelectorAll('.field-input, .field-textarea').forEach(el => {
 // ═══════════════════════════════════════════════════════════════
 async function loginAndContinue() {
   const email = document.getElementById('loginEmail').value.trim();
-  const password = document.getElementById('loginPassword').value;
 
   // Clear previous errors
   document.querySelectorAll('#loginSection .field-error').forEach(el => el.classList.remove('visible'));
@@ -1951,29 +1947,25 @@ async function loginAndContinue() {
     document.getElementById('err-loginEmail').classList.add('visible');
     return;
   }
-  if (!password) {
-    document.getElementById('loginPassword').classList.add('error');
-    document.getElementById('err-loginPassword').classList.add('visible');
-    return;
-  }
 
   const btn = document.getElementById('loginBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>מתחבר...';
+  btn.textContent = 'שולח...';
 
   try {
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin + '/new' }
+    });
     if (error) throw error;
-    document.getElementById('loginSection').style.display = 'none';
-    document.getElementById('mainContent').style.display = '';
+
+    // Show success message
+    document.getElementById('loginForm').innerHTML = '<p style="text-align:center;color:var(--gold);font-size:1.1rem;padding:20px 0;">שלחנו קישור לאימייל שלכם!<br>לחצו עליו כדי להמשיך.</p>';
   } catch (err) {
     console.error('Login error:', err);
-    const errEl = document.getElementById('err-loginGeneral');
-    errEl.textContent = err.message || 'שגיאה בהתחברות';
-    errEl.classList.add('visible');
-  } finally {
+    showToast('שגיאה: ' + (err.message || 'נסו שוב'));
     btn.disabled = false;
-    btn.innerHTML = 'התחברות';
+    btn.textContent = 'שלחו לי קישור';
   }
 }
 

@@ -918,17 +918,6 @@
       <button class="btn-primary" id="l-btn" onclick="doLogin()">התחברות</button>
     </div>
 
-    <div class="login-divider">או</div>
-
-    <div id="login-form-magic">
-      <div class="field-group" id="magic-email-group">
-        <label>קישור קסם - התחברות ללא סיסמה</label>
-        <input type="email" id="m-email" class="field-input" placeholder="your@email.com" autocomplete="email" />
-      </div>
-      <button class="btn-magic" id="m-btn" onclick="doMagicLink()">שלח קישור התחברות</button>
-      <div class="ok-msg magic-sent" id="magic-ok">קישור ההתחברות נשלח! בדוק את תיבת המייל.</div>
-    </div>
-
     <div class="err-msg" id="l-err"></div>
   </div>
 </div>
@@ -955,7 +944,7 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-head">
         <span class="sidebar-title">הפרויקטים שלי</span>
-        <a href="/new" class="btn-new-project">+ LP חדש</a>
+        <a href="/new" class="btn-new-project">+ דף נחיתה חדש</a>
       </div>
       <div class="project-list" id="project-list">
         <div class="sidebar-loading"><div class="loading-block"><div class="small-spin"></div> טוען...</div></div>
@@ -970,7 +959,7 @@
         <button class="mobile-sidebar-toggle" onclick="toggleSidebar()">&#9776; הפרויקטים שלי</button>
         <div class="main-empty-icon">&#9670;</div>
         <div>בחר פרויקט מהרשימה</div>
-        <div style="font-size:13px; color:var(--text-dim);">או צור דף נחיתה חדש</div>
+        <a href="/new" style="font-size:13px; color:var(--text-dim); text-decoration:none; transition:color 0.2s;" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-dim)'">או צור דף נחיתה חדש &larr;</a>
       </div>
 
       <!-- Project detail view -->
@@ -1162,22 +1151,6 @@ async function doLogin() {
   }
 }
 
-async function doMagicLink() {
-  const email = document.getElementById('m-email').value.trim();
-  const btn = document.getElementById('m-btn');
-  const err = document.getElementById('l-err');
-  const ok = document.getElementById('magic-ok');
-  err.style.display = 'none'; ok.style.display = 'none';
-  if (!email) { showErr('נא למלא כתובת מייל'); return; }
-  btn.disabled = true; btn.textContent = 'שולח...';
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + '/dashboard.html' } });
-  btn.disabled = false; btn.textContent = 'שלח קישור התחברות';
-  if (error) {
-    showErr('שגיאה: ' + error.message);
-  } else {
-    ok.style.display = 'block';
-  }
-}
 
 function showErr(msg) {
   const el = document.getElementById('l-err');
@@ -1197,7 +1170,6 @@ async function doLogout() {
 // Enter to submit
 document.getElementById('l-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('l-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('l-pass').focus(); });
-document.getElementById('m-email').addEventListener('keydown', e => { if (e.key === 'Enter') doMagicLink(); });
 
 // Session check on load
 (async () => {

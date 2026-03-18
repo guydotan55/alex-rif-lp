@@ -1687,7 +1687,8 @@ async function uploadToStorage(file, isQuestionnaire, progressId, fillId, status
   } catch (err) {
     console.error('Upload error:', err);
     fillEl.style.width = '100%';
-    statusEl.textContent = 'שגיאה בהעלאה — נסו שוב';
+    const detail = err.message || err.error || err.statusCode || 'Unknown error';
+    statusEl.textContent = `שגיאה בהעלאה: ${detail}`;
     statusEl.className = 'upload-status error';
   }
 }
@@ -1791,7 +1792,7 @@ async function submitQuestionnaire() {
         session = signInData.session;
       }
     } else {
-      const { error } = await sb.auth.signInWithOtp({ email });
+      const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + '/new' } });
       if (error) throw new Error(error.message);
       showToast('שלחנו קישור לאימייל שלכם! לחצו עליו כדי להמשיך.', true);
       btn.disabled = false;
@@ -1863,7 +1864,7 @@ async function submitBrief() {
         session = signInData.session;
       }
     } else {
-      const { error } = await sb.auth.signInWithOtp({ email });
+      const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + '/new' } });
       if (error) throw new Error(error.message);
       showToast('שלחנו קישור לאימייל שלכם! לחצו עליו כדי להמשיך.', true);
       btn.disabled = false;

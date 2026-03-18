@@ -45,6 +45,13 @@ function buildBrief(project) {
   if (q.color_preference) lines.push(`Color preference: ${q.color_preference}`);
   if (q.tone) lines.push(`Tone / voice: ${q.tone}`);
 
+  // Brief mode: the brief text is stored in questionnaire_data.brief
+  if (q.brief) {
+    lines.push("");
+    lines.push("Free-form brief:");
+    lines.push(q.brief);
+  }
+
   if (project.brief_text) {
     lines.push("");
     lines.push("Additional brief / notes:");

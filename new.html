@@ -862,7 +862,7 @@
     <div style="max-width:400px; margin:0 auto; padding:40px 0;">
       <div style="background:var(--navy-light); border:1.5px solid rgba(245,200,66,0.15); border-radius:var(--radius); padding:32px 28px;">
         <h2 style="font-size:1.2rem; font-weight:700; color:var(--white); margin-bottom:6px; text-align:center;">התחברות</h2>
-        <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:24px; text-align:center;">הזינו את האימייל שלכם ונשלח קישור כניסה</p>
+        <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:24px; text-align:center;">הזינו את האימייל שלכם</p>
         <div id="loginForm">
         <form onsubmit="event.preventDefault(); loginAndContinue()">
         <div class="field">
@@ -870,7 +870,12 @@
           <input type="email" class="field-input" id="loginEmail" placeholder="your@email.com" dir="ltr" style="text-align:left;" autocomplete="email">
           <div class="field-error" id="err-loginEmail">נא להזין כתובת אימייל תקינה</div>
         </div>
+        <div class="field" id="loginPasswordField" style="display:none; margin-top:12px;">
+          <label class="field-label">סיסמה</label>
+          <input type="password" class="field-input" id="loginPassword" placeholder="סיסמה" autocomplete="current-password">
+        </div>
         <button type="submit" class="nav-btn nav-btn-submit" id="loginBtn" style="width:100%; margin-top:8px;">שלחו לי קישור</button>
+        <button type="button" id="loginPasswordToggle" style="display:block; width:100%; margin-top:10px; background:none; border:none; color:var(--text-dim); font-family:'Heebo',sans-serif; font-size:0.78rem; cursor:pointer; text-decoration:underline;" onclick="togglePasswordLogin()">כניסה עם סיסמה</button>
         <div class="field-error" id="err-loginGeneral" style="text-align:center; margin-top:12px;">שגיאה בהתחברות</div>
         </form>
         </div>
@@ -1935,6 +1940,15 @@ document.querySelectorAll('.field-input, .field-textarea').forEach(el => {
 // ═══════════════════════════════════════════════════════════════
 // Login / Logout / Session check
 // ═══════════════════════════════════════════════════════════════
+let loginWithPassword = false;
+
+function togglePasswordLogin() {
+  loginWithPassword = !loginWithPassword;
+  document.getElementById('loginPasswordField').style.display = loginWithPassword ? '' : 'none';
+  document.getElementById('loginBtn').textContent = loginWithPassword ? 'התחברו' : 'שלחו לי קישור';
+  document.getElementById('loginPasswordToggle').textContent = loginWithPassword ? 'כניסה עם קישור קסם' : 'כניסה עם סיסמה';
+}
+
 async function loginAndContinue() {
   const email = document.getElementById('loginEmail').value.trim();
 
@@ -1950,9 +1964,18 @@ async function loginAndContinue() {
 
   const btn = document.getElementById('loginBtn');
   btn.disabled = true;
-  btn.textContent = 'שולח...';
+  btn.textContent = loginWithPassword ? 'מתחבר...' : 'שולח...';
 
   try {
+    if (loginWithPassword) {
+      const password = document.getElementById('loginPassword').value;
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      document.getElementById('loginSection').style.display = 'none';
+      document.getElementById('mainContent').style.display = '';
+      return;
+    }
+
     const { error } = await sb.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: window.location.origin + '/new' }

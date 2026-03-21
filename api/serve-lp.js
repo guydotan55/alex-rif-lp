@@ -191,7 +191,7 @@ export default async function handler(req, res) {
     }
 
     const project = projects[0];
-    let html = project.html || "";
+    let html = project.generated_html || project.html || "";
 
     // Fetch text overrides from lp_editable_content
     const overridesRes = await fetch(

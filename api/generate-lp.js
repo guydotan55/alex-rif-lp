@@ -93,10 +93,16 @@ CRITICAL RULES:
    - data-editable="form_title" on the form section headline
    - data-editable="thankyou_text" on the hidden thank-you element
 9. Add class="cta-button" and data-cta="true" to ALL CTA buttons.
-10. Design must be mobile-first and fully responsive:
-    - Use relative units, flexbox, CSS grid
-    - Ensure text is readable on all screen sizes
-    - Buttons must be touch-friendly (min 44px height)
+10. MOBILE IS THE #1 PRIORITY — 95% of traffic comes from mobile devices:
+    - Design mobile-first: start with the mobile layout, then enhance for larger screens
+    - The page MUST look perfect and identical in visual quality on mobile and desktop
+    - All decorative elements (arches, frames, shapes, borders) must be visible and properly sized on mobile too
+    - Use relative units (%, vw, vh, rem, em), flexbox, CSS grid
+    - Font sizes must be readable on small screens (min 16px body text)
+    - Buttons must be touch-friendly (min 48px height, full-width on mobile)
+    - Padding/margins should use clamp() or responsive values
+    - Test-proof: no horizontal scroll, no cut-off elements, no hidden content on mobile
+    - Hero section should fit within the mobile viewport without excessive empty space
 11. Create a UNIQUE, visually striking design inspired by the uploaded image's color palette, mood, and style:
     - Extract dominant colors from the image and use them as the page palette
     - Use CSS gradients, shapes, patterns, and decorative elements for visual interest

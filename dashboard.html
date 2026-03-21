@@ -1017,6 +1017,10 @@
               &#9654; פרסם
             </button>
             <span id="preview-status" style="font-size:12px; color:var(--text-dim); margin-right:auto;"></span>
+            <div id="published-url-bar" style="display:none; margin-right:auto; direction:ltr; background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:4px 6px 4px 12px; display:none; align-items:center; gap:8px; max-width:100%; overflow:hidden;">
+              <a id="published-url-link" href="#" target="_blank" style="color:var(--gold-soft); font-size:12px; text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; direction:ltr;"></a>
+              <button id="copy-url-btn" onclick="copyPublishedUrl()" style="background:var(--gold-dim); border:1px solid var(--gold); border-radius:6px; color:var(--gold); cursor:pointer; font-family:'Heebo',sans-serif; font-size:11px; padding:3px 10px; white-space:nowrap; transition:all 0.2s;">העתק</button>
+            </div>
           </div>
           <div class="preview-frame-wrap" id="preview-frame-wrap">
             <div class="preview-empty" id="preview-empty">
@@ -1426,14 +1430,24 @@ function loadPreview() {
     btnGen.innerHTML = '&#9881; ייצר מחדש';
     btnPub.style.display = 'inline-flex';
 
+    const urlBar = document.getElementById('published-url-bar');
+    const urlLink = document.getElementById('published-url-link');
+
     if (isPublished) {
       btnPub.innerHTML = '&#9724; בטל פרסום';
       btnPub.className = 'btn-action danger';
-      statusEl.textContent = 'מפורסם - ' + (selectedProject.slug ? '/lp/' + selectedProject.slug : '');
+      statusEl.textContent = 'מפורסם';
+      if (selectedProject.slug) {
+        const fullUrl = window.location.origin + '/lp/' + selectedProject.slug;
+        urlLink.href = fullUrl;
+        urlLink.textContent = fullUrl;
+        urlBar.style.display = 'flex';
+      }
     } else {
       btnPub.innerHTML = '&#9654; פרסם';
       btnPub.className = 'btn-action success';
       statusEl.textContent = 'טיוטה';
+      urlBar.style.display = 'none';
     }
 
     // Create iframe
@@ -1453,6 +1467,7 @@ function loadPreview() {
     btnGen.innerHTML = '&#9881; ייצר דף נחיתה';
     btnPub.style.display = 'none';
     statusEl.textContent = '';
+    document.getElementById('published-url-bar').style.display = 'none';
   }
 }
 
@@ -1542,6 +1557,23 @@ async function togglePublish() {
   btnPub.disabled = false;
 
   showToast(newStatus === 'published' ? 'הדף פורסם בהצלחה!' : 'הפרסום בוטל.', 'success');
+}
+
+function copyPublishedUrl() {
+  const url = document.getElementById('published-url-link').href;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('copy-url-btn');
+    btn.textContent = 'הועתק!';
+    btn.style.background = 'rgba(76, 175, 80, 0.2)';
+    btn.style.borderColor = 'var(--success)';
+    btn.style.color = 'var(--success)';
+    setTimeout(() => {
+      btn.textContent = 'העתק';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+      btn.style.color = '';
+    }, 2000);
+  });
 }
 
 // ── Edit Text Tab ────────────────────────────────────────

@@ -1187,6 +1187,12 @@
     </div>
 
     <div class="field">
+      <label class="field-label">שם הפרויקט</label>
+      <input type="text" class="field-input" id="projectName" placeholder="לדוגמה: דף נחיתה לקורס יוגה" maxlength="100" style="margin-bottom:4px;">
+      <p style="font-size:12px; color:var(--text-dim); margin-bottom:0;">אם תשאירו ריק, השם ייווצר אוטומטית מהבריף</p>
+    </div>
+
+    <div class="field">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
         <label class="field-label" style="margin-bottom:0">הבריף שלכם *</label>
         <button type="button" class="remix-btn" onclick="remixField(this, 'briefText')" title="שפר תשובה עם AI">&#x2728; שפר</button>
@@ -1745,6 +1751,7 @@ async function submitBrief() {
     }
 
     const briefText = document.getElementById('briefText').value.trim();
+    const projectName = document.getElementById('projectName').value.trim() || briefText.substring(0, 50).replace(/\s+/g, ' ') || 'Brief Project';
     const slug = generateSlug('brief-' + Date.now());
 
     // If a brief file was uploaded (PDF/DOCX), include its URL
@@ -1757,7 +1764,7 @@ async function submitBrief() {
     const { data: project, error: projectError } = await sb.from('projects').insert({
       user_id: session.user.id,
       slug: slug,
-      name: 'Brief Project',
+      name: projectName,
       language: 'he',
       status: 'draft',
       questionnaire_data: briefData,

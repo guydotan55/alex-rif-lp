@@ -911,6 +911,70 @@
   @media (min-width: 769px) {
     .mobile-sidebar-toggle { display: none !important; }
   }
+
+  /* ── Variant Bar ──────────────────────────────────────── */
+  .variant-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 24px;
+    background: var(--navy-card);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    overflow-x: auto;
+  }
+  .variant-pill {
+    background: var(--navy-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .variant-pill:hover { border-color: var(--border-strong); color: var(--cream); }
+  .variant-pill.active {
+    border-color: var(--gold);
+    color: var(--gold);
+    background: var(--gold-dim);
+  }
+  .btn-add-variant {
+    background: var(--gold-dim);
+    border: 1px solid rgba(245, 200, 66, 0.2);
+    color: var(--gold);
+    font-family: 'Heebo', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .btn-add-variant:hover { background: rgba(245, 200, 66, 0.2); }
+  .variant-compare-container {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .variant-compare-column {
+    flex: 1;
+    min-width: 180px;
+    background: var(--navy-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+  }
 </style>
 </head>
 <body>
@@ -1009,6 +1073,7 @@
 
         <!-- Tab: Preview -->
         <div class="tab-pane active" id="tab-preview">
+          <div class="variant-bar" id="variant-bar" style="display:none;"></div>
           <div class="preview-toolbar" id="preview-toolbar">
             <button class="btn-action" id="btn-generate" onclick="generateLP()">
               &#9881; ייצר דף נחיתה
@@ -1097,11 +1162,14 @@
           <div class="pane-inner">
             <div class="analytics-header">
               <div class="analytics-title">משפך המרה</div>
-              <select class="date-range-select" id="date-range" onchange="renderAnalytics()">
-                <option value="7">7 ימים אחרונים</option>
-                <option value="30" selected>30 ימים אחרונים</option>
-                <option value="all">כל הזמן</option>
-              </select>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <select class="date-range-select" id="date-range" onchange="renderAnalytics()">
+                  <option value="7">7 ימים אחרונים</option>
+                  <option value="30" selected>30 ימים אחרונים</option>
+                  <option value="all">כל הזמן</option>
+                </select>
+                <button class="btn-action" id="btn-compare-variants" onclick="toggleCompareView()" style="display:none;font-size:12px;">&#128202; השווה וריאנטים</button>
+              </div>
             </div>
             <div id="analytics-content">
               <div class="loading-block"><div class="small-spin"></div> טוען אנליטיקס...</div>
@@ -1120,9 +1188,9 @@
             </div>
             <div class="leads-table-wrap">
               <table class="leads-table">
-                <thead><tr><th>מייל</th><th>תאריך</th></tr></thead>
+                <thead><tr><th>מייל</th><th>וריאנט</th><th>תאריך</th></tr></thead>
                 <tbody id="leads-tbody">
-                  <tr><td colspan="2"><div class="loading-block"><div class="small-spin"></div> טוען...</div></td></tr>
+                  <tr><td colspan="3"><div class="loading-block"><div class="small-spin"></div> טוען...</div></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1157,6 +1225,9 @@ let projectEvents = [];
 let projectContent = [];
 let leadsPage = 1;
 const PAGE_SIZE = 20;
+let projectVariants = [];
+let selectedVariant = null;
+let compareMode = false;
 
 // ── Auth ──────────────────────────────────────────────────
 async function doLogin() {
@@ -1387,6 +1458,20 @@ async function selectProject(id) {
     document.getElementById('sidebar').classList.add('collapsed');
   }
 
+  // Fetch variants for this project
+  const { data: variants } = await sb.from('project_variants')
+    .select('*')
+    .eq('project_id', id)
+    .order('created_at');
+
+  projectVariants = variants || [];
+
+  // Auto-select default variant, or first one
+  selectedVariant = projectVariants.find(v => v.is_default) || projectVariants[0] || null;
+  compareMode = false;
+
+  renderVariantBar();
+
   // Load all project data
   await Promise.all([
     loadPreview(),
@@ -1422,8 +1507,10 @@ function loadPreview() {
 
   progress.classList.remove('show');
 
-  const hasHtml = selectedProject.generated_html && selectedProject.generated_html.trim().length > 0;
-  const isPublished = selectedProject.status === 'published';
+  // Use variant data if available, otherwise fall back to project (backward compat)
+  const htmlSource = selectedVariant ? selectedVariant.generated_html : selectedProject.generated_html;
+  const hasHtml = htmlSource && htmlSource.trim().length > 0;
+  const isPublished = selectedVariant ? selectedVariant.status === 'published' : selectedProject.status === 'published';
 
   if (hasHtml) {
     empty.style.display = 'none';
@@ -1438,7 +1525,12 @@ function loadPreview() {
       btnPub.className = 'btn-action danger';
       statusEl.textContent = 'מפורסם';
       if (selectedProject.slug) {
-        const fullUrl = window.location.origin + '/lp/' + selectedProject.slug;
+        let fullUrl;
+        if (selectedVariant && !selectedVariant.is_default) {
+          fullUrl = window.location.origin + '/lp/' + selectedProject.slug + '/' + selectedVariant.variant_slug;
+        } else {
+          fullUrl = window.location.origin + '/lp/' + selectedProject.slug;
+        }
         urlLink.href = fullUrl;
         urlLink.textContent = fullUrl;
         urlBar.style.display = 'flex';
@@ -1455,9 +1547,13 @@ function loadPreview() {
     iframe.sandbox = 'allow-scripts allow-same-origin';
 
     if (isPublished && selectedProject.slug) {
-      iframe.src = '/lp/' + selectedProject.slug;
+      if (selectedVariant && !selectedVariant.is_default) {
+        iframe.src = '/lp/' + selectedProject.slug + '/' + selectedVariant.variant_slug;
+      } else {
+        iframe.src = '/lp/' + selectedProject.slug;
+      }
     } else {
-      const blob = new Blob([selectedProject.generated_html], { type: 'text/html' });
+      const blob = new Blob([htmlSource], { type: 'text/html' });
       iframe.src = URL.createObjectURL(blob);
     }
 
@@ -1496,6 +1592,7 @@ async function generateLP() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         project_id: selectedProject.id,
+        variant_id: selectedVariant?.id || null,
         access_token: session.access_token
       })
     });
@@ -1516,7 +1613,21 @@ async function generateLP() {
       if (idx >= 0) projects[idx] = data;
     }
 
+    // Refresh variant data
+    if (selectedVariant) {
+      const { data: updatedVariant } = await sb.from('project_variants')
+        .select('*')
+        .eq('id', selectedVariant.id)
+        .single();
+      if (updatedVariant) {
+        selectedVariant = updatedVariant;
+        const vIdx = projectVariants.findIndex(v => v.id === updatedVariant.id);
+        if (vIdx >= 0) projectVariants[vIdx] = updatedVariant;
+      }
+    }
+
     progress.classList.remove('show');
+    renderVariantBar();
     loadPreview();
     showToast('דף הנחיתה נוצר בהצלחה!', 'success');
 
@@ -1533,30 +1644,57 @@ async function generateLP() {
 async function togglePublish() {
   if (!selectedProject) return;
 
-  const isPublished = selectedProject.status === 'published';
-  const newStatus = isPublished ? 'draft' : 'published';
   const btnPub = document.getElementById('btn-publish');
-
   btnPub.disabled = true;
 
-  const { error } = await sb.from('projects').update({ status: newStatus }).eq('id', selectedProject.id);
+  if (selectedVariant) {
+    // Publish/unpublish the variant
+    const isPublished = selectedVariant.status === 'published';
+    const newStatus = isPublished ? 'draft' : 'published';
 
-  if (error) {
-    showToast('שגיאה: ' + error.message, 'error');
-    btnPub.disabled = false;
-    return;
+    const { error } = await sb.from('project_variants')
+      .update({ status: newStatus })
+      .eq('id', selectedVariant.id);
+
+    if (error) {
+      showToast('שגיאה: ' + error.message, 'error');
+      btnPub.disabled = false;
+      return;
+    }
+
+    selectedVariant.status = newStatus;
+    const vIdx = projectVariants.findIndex(v => v.id === selectedVariant.id);
+    if (vIdx >= 0) projectVariants[vIdx].status = newStatus;
+
+    // Update project status based on whether any variant is published
+    const anyPublished = projectVariants.some(v => v.status === 'published');
+    const projectStatus = anyPublished ? 'published' : 'draft';
+    await sb.from('projects').update({ status: projectStatus }).eq('id', selectedProject.id);
+    selectedProject.status = projectStatus;
+    const pIdx = projects.findIndex(p => p.id === selectedProject.id);
+    if (pIdx >= 0) projects[pIdx].status = projectStatus;
+  } else {
+    // Legacy: no variants, publish the project directly
+    const isPublished = selectedProject.status === 'published';
+    const newStatus = isPublished ? 'draft' : 'published';
+    const { error } = await sb.from('projects').update({ status: newStatus }).eq('id', selectedProject.id);
+    if (error) {
+      showToast('שגיאה: ' + error.message, 'error');
+      btnPub.disabled = false;
+      return;
+    }
+    selectedProject.status = newStatus;
+    const idx = projects.findIndex(p => p.id === selectedProject.id);
+    if (idx >= 0) projects[idx].status = newStatus;
   }
 
-  selectedProject.status = newStatus;
-  const idx = projects.findIndex(p => p.id === selectedProject.id);
-  if (idx >= 0) projects[idx].status = newStatus;
-
-  // Refresh sidebar badges
   loadProjects();
+  renderVariantBar();
   loadPreview();
   btnPub.disabled = false;
 
-  showToast(newStatus === 'published' ? 'הדף פורסם בהצלחה!' : 'הפרסום בוטל.', 'success');
+  const published = selectedVariant ? selectedVariant.status === 'published' : selectedProject.status === 'published';
+  showToast(published ? 'הדף פורסם בהצלחה!' : 'הפרסום בוטל.', 'success');
 }
 
 function copyPublishedUrl() {
@@ -1583,10 +1721,14 @@ async function loadEditableContent() {
   const container = document.getElementById('edit-fields');
   container.innerHTML = '<div class="loading-block"><div class="small-spin"></div> טוען תוכן...</div>';
 
-  const { data, error } = await sb.from('lp_editable_content')
-    .select('*')
-    .eq('project_id', selectedProject.id)
-    .order('key');
+  let ecQuery = sb.from('lp_editable_content').select('*');
+  if (selectedVariant) {
+    ecQuery = ecQuery.eq('variant_id', selectedVariant.id);
+  } else {
+    ecQuery = ecQuery.eq('project_id', selectedProject.id);
+  }
+  ecQuery = ecQuery.order('key');
+  const { data, error } = await ecQuery;
 
   if (error) {
     container.innerHTML = '<div style="padding:20px;color:var(--text-dim);">שגיאה בטעינת התוכן</div>';
@@ -1635,6 +1777,7 @@ async function saveContent() {
   fields.forEach(el => {
     upserts.push({
       project_id: selectedProject.id,
+      variant_id: selectedVariant?.id || null,
       key: el.dataset.key,
       value: el.value
     });
@@ -1646,7 +1789,7 @@ async function saveContent() {
   }
 
   const { error } = await sb.from('lp_editable_content')
-    .upsert(upserts, { onConflict: 'project_id,key' });
+    .upsert(upserts, { onConflict: 'variant_id,key' });
 
   btn.disabled = false;
 
@@ -1726,7 +1869,7 @@ async function loadAnalytics() {
   container.innerHTML = '<div class="loading-block"><div class="small-spin"></div> טוען אנליטיקס...</div>';
 
   const { data, error } = await sb.from('analytics_events')
-    .select('event_type,event_data,created_at')
+    .select('event_type,event_data,created_at,variant_id')
     .eq('project_id', selectedProject.id);
 
   if (error) {
@@ -1739,9 +1882,21 @@ async function loadAnalytics() {
   renderAnalytics();
 }
 
+function toggleCompareView() {
+  compareMode = !compareMode;
+  renderAnalytics();
+}
+
 function renderAnalytics() {
   const container = document.getElementById('analytics-content');
   const range = document.getElementById('date-range').value;
+
+  // Show/hide compare button
+  const compareBtn = document.getElementById('btn-compare-variants');
+  if (compareBtn) {
+    compareBtn.style.display = projectVariants.length > 1 ? 'inline-flex' : 'none';
+    compareBtn.innerHTML = compareMode ? '&#128200; תצוגת וריאנט' : '&#128202; השווה וריאנטים';
+  }
 
   let events = projectEvents;
   if (range !== 'all') {
@@ -1751,17 +1906,10 @@ function renderAnalytics() {
     events = events.filter(e => new Date(e.created_at) >= cutoff);
   }
 
-  const pageViews = events.filter(e => e.event_type === 'page_view').length;
-  const lastFold = events.filter(e => e.event_type === 'last_fold_reach').length;
-  const ctaClicks = events.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'hero_cta').length;
-  const leadsCaptured = events.filter(e => e.event_type === 'lead_captured').length;
-
-  if (pageViews === 0 && lastFold === 0 && ctaClicks === 0 && leadsCaptured === 0) {
-    container.innerHTML = '<div class="no-analytics">אין נתוני אנליטיקס עדיין לפרויקט זה</div>';
-    return;
+  // Filter by variant in non-compare mode
+  if (!compareMode && selectedVariant) {
+    events = events.filter(e => e.variant_id === selectedVariant.id);
   }
-
-  const maxVal = Math.max(pageViews, 1);
 
   function pct(a, b) {
     if (!b) return null;
@@ -1779,6 +1927,57 @@ function renderAnalytics() {
       <span class="funnel-arrow-pct ${pctClass(v)}">${v}%</span>
     </div>`;
   }
+
+  // Comparison view
+  if (compareMode && projectVariants.length > 1) {
+    const variantGroups = {};
+    projectVariants.forEach(v => { variantGroups[v.id] = { name: v.variant_name || v.variant_slug, events: [] }; });
+    events.forEach(e => {
+      if (e.variant_id && variantGroups[e.variant_id]) {
+        variantGroups[e.variant_id].events.push(e);
+      }
+    });
+
+    let html = '<div class="variant-compare-container">';
+    Object.entries(variantGroups).forEach(([vid, group]) => {
+      const evts = group.events;
+      const pv = evts.filter(e => e.event_type === 'page_view').length;
+      const lf = evts.filter(e => e.event_type === 'last_fold_reach').length;
+      const cc = evts.filter(e => e.event_type === 'button_click').length;
+      const lc = evts.filter(e => e.event_type === 'lead_captured').length;
+      const convPct = pv > 0 ? (lc / pv * 100).toFixed(1) : '0.0';
+
+      html += `<div class="variant-compare-column">
+        <div style="font-weight:700;color:var(--gold);margin-bottom:12px;text-align:center;">${esc(group.name)}</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">צפיות</span><span style="color:var(--white);font-weight:600;">${pv}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">סוף דף</span><span style="color:var(--white);font-weight:600;">${lf}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">CTA</span><span style="color:var(--white);font-weight:600;">${cc}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">לידים</span><span style="color:var(--white);font-weight:600;">${lc}</span></div>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
+          <span class="funnel-arrow-pct ${parseFloat(convPct) >= 5 ? 'pct-good' : parseFloat(convPct) >= 2 ? 'pct-mid' : 'pct-low'}" style="font-size:16px;">${convPct}%</span>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת</div>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  // Standard funnel view
+  const pageViews = events.filter(e => e.event_type === 'page_view').length;
+  const lastFold = events.filter(e => e.event_type === 'last_fold_reach').length;
+  const ctaClicks = events.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'hero_cta').length;
+  const leadsCaptured = events.filter(e => e.event_type === 'lead_captured').length;
+
+  if (pageViews === 0 && lastFold === 0 && ctaClicks === 0 && leadsCaptured === 0) {
+    container.innerHTML = '<div class="no-analytics">אין נתוני אנליטיקס עדיין לפרויקט זה</div>';
+    return;
+  }
+
+  const maxVal = Math.max(pageViews, 1);
 
   const steps = [
     { label: 'צפיות בדף', count: pageViews, color: 'rgba(245, 200, 66, 0.25)', textColor: 'var(--gold)' },
@@ -1829,15 +2028,15 @@ async function loadLeads() {
   if (!selectedProject) return;
 
   const tbody = document.getElementById('leads-tbody');
-  tbody.innerHTML = '<tr><td colspan="2"><div class="loading-block"><div class="small-spin"></div> טוען לידים...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="3"><div class="loading-block"><div class="small-spin"></div> טוען לידים...</div></td></tr>';
 
   const { data, error } = await sb.from('leads')
-    .select('id,email,created_at')
+    .select('id,email,created_at,variant_id')
     .eq('project_id', selectedProject.id)
     .order('created_at', { ascending: false });
 
   if (error) {
-    tbody.innerHTML = '<tr><td colspan="2"><div style="padding:20px;text-align:center;color:var(--text-dim);">שגיאה בטעינת לידים</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3"><div style="padding:20px;text-align:center;color:var(--text-dim);">שגיאה בטעינת לידים</div></td></tr>';
     console.error('leads:', error);
     return;
   }
@@ -1855,7 +2054,7 @@ function renderLeads() {
   countLabel.textContent = projectLeads.length + ' לידים';
 
   if (projectLeads.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="2"><div class="leads-empty">אין לידים עדיין</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3"><div class="leads-empty">אין לידים עדיין</div></td></tr>';
     pagination.innerHTML = '';
     return;
   }
@@ -1866,8 +2065,11 @@ function renderLeads() {
   const slice = projectLeads.slice(start, start + PAGE_SIZE);
 
   tbody.innerHTML = slice.map(l => {
+    const variant = projectVariants.find(v => v.id === l.variant_id);
+    const variantLabel = variant ? (variant.variant_name || variant.variant_slug) : '\u2014';
     return `<tr>
       <td class="ltr">${esc(l.email || '\u2014')}</td>
+      <td>${esc(variantLabel)}</td>
       <td class="ltr mono">${formatDateTime(l.created_at)}</td>
     </tr>`;
   }).join('');
@@ -1897,6 +2099,75 @@ function pageRange(cur, tot) {
   if (cur <= 4) return [1, 2, 3, 4, 5, '...', tot];
   if (cur >= tot - 3) return [1, '...', tot - 4, tot - 3, tot - 2, tot - 1, tot];
   return [1, '...', cur - 1, cur, cur + 1, '...', tot];
+}
+
+// ── Variant Management ───────────────────────────────────
+function renderVariantBar() {
+  const bar = document.getElementById('variant-bar');
+  if (!projectVariants || projectVariants.length === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  bar.style.display = 'flex';
+  bar.innerHTML = projectVariants.map(v => {
+    const isActive = selectedVariant?.id === v.id;
+    const label = v.variant_name || v.variant_slug;
+    const statusDot = v.status === 'published'
+      ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;margin-inline-start:4px;"></span>'
+      : '';
+    return `<button class="variant-pill ${isActive ? 'active' : ''}" onclick="selectVariant('${v.id}')">${esc(label)}${statusDot}</button>`;
+  }).join('') + `<button class="btn-add-variant" onclick="showAddVariantModal()">+ וריאנט</button>`;
+}
+
+async function selectVariant(variantId) {
+  selectedVariant = projectVariants.find(v => v.id === variantId) || null;
+  renderVariantBar();
+  await Promise.all([
+    loadPreview(),
+    loadEditableContent(),
+    loadAnalytics(),
+    loadLeads()
+  ]);
+}
+
+async function showAddVariantModal() {
+  if (!selectedProject) return;
+
+  // Suggest next letter slug
+  const existingSlugs = projectVariants.map(v => v.variant_slug);
+  const letters = 'abcdefghijklmnopqrstuvwxyz'.split('');
+  const nextSlug = letters.find(l => !existingSlugs.includes(l)) || 'v' + (projectVariants.length + 1);
+
+  const slug = prompt('שם הוריאנט (באנגלית, בלי רווחים):', nextSlug);
+  if (!slug || !slug.trim()) return;
+
+  const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '');
+  if (!cleanSlug) { showToast('שם לא תקין', 'error'); return; }
+
+  if (existingSlugs.includes(cleanSlug)) {
+    showToast('וריאנט עם שם זה כבר קיים', 'error');
+    return;
+  }
+
+  const { data, error } = await sb.from('project_variants').insert({
+    project_id: selectedProject.id,
+    variant_slug: cleanSlug,
+    variant_name: cleanSlug.toUpperCase(),
+    is_default: false,
+    status: 'draft'
+  }).select().single();
+
+  if (error) {
+    showToast('שגיאה ביצירת וריאנט: ' + error.message, 'error');
+    return;
+  }
+
+  projectVariants.push(data);
+  selectedVariant = data;
+  renderVariantBar();
+  loadPreview();
+  showToast('וריאנט חדש נוצר!', 'success');
 }
 
 // ── First-Run Flow ───────────────────────────────────────

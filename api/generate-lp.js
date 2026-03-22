@@ -200,7 +200,7 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { project_id, access_token } = req.body || {};
+  const { project_id, variant_id, access_token } = req.body || {};
 
   // Validate required params
   if (!project_id) {
@@ -345,7 +345,73 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Generated content is not valid HTML" });
     }
 
-    // 6. Save generated HTML to projects.generated_html
+    // 6. Resolve or create the variant to save HTML into
+    let activeVariantId = variant_id;
+
+    if (!activeVariantId) {
+      // Check if a default variant exists for this project
+      const existingVarRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/project_variants?project_id=eq.${encodeURIComponent(project_id)}&is_default=eq.true&select=id&limit=1`,
+        {
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+        }
+      );
+      const existingVars = existingVarRes.ok ? await existingVarRes.json() : [];
+
+      if (existingVars.length > 0) {
+        activeVariantId = existingVars[0].id;
+      } else {
+        // Create a default variant
+        const createVarRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/project_variants`,
+          {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_SERVICE_ROLE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json",
+              Prefer: "return=representation",
+            },
+            body: JSON.stringify({
+              project_id: project_id,
+              variant_slug: "default",
+              variant_name: "Default",
+              is_default: true,
+              status: "draft",
+            }),
+          }
+        );
+        if (createVarRes.ok) {
+          const created = await createVarRes.json();
+          activeVariantId = created[0].id;
+        }
+      }
+    }
+
+    // Save generated HTML to the variant
+    if (activeVariantId) {
+      const updateVarRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${encodeURIComponent(activeVariantId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json",
+            Prefer: "return=minimal",
+          },
+          body: JSON.stringify({ generated_html: generatedHtml }),
+        }
+      );
+      if (!updateVarRes.ok) {
+        console.error("Failed to save variant HTML:", updateVarRes.status);
+      }
+    }
+
+    // Also keep projects.generated_html in sync for backward compat
     const updateRes = await fetch(
       `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(project_id)}`,
       {
@@ -361,17 +427,20 @@ export default async function handler(req, res) {
     );
 
     if (!updateRes.ok) {
-      console.error("Failed to save generated HTML:", updateRes.status);
-      // Continue — we still want to return the result even if save fails
+      console.error("Failed to save generated HTML to project:", updateRes.status);
     }
 
     // 7. Extract editable content keys and save defaults to lp_editable_content
     const editableKeys = extractEditableKeys(generatedHtml);
 
     if (editableKeys.length > 0) {
-      // Delete existing editable content for this project first
+      // Delete existing editable content for this variant (or project if no variant)
+      const deleteFilter = activeVariantId
+        ? `variant_id=eq.${encodeURIComponent(activeVariantId)}`
+        : `project_id=eq.${encodeURIComponent(project_id)}`;
+
       await fetch(
-        `${SUPABASE_URL}/rest/v1/lp_editable_content?project_id=eq.${encodeURIComponent(project_id)}`,
+        `${SUPABASE_URL}/rest/v1/lp_editable_content?${deleteFilter}`,
         {
           method: "DELETE",
           headers: {
@@ -384,6 +453,7 @@ export default async function handler(req, res) {
       // Insert new editable content rows
       const rows = editableKeys.map((ek) => ({
         project_id: project_id,
+        variant_id: activeVariantId || null,
         key: ek.key,
         value: ek.default_value,
       }));
@@ -415,6 +485,7 @@ export default async function handler(req, res) {
       success: true,
       preview_html: generatedHtml,
       editable_keys: editableKeys,
+      variant_id: activeVariantId || null,
     });
   } catch (err) {
     console.error("generate-lp error:", err);

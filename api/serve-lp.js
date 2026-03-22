@@ -39,7 +39,7 @@ function applyOverrides(html, overrides) {
  * Build the client-side script that handles analytics + form submission.
  * Uses the public SUPABASE_ANON_KEY for client-side Supabase calls.
  */
-function buildInjectedScript(projectId, anonKey, supabaseUrl, emailEnabled) {
+function buildInjectedScript(projectId, variantId, anonKey, supabaseUrl, emailEnabled) {
   return `
 <!-- LP Builder: Analytics & Form Handling -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -48,19 +48,22 @@ function buildInjectedScript(projectId, anonKey, supabaseUrl, emailEnabled) {
   var SUPABASE_URL = "${supabaseUrl}";
   var SUPABASE_ANON_KEY = "${anonKey}";
   var PROJECT_ID = "${projectId}";
+  var VARIANT_ID = ${variantId ? `"${variantId}"` : "null"};
   var EMAIL_ENABLED = ${emailEnabled ? "true" : "false"};
 
   var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   var sessionId = crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36));
 
   function trackEvent(eventType, eventData) {
-    sb.from("analytics_events").insert({
+    var row = {
       event_type: eventType,
       event_data: eventData || {},
       source: "lp-builder",
       session_id: sessionId,
       project_id: PROJECT_ID
-    }).then(function() {});
+    };
+    if (VARIANT_ID) row.variant_id = VARIANT_ID;
+    sb.from("analytics_events").insert(row).then(function() {});
   }
 
   // 1. page_view — fires on load
@@ -117,6 +120,7 @@ function buildInjectedScript(projectId, anonKey, supabaseUrl, emailEnabled) {
         project_id: PROJECT_ID,
         source: "lp-builder"
       };
+      if (VARIANT_ID) leadData.variant_id = VARIANT_ID;
       if (nameInput && nameInput.value.trim()) leadData.name = nameInput.value.trim();
       if (phoneInput && phoneInput.value.trim()) leadData.phone = phoneInput.value.trim();
 
@@ -156,6 +160,7 @@ function buildInjectedScript(projectId, anonKey, supabaseUrl, emailEnabled) {
 
 export default async function handler(req, res) {
   const slug = req.query.slug;
+  const variantSlug = req.query.variant; // undefined for /lp/:slug, set for /lp/:slug/:variant
 
   if (!slug) {
     res.status(404);
@@ -164,9 +169,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Fetch published project by slug
+    // Fetch project by slug (no status filter — variant status controls publishing)
     const projectRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/projects?slug=eq.${encodeURIComponent(slug)}&status=eq.published&select=*&limit=1`,
+      `${SUPABASE_URL}/rest/v1/projects?slug=eq.${encodeURIComponent(slug)}&select=id,email_enabled&limit=1`,
       {
         headers: {
           apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -191,11 +196,71 @@ export default async function handler(req, res) {
     }
 
     const project = projects[0];
-    let html = project.generated_html || project.html || "";
 
-    // Fetch text overrides from lp_editable_content
+    // Fetch the variant: specific variant by slug, or default
+    let variantQuery = `${SUPABASE_URL}/rest/v1/project_variants?project_id=eq.${project.id}&status=eq.published&select=id,generated_html`;
+    if (variantSlug) {
+      variantQuery += `&variant_slug=eq.${encodeURIComponent(variantSlug)}`;
+    } else {
+      variantQuery += `&is_default=eq.true`;
+    }
+    variantQuery += `&limit=1`;
+
+    const variantRes = await fetch(variantQuery, {
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    });
+
+    if (!variantRes.ok) {
+      console.error("Supabase variants fetch error:", variantRes.status);
+      res.status(500);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send("<h1>500 — Server Error</h1>");
+    }
+
+    const variants = await variantRes.json();
+
+    if (!variants || variants.length === 0) {
+      // Fallback: try serving from projects.generated_html for backward compat
+      const fallbackRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/projects?id=eq.${project.id}&status=eq.published&select=generated_html&limit=1`,
+        {
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+        }
+      );
+      const fallbackProjects = fallbackRes.ok ? await fallbackRes.json() : [];
+      if (fallbackProjects.length > 0 && fallbackProjects[0].generated_html) {
+        // Serve legacy project HTML without variant tracking
+        let html = fallbackProjects[0].generated_html;
+        const emailEnabled = project.email_enabled === true;
+        const injectedScript = buildInjectedScript(project.id, null, SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled);
+        if (html.includes("</body>")) {
+          html = html.replace("</body>", injectedScript + "\n</body>");
+        } else {
+          html += injectedScript;
+        }
+        res.status(200);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
+        return res.send(html);
+      }
+
+      res.status(404);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send("<h1>404 — Page Not Found</h1>");
+    }
+
+    const variant = variants[0];
+    let html = variant.generated_html || "";
+
+    // Fetch text overrides scoped to this variant
     const overridesRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/lp_editable_content?project_id=eq.${project.id}&select=key,value`,
+      `${SUPABASE_URL}/rest/v1/lp_editable_content?variant_id=eq.${variant.id}&select=key,value`,
       {
         headers: {
           apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -213,6 +278,7 @@ export default async function handler(req, res) {
     const emailEnabled = project.email_enabled === true;
     const injectedScript = buildInjectedScript(
       project.id,
+      variant.id,
       SUPABASE_ANON_KEY,
       SUPABASE_URL,
       emailEnabled
@@ -221,7 +287,6 @@ export default async function handler(req, res) {
     if (html.includes("</body>")) {
       html = html.replace("</body>", injectedScript + "\n</body>");
     } else {
-      // If no </body> tag, append to end
       html += injectedScript;
     }
 

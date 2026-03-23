@@ -35,6 +35,23 @@ function applyOverrides(html, overrides) {
   return html;
 }
 
+function applyImageOverrides(html, imageOverrides) {
+  if (!imageOverrides || imageOverrides.length === 0) return html;
+  for (const { slot, image_url } of imageOverrides) {
+    if (!slot || !image_url) continue;
+    // Handle src before or after data-image-slot in the tag
+    const regex1 = new RegExp(
+      `(<img\\b[^>]*data-image-slot\\s*=\\s*"${slot}"[^>]*\\bsrc=")([^"]*)(")`, "gi"
+    );
+    const regex2 = new RegExp(
+      `(<img\\b[^>]*\\bsrc=")([^"]*)("[^>]*data-image-slot\\s*=\\s*"${slot}")`, "gi"
+    );
+    html = html.replace(regex1, `$1${image_url}$3`);
+    html = html.replace(regex2, `$1${image_url}$3`);
+  }
+  return html;
+}
+
 /**
  * Build the client-side script that handles analytics + form submission.
  * Uses the public SUPABASE_ANON_KEY for client-side Supabase calls.
@@ -237,6 +254,14 @@ export default async function handler(req, res) {
       if (fallbackProjects.length > 0 && fallbackProjects[0].generated_html) {
         // Serve legacy project HTML without variant tracking
         let html = fallbackProjects[0].generated_html;
+        const imageOverridesRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/lp_image_content?project_id=eq.${project.id}&select=slot,image_url`,
+          { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+        );
+        if (imageOverridesRes.ok) {
+          const imageOverrides = await imageOverridesRes.json();
+          html = applyImageOverrides(html, imageOverrides);
+        }
         const emailEnabled = project.email_enabled === true;
         const injectedScript = buildInjectedScript(project.id, null, SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled);
         if (html.includes("</body>")) {
@@ -272,6 +297,21 @@ export default async function handler(req, res) {
     if (overridesRes.ok) {
       const overrides = await overridesRes.json();
       html = applyOverrides(html, overrides);
+    }
+
+    // Fetch image overrides scoped to this variant
+    const imageOverridesRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${variant.id}&select=slot,image_url`,
+      {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    );
+    if (imageOverridesRes.ok) {
+      const imageOverrides = await imageOverridesRes.json();
+      html = applyImageOverrides(html, imageOverrides);
     }
 
     // Inject analytics + form handling script before </body>

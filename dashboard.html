@@ -975,6 +975,84 @@
     border-radius: var(--radius-sm);
     padding: 16px;
   }
+
+  /* ── Image Picker Modal ─────────────────────────────────── */
+  #image-picker-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  #image-picker-modal .modal-content {
+    background: var(--navy-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: 100%;
+    max-width: 680px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+  }
+  #image-picker-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px 0;
+  }
+  .picker-tab {
+    flex: 1;
+    padding: 12px;
+    text-align: center;
+    font-size: 14px;
+    font-family: 'Heebo', sans-serif;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    color: var(--text-dim);
+    transition: all var(--transition);
+  }
+  .picker-tab:hover { color: var(--cream); }
+  .picker-tab.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+    font-weight: 500;
+  }
+  .picker-tab-content { min-height: 200px; }
+  .stock-image-card {
+    aspect-ratio: 3/2;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: border-color 0.2s;
+  }
+  .stock-image-card:hover { border-color: var(--border-strong); }
+  .stock-image-card.selected { border-color: var(--gold); }
+  .stock-image-card img { width: 100%; height: 100%; object-fit: cover; }
+  .direction-chip {
+    padding: 8px 14px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    font-family: 'Heebo', sans-serif;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--navy);
+    color: var(--text);
+    transition: all 0.2s;
+  }
+  .direction-chip:hover { border-color: var(--border-strong); color: var(--cream); }
+  .direction-chip.active { background: var(--gold-dim); color: var(--gold); border-color: var(--gold); }
+  .upload-zone {
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .upload-zone:hover { border-color: var(--gold); }
 </style>
 </head>
 <body>
@@ -1205,6 +1283,65 @@
   </div><!-- /dash-body -->
 
 </div><!-- /dashboard -->
+
+<!-- Image Picker Modal -->
+<div id="image-picker-modal" style="display:none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div>
+        <h3 id="image-picker-title" style="color:var(--white);font-size:16px;font-weight:700;">החלפת תמונה</h3>
+        <p style="font-size:13px;color:var(--text-dim);margin-top:4px;" id="image-picker-subtitle">בחרו מקור לתמונה חדשה</p>
+      </div>
+      <button onclick="closeImagePicker()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-dim);transition:color 0.2s;" onmouseover="this.style.color='var(--cream)'" onmouseout="this.style.color='var(--text-dim)'">&times;</button>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid var(--border);margin-top:16px;">
+      <button class="picker-tab active" onclick="switchPickerTab('upload')" id="tab-picker-upload">&#128247; העלאה</button>
+      <button class="picker-tab" onclick="switchPickerTab('stock')" id="tab-picker-stock">&#128269; Stock Photo</button>
+      <button class="picker-tab" onclick="switchPickerTab('ai')" id="tab-picker-ai">&#10024; AI Generated</button>
+    </div>
+
+    <!-- Upload Tab -->
+    <div id="picker-upload" class="picker-tab-content" style="padding:24px;">
+      <div class="upload-zone" onclick="document.getElementById('pickerFileInput').click()" style="padding:32px;text-align:center;">
+        <input type="file" id="pickerFileInput" accept="image/*" style="display:none;" onchange="handlePickerUpload(event)">
+        <div style="font-size:28px;margin-bottom:8px;">&#128247;</div>
+        <div style="color:var(--cream);">גררו תמונה לכאן או לחצו להעלאה</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">JPG, PNG, WebP עד 5MB</div>
+      </div>
+    </div>
+
+    <!-- Stock Tab -->
+    <div id="picker-stock" class="picker-tab-content" style="display:none;padding:24px;">
+      <div id="stock-directions" style="margin-bottom:16px;">
+        <p style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">בחרו כיוון ויזואלי:</p>
+        <div id="stock-directions-list" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <div style="color:var(--text-dim);font-size:13px;">טוען כיוונים...</div>
+        </div>
+      </div>
+      <div id="stock-results" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;"></div>
+      <div id="stock-loading" style="display:none;text-align:center;padding:20px;color:var(--text-dim);">מחפש תמונות...</div>
+    </div>
+
+    <!-- AI Tab -->
+    <div id="picker-ai" class="picker-tab-content" style="display:none;padding:24px;">
+      <div id="ai-directions" style="margin-bottom:16px;">
+        <p style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">בחרו כיוון ויזואלי:</p>
+        <div id="ai-directions-list" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <div style="color:var(--text-dim);font-size:13px;">טוען כיוונים...</div>
+        </div>
+      </div>
+      <div id="ai-result" style="text-align:center;"></div>
+      <div id="ai-loading" style="display:none;text-align:center;padding:20px;color:var(--text-dim);">יוצר תמונה... (5-8 שניות)</div>
+    </div>
+
+    <!-- Apply button -->
+    <div id="picker-apply-bar" style="display:none;padding:16px 24px;border-top:1px solid var(--border);">
+      <button onclick="applySelectedImage()" class="btn-primary" style="width:100%;">החל תמונה</button>
+    </div>
+  </div>
+</div>
 
 <!-- Toast notification -->
 <div class="toast" id="toast"></div>
@@ -1556,6 +1693,32 @@ function loadPreview() {
       const blob = new Blob([htmlSource], { type: 'text/html' });
       iframe.src = URL.createObjectURL(blob);
     }
+
+    // After iframe loads, inject image hover overlays
+    iframe.onload = function() {
+      try {
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        const imgSlots = iframeDoc.querySelectorAll('[data-image-slot]');
+        imgSlots.forEach(img => {
+          const slot = img.getAttribute('data-image-slot');
+          const wrapper = iframeDoc.createElement('div');
+          wrapper.style.cssText = 'position:relative;display:inline-block;width:100%;';
+          img.parentNode.insertBefore(wrapper, img);
+          wrapper.appendChild(img);
+
+          const overlay = iframeDoc.createElement('div');
+          overlay.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;cursor:pointer;z-index:100;';
+          overlay.innerHTML = '<div style="background:white;padding:10px 20px;border-radius:8px;font-family:sans-serif;font-size:14px;font-weight:600;">\uD83D\uDDBC\uFE0F החלפת תמונה</div>';
+
+          wrapper.appendChild(overlay);
+          wrapper.addEventListener('mouseenter', () => overlay.style.display = 'flex');
+          wrapper.addEventListener('mouseleave', () => overlay.style.display = 'none');
+          overlay.addEventListener('click', () => {
+            window.parent.postMessage({ type: 'open-image-picker', slot }, '*');
+          });
+        });
+      } catch(e) { /* cross-origin iframe — skip overlay injection */ }
+    };
 
     wrap.appendChild(iframe);
   } else {
@@ -2259,6 +2422,217 @@ function esc(s) {
 function escAttr(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+// ── Image Picker ─────────────────────────────────────────
+let currentPickerSlot = null;
+let pickerDirections = [];
+let selectedPickerImage = null;
+let lastAiDirectionIndex = 0;
+
+function openImagePicker(slot) {
+  currentPickerSlot = slot;
+  selectedPickerImage = null;
+  document.getElementById('image-picker-modal').style.display = 'flex';
+  document.getElementById('image-picker-title').textContent =
+    slot === 'hero' ? 'החלפת תמונת Hero' : 'החלפת תמונת Fold שני';
+  document.getElementById('picker-apply-bar').style.display = 'none';
+  switchPickerTab('upload');
+  loadDirections();
+}
+
+function closeImagePicker() {
+  document.getElementById('image-picker-modal').style.display = 'none';
+  currentPickerSlot = null;
+}
+
+function switchPickerTab(tab) {
+  document.querySelectorAll('.picker-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.picker-tab-content').forEach(c => c.style.display = 'none');
+  document.getElementById('tab-picker-' + tab).classList.add('active');
+  document.getElementById('picker-' + tab).style.display = 'block';
+}
+
+async function loadDirections() {
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session?.access_token;
+  try {
+    const res = await fetch('/api/image-directions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: selectedProject.id, access_token: token }),
+    });
+    const data = await res.json();
+    pickerDirections = data.directions || [];
+    renderDirections('stock-directions-list');
+    renderDirections('ai-directions-list');
+  } catch (e) {
+    console.error('Failed to load directions:', e);
+  }
+}
+
+function renderDirections(containerId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  pickerDirections.forEach((d, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'direction-chip';
+    btn.dataset.index = i;
+    btn.textContent = d;
+    btn.onclick = () => selectDirection(containerId, i);
+    container.appendChild(btn);
+  });
+}
+
+async function selectDirection(containerId, index) {
+  const container = document.getElementById(containerId);
+  container.querySelectorAll('.direction-chip').forEach((c, i) =>
+    c.classList.toggle('active', i === index)
+  );
+  const direction = pickerDirections[index];
+  const isStock = containerId.includes('stock');
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session?.access_token;
+
+  if (isStock) {
+    document.getElementById('stock-loading').style.display = 'block';
+    document.getElementById('stock-results').innerHTML = '';
+    try {
+      const res = await fetch('/api/search-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          direction, source_type: 'pexels', slot: currentPickerSlot, access_token: token
+        }),
+      });
+      const data = await res.json();
+      renderStockResults(data.results || []);
+    } finally {
+      document.getElementById('stock-loading').style.display = 'none';
+    }
+  } else {
+    lastAiDirectionIndex = index;
+    document.getElementById('ai-loading').style.display = 'block';
+    document.getElementById('ai-result').innerHTML = '';
+    try {
+      const res = await fetch('/api/search-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          direction, source_type: 'imagen', slot: currentPickerSlot, access_token: token
+        }),
+      });
+      const data = await res.json();
+      renderAiResult(data.results || [], direction);
+    } finally {
+      document.getElementById('ai-loading').style.display = 'none';
+    }
+  }
+}
+
+function renderStockResults(results) {
+  const container = document.getElementById('stock-results');
+  container.innerHTML = results.map((r, i) =>
+    `<div class="stock-image-card" onclick="selectStockImage(${i})">
+      <img src="${esc(r.thumbnail_url)}" alt="Stock option ${i + 1}" loading="lazy">
+    </div>`
+  ).join('');
+  container._results = results;
+}
+
+function selectStockImage(index) {
+  const container = document.getElementById('stock-results');
+  container.querySelectorAll('.stock-image-card').forEach((c, i) =>
+    c.classList.toggle('selected', i === index)
+  );
+  const result = container._results[index];
+  selectedPickerImage = { url: result.url, source: 'pexels', source_meta: result.source_meta };
+  document.getElementById('picker-apply-bar').style.display = 'block';
+}
+
+function renderAiResult(results, direction) {
+  if (!results.length) {
+    document.getElementById('ai-result').innerHTML = '<p style="color:var(--text-dim);">יצירת התמונה נכשלה. נסו כיוון אחר.</p>';
+    return;
+  }
+  const r = results[0];
+  const container = document.getElementById('ai-result');
+  container.innerHTML = '';
+
+  const img = document.createElement('img');
+  img.src = r.url;
+  img.alt = 'AI generated';
+  img.style.cssText = 'width:100%;border-radius:12px;margin-bottom:12px;';
+  container.appendChild(img);
+
+  const retryBtn = document.createElement('button');
+  retryBtn.className = 'btn-action';
+  retryBtn.style.cssText = 'width:100%;justify-content:center;';
+  retryBtn.textContent = '\uD83D\uDD04 יצירת וריאציה נוספת';
+  retryBtn.onclick = () => selectDirection('ai-directions-list', lastAiDirectionIndex);
+  container.appendChild(retryBtn);
+
+  selectedPickerImage = { url: r.url, source: 'imagen', source_meta: r.source_meta };
+  document.getElementById('picker-apply-bar').style.display = 'block';
+}
+
+async function handlePickerUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const timestamp = Date.now();
+  const rand = Math.random().toString(36).slice(2, 8);
+  const ext = file.name.split('.').pop();
+  const path = `uploads/${timestamp}_${rand}.${ext}`;
+
+  const { error } = await sb.storage.from('lp-images').upload(path, file);
+  if (error) { showToast('שגיאה בהעלאה: ' + error.message, 'error'); return; }
+
+  const { data: urlData } = sb.storage.from('lp-images').getPublicUrl(path);
+  selectedPickerImage = { url: urlData.publicUrl, source: 'upload', source_meta: {} };
+  document.getElementById('picker-apply-bar').style.display = 'block';
+
+  document.getElementById('picker-upload').innerHTML = `
+    <img src="${esc(urlData.publicUrl)}" style="width:100%;border-radius:var(--radius-sm);">
+    <p style="text-align:center;color:var(--success);margin-top:8px;">התמונה הועלתה בהצלחה</p>
+  `;
+}
+
+async function applySelectedImage() {
+  if (!selectedPickerImage || !currentPickerSlot) return;
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session?.access_token;
+  const variantId = selectedVariant?.id;
+  if (!variantId) { showToast('לא נבחר variant', 'error'); return; }
+
+  try {
+    const res = await fetch('/api/apply-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: selectedProject.id,
+        variant_id: variantId,
+        slot: currentPickerSlot,
+        image_url: selectedPickerImage.url,
+        source: selectedPickerImage.source,
+        source_meta: selectedPickerImage.source_meta,
+        access_token: token,
+      }),
+    });
+    if (!res.ok) throw new Error('Apply failed');
+
+    closeImagePicker();
+    showToast('התמונה הוחלפה בהצלחה!', 'success');
+    loadPreview();
+  } catch (e) {
+    showToast('שגיאה בשמירת התמונה', 'error');
+  }
+}
+
+// ── Image overlay postMessage listener ───────────────────
+window.addEventListener('message', (event) => {
+  if (event.data?.type === 'open-image-picker') {
+    openImagePicker(event.data.slot);
+  }
+});
 </script>
 </body>
 </html>

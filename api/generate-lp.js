@@ -64,7 +64,7 @@ function buildBrief(project) {
 /**
  * Build the system prompt instructing Claude how to generate the LP.
  */
-function buildSystemPrompt() {
+function buildSystemPrompt(imageMode, resolvedImages) {
   return `You are an expert landing page designer and front-end developer.
 Your job is to create a complete, production-ready, single-file HTML landing page based on the provided brief and inspiration image.
 
@@ -103,11 +103,21 @@ CRITICAL RULES:
     - Padding/margins should use clamp() or responsive values
     - Test-proof: no horizontal scroll, no cut-off elements, no hidden content on mobile
     - Hero section should fit within the mobile viewport without excessive empty space
-11. Create a UNIQUE, visually striking design inspired by the uploaded image's color palette, mood, and style:
+${imageMode === "with_images" && resolvedImages ? `11. IMAGE PLACEMENT RULES:
+    - You have been provided with real image URLs. Use them in the HTML.
+    - Hero section MUST include: <img data-image-slot="hero" src="${resolvedImages.hero?.url}" alt="[contextual alt text]" style="width:100%;height:100%;object-fit:cover;">
+    ${resolvedImages.fold2 ? `- Second fold section MUST include: <img data-image-slot="fold2" src="${resolvedImages.fold2.url}" alt="[contextual alt text]" style="width:100%;object-fit:cover;">` : "- No second fold image — use CSS-only design for other sections."}
+    - Design the color palette, typography, and mood to COMPLEMENT the provided images
+    - Hero image can be used as: full-width background behind text, partial overlay, side-by-side with text, or contained block — choose the best approach for the design
+    - Images must be responsive (width:100%, height:auto or object-fit:cover)
+    - The data-image-slot attribute is REQUIRED on each image — do not remove it
+    - Do NOT add any other <img> tags beyond the provided slots
+    - Use CSS gradients, shapes, patterns for other decorative elements` :
+`11. Create a UNIQUE, visually striking design inspired by the uploaded image's color palette, mood, and style:
     - Extract dominant colors from the image and use them as the page palette
     - Use CSS gradients, shapes, patterns, and decorative elements for visual interest
     - Do NOT use any external images or placeholder image URLs
-    - All visual elements must be pure CSS (gradients, borders, shadows, shapes)
+    - All visual elements must be pure CSS (gradients, borders, shadows, shapes)`}
 12. DO NOT include:
     - Analytics code or tracking scripts
     - Form submission handlers or JavaScript form logic
@@ -252,11 +262,15 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "You do not have permission to generate LP for this project" });
     }
 
+    // Check for resolved_images from client (two-phase generation)
+    const resolved_images = req.body.resolved_images || null;
+    const imageMode = project.image_mode || "css_only";
+
     // 3. Build the brief from project data
     const briefText = buildBrief(project);
 
     // 4. Build messages for Claude API
-    const systemPrompt = buildSystemPrompt();
+    const systemPrompt = buildSystemPrompt(imageMode, resolved_images);
 
     // Build user message content — text brief + optional image + optional brief file
     const userContent = [];
@@ -291,13 +305,20 @@ export default async function handler(req, res) {
 
     // Add the text brief
     let briefIntro = "";
+    if (imageMode === "with_images" && resolved_images?.hero) {
+      briefIntro = "You have been provided with real image URLs to use in the landing page. Design the page around these images.";
+      briefIntro += `\n\nHero image URL: ${resolved_images.hero.url}`;
+      if (resolved_images.fold2) {
+        briefIntro += `\nSecond fold image URL: ${resolved_images.fold2.url}`;
+      }
+    }
     if (imageUrl) {
-      briefIntro = "Here is the inspiration image for the design. Use its color palette, mood, and visual style as the basis for the landing page design.";
+      briefIntro += (briefIntro ? "\n" : "") + "Here is the inspiration image for the design. Use its color palette, mood, and visual style as the basis for the landing page design.";
     }
     if (briefFileUrl) {
       briefIntro += (briefIntro ? "\n" : "") + "A brief document has been attached above — incorporate its content into the landing page design.";
     }
-    if (!imageUrl && !briefFileUrl) {
+    if (!imageUrl && !briefFileUrl && !resolved_images) {
       briefIntro = "(No inspiration image was provided. Create a visually striking design using a modern, professional color palette that matches the brand's tone.)";
     }
 
@@ -474,6 +495,57 @@ export default async function handler(req, res) {
 
       if (!insertRes.ok) {
         console.error("Failed to save editable content:", insertRes.status);
+      }
+    }
+
+    // 7b. Save resolved images to lp_image_content (if with_images mode)
+    if (imageMode === "with_images" && resolved_images && activeVariantId) {
+      // Delete existing image content for this variant
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${encodeURIComponent(activeVariantId)}`,
+        {
+          method: "DELETE",
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+        }
+      );
+
+      // Insert image rows
+      const imageRows = [];
+      if (resolved_images.hero) {
+        imageRows.push({
+          project_id,
+          variant_id: activeVariantId,
+          slot: "hero",
+          image_url: resolved_images.hero.url,
+          source: resolved_images.hero.source,
+          source_meta: resolved_images.hero.meta || {},
+        });
+      }
+      if (resolved_images.fold2) {
+        imageRows.push({
+          project_id,
+          variant_id: activeVariantId,
+          slot: "fold2",
+          image_url: resolved_images.fold2.url,
+          source: resolved_images.fold2.source,
+          source_meta: resolved_images.fold2.meta || {},
+        });
+      }
+
+      if (imageRows.length > 0) {
+        await fetch(`${SUPABASE_URL}/rest/v1/lp_image_content`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json",
+            Prefer: "return=minimal",
+          },
+          body: JSON.stringify(imageRows),
+        });
       }
     }
 

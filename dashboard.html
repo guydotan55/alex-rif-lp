@@ -1570,9 +1570,22 @@ function loadPreview() {
 async function generateLP() {
   if (!selectedProject) return;
 
+  // Regeneration warning if images exist
+  if (selectedProject.image_mode === 'with_images') {
+    const existingImages = await sb
+      .from('lp_image_content')
+      .select('id')
+      .eq('project_id', selectedProject.id)
+      .limit(1);
+    if (existingImages.data?.length > 0) {
+      if (!confirm('יצירה מחדש תחליף את התמונות הנוכחיות. להמשיך?')) return;
+    }
+  }
+
   const btnGen = document.getElementById('btn-generate');
   const empty = document.getElementById('preview-empty');
   const progress = document.getElementById('gen-progress');
+  const progressText = progress.querySelector('.gen-progress-text');
   const wrap = document.getElementById('preview-frame-wrap');
 
   // Remove old iframe
@@ -1587,14 +1600,44 @@ async function generateLP() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) throw new Error('Not authenticated');
 
+    let resolvedImages = null;
+
+    // Phase 1: Resolve images (if with_images mode)
+    if (selectedProject.image_mode === 'with_images') {
+      progressText.textContent = 'מחפש תמונות...';
+
+      const imgRes = await fetch('/api/resolve-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: selectedProject.id,
+          access_token: session.access_token
+        }),
+      });
+      const imgData = await imgRes.json();
+
+      if (imgData.mode === 'with_images' && imgData.hero) {
+        resolvedImages = { hero: imgData.hero, fold2: imgData.fold2 };
+      }
+      // If mode is css_only_fallback, resolvedImages stays null
+    }
+
+    // Phase 2: Generate LP
+    progressText.textContent = 'מייצר את דף הנחיתה...';
+
+    const body = {
+      project_id: selectedProject.id,
+      variant_id: selectedVariant?.id || null,
+      access_token: session.access_token,
+    };
+    if (resolvedImages) {
+      body.resolved_images = resolvedImages;
+    }
+
     const resp = await fetch('/api/generate-lp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        project_id: selectedProject.id,
-        variant_id: selectedVariant?.id || null,
-        access_token: session.access_token
-      })
+      body: JSON.stringify(body),
     });
 
     if (!resp.ok) {
@@ -1608,7 +1651,6 @@ async function generateLP() {
     const { data } = await sb.from('projects').select('*').eq('id', selectedProject.id).single();
     if (data) {
       selectedProject = data;
-      // Update in projects array
       const idx = projects.findIndex(p => p.id === data.id);
       if (idx >= 0) projects[idx] = data;
     }

@@ -2369,6 +2369,28 @@ async function showAddVariantModal() {
   }
 
   projectVariants.push(data);
+
+  // Copy images from default variant to new variant
+  const defaultVariant = projectVariants.find(v => v.is_default);
+  if (defaultVariant) {
+    const { data: existingImages } = await sb
+      .from('lp_image_content')
+      .select('*')
+      .eq('variant_id', defaultVariant.id);
+
+    if (existingImages?.length > 0) {
+      const newImageRows = existingImages.map(img => ({
+        project_id: img.project_id,
+        variant_id: data.id,
+        slot: img.slot,
+        image_url: img.image_url,
+        source: img.source,
+        source_meta: img.source_meta,
+      }));
+      await sb.from('lp_image_content').insert(newImageRows);
+    }
+  }
+
   selectedVariant = data;
   renderVariantBar();
   loadPreview();

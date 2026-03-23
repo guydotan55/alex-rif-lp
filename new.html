@@ -910,13 +910,13 @@
     <div class="progress-wrap" id="progressWrap">
       <div class="progress-steps" id="progressSteps"></div>
       <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
-      <div class="progress-label" id="progressLabel">שלב 1 מתוך 6</div>
+      <div class="progress-label" id="progressLabel">שלב 1 מתוך 7</div>
     </div>
 
     <!-- ── Step 1: Basics ──────────────────────────────────── -->
     <div class="step-card active" data-step="1">
       <div class="step-header">
-        <div class="step-num">שלב 1 מתוך 6</div>
+        <div class="step-num">שלב 1 מתוך 7</div>
         <h2 class="step-title">בואו נתחיל מהבסיס</h2>
         <p class="step-subtitle">ספרו לנו קצת על העסק או הפרויקט שלכם</p>
       </div>
@@ -958,7 +958,7 @@
     <!-- ── Step 2: Story & Value ───────────────────────────── -->
     <div class="step-card" data-step="2">
       <div class="step-header">
-        <div class="step-num">שלב 2 מתוך 6</div>
+        <div class="step-num">שלב 2 מתוך 7</div>
         <h2 class="step-title">הסיפור והערך שלכם</h2>
         <p class="step-subtitle">כאן אנחנו בונים את הלב של הדף</p>
       </div>
@@ -1011,7 +1011,7 @@
     <!-- ── Step 3: Social Proof ────────────────────────────── -->
     <div class="step-card" data-step="3">
       <div class="step-header">
-        <div class="step-num">שלב 3 מתוך 6</div>
+        <div class="step-num">שלב 3 מתוך 7</div>
         <h2 class="step-title">הוכחה חברתית</h2>
         <p class="step-subtitle">שמות, המלצות, תגים — הכל עוזר לבנות אמון (אופציונלי)</p>
       </div>
@@ -1038,7 +1038,7 @@
     <!-- ── Step 4: Offer & CTA ─────────────────────────────── -->
     <div class="step-card" data-step="4">
       <div class="step-header">
-        <div class="step-num">שלב 4 מתוך 6</div>
+        <div class="step-num">שלב 4 מתוך 7</div>
         <h2 class="step-title">ההצעה וקריאה לפעולה</h2>
         <p class="step-subtitle">מה ההצעה שלכם, ומה אתם רוצים שהמבקר יעשה</p>
       </div>
@@ -1080,7 +1080,7 @@
     <!-- ── Step 5: Visual Identity ─────────────────────────── -->
     <div class="step-card" data-step="5">
       <div class="step-header">
-        <div class="step-num">שלב 5 מתוך 6</div>
+        <div class="step-num">שלב 5 מתוך 7</div>
         <h2 class="step-title">הזהות החזותית</h2>
         <p class="step-subtitle">תמונה, צבעים וטון הדיבור של הדף</p>
       </div>
@@ -1127,10 +1127,91 @@
       </div>
     </div>
 
-    <!-- ── Step 6: Email Settings ──────────────────────────── -->
+    <!-- ── Step 6: Image Preferences ─────────────────────────── -->
     <div class="step-card" data-step="6">
       <div class="step-header">
-        <div class="step-num">שלב 6 מתוך 6</div>
+        <div class="step-num">שלב 6 מתוך 7</div>
+        <h2 class="step-title">תמונות</h2>
+        <p class="step-subtitle">האם תרצו תמונות בדף הנחיתה?</p>
+      </div>
+
+      <div class="color-mode-group" style="margin-bottom:24px;">
+        <button type="button" class="color-mode-btn active" id="btn-with-images" onclick="setImageMode('with_images')">כן, עם תמונות</button>
+        <button type="button" class="color-mode-btn" id="btn-css-only" onclick="setImageMode('css_only')">לא, עיצוב בלבד</button>
+      </div>
+
+      <div id="image-options">
+        <!-- Hero image upload -->
+        <div class="field">
+          <label class="field-label">תמונת Hero</label>
+          <span class="field-hint">התמונה הראשית בראש העמוד</span>
+          <div class="upload-zone" id="heroUploadZone" onclick="document.getElementById('heroFileInput').click()">
+            <div class="upload-placeholder" id="heroUploadPrompt">
+              <span class="upload-icon">&#x1F4F7;</span>
+              <div class="upload-text">גררו תמונה לכאן או <strong>לחצו לבחירה</strong><br><span style="font-size:0.78rem;color:var(--text-dim)">JPG, PNG, WebP — עד 5MB</span></div>
+            </div>
+            <img class="upload-preview" id="heroUploadPreview" alt="Preview">
+          </div>
+          <input type="file" id="heroFileInput" accept="image/*" hidden>
+          <div class="upload-progress" id="heroUploadProgress">
+            <div class="upload-progress-bar"><div class="upload-progress-fill" id="heroUploadProgressFill"></div></div>
+            <div class="upload-status" id="heroUploadStatus">מעלה...</div>
+          </div>
+
+          <div id="heroModeChoice" style="display:none;margin-top:12px;">
+            <span class="field-hint" style="text-align:center;display:block;margin-bottom:10px;">איך להשתמש בתמונה?</span>
+            <div class="color-mode-group">
+              <button type="button" class="color-mode-btn active" id="btn-hero-direct" onclick="setHeroImageMode('direct')">השתמשו בתמונה הזו</button>
+              <button type="button" class="color-mode-btn" id="btn-hero-inspiration" onclick="setHeroImageMode('inspiration')">השתמשו כהשראה</button>
+            </div>
+            <p style="font-size:0.75rem;color:var(--text-dim);margin-top:8px;text-align:center;max-width:360px;margin-left:auto;margin-right:auto;line-height:1.6;">
+              "השראה" אומר שננתח את האווירה, הסגנון והצבעים כדי למצוא או ליצור תמונה מתאימה עבורכם
+            </p>
+          </div>
+          <p id="heroSkipHint" style="text-align:center;color:var(--text-dim);font-size:0.78rem;margin-top:10px;">
+            או דלגו — נמצא תמונה מתאימה אוטומטית לפי התיאור שלכם
+          </p>
+        </div>
+
+        <!-- Fold 2 toggle -->
+        <div class="field" style="border-top:1px solid rgba(245,200,66,0.1);padding-top:16px;">
+          <div class="toggle-row">
+            <div>
+              <span class="toggle-label">תמונת Fold שני</span>
+              <span class="field-hint" style="display:block;margin-top:2px;">אופציונלי — מוסיף תמונה לחלק הסיפור</span>
+            </div>
+            <button type="button" class="toggle-switch" id="fold2Toggle" onclick="toggleFold2()"></button>
+          </div>
+          <div id="fold2UploadSection" style="display:none;margin-top:12px;">
+            <div class="upload-zone" id="fold2UploadZone" onclick="document.getElementById('fold2FileInput').click()">
+              <div class="upload-placeholder" id="fold2UploadPrompt">
+                <span class="upload-icon">&#x1F4F7;</span>
+                <div class="upload-text">גררו תמונה לכאן או <strong>לחצו לבחירה</strong></div>
+              </div>
+              <img class="upload-preview" id="fold2UploadPreview" alt="Preview">
+            </div>
+            <input type="file" id="fold2FileInput" accept="image/*" hidden>
+            <div class="upload-progress" id="fold2UploadProgress">
+              <div class="upload-progress-bar"><div class="upload-progress-fill" id="fold2UploadProgressFill"></div></div>
+              <div class="upload-status" id="fold2UploadStatus">מעלה...</div>
+            </div>
+            <div id="fold2ModeChoice" style="display:none;margin-top:12px;">
+              <div class="color-mode-group">
+                <button type="button" class="color-mode-btn active" id="btn-fold2-direct" onclick="setFold2ImageMode('direct')">השתמשו בתמונה הזו</button>
+                <button type="button" class="color-mode-btn" id="btn-fold2-inspiration" onclick="setFold2ImageMode('inspiration')">השתמשו כהשראה</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="skip-btn" onclick="goNext()">דלגו על שלב זה &larr;</button>
+    </div>
+
+    <!-- ── Step 7: Email Settings ──────────────────────────── -->
+    <div class="step-card" data-step="7">
+      <div class="step-header">
+        <div class="step-num">שלב 7 מתוך 7</div>
         <h2 class="step-title">הגדרות אימייל</h2>
         <p class="step-subtitle">הגדירו מייל ברוכים הבאים אוטומטי לנרשמים</p>
       </div>
@@ -1241,7 +1322,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // State
 // ═══════════════════════════════════════════════════════════════
 let currentStep = 1;
-const totalSteps = 6;
+const totalSteps = 7;
 let currentMode = 'questionnaire';
 let selectedLang = 'he';
 let selectedTone = 'professional';
@@ -1250,6 +1331,12 @@ let emailEnabled = true;
 let uploadedImageUrl = null;
 let briefUploadedImageUrl = null;
 let featureCount = 1;
+let imageMode = 'with_images';
+let heroImageUrl = null;
+let heroImageMode = 'direct';
+let fold2Enabled = false;
+let fold2ImageUrl = null;
+let fold2ImageMode = 'direct';
 
 // ═══════════════════════════════════════════════════════════════
 // Progress bar init
@@ -1382,13 +1469,9 @@ function validateStep(step) {
     if (!document.getElementById('ctaText').value.trim()) return showError('ctaText', 'err-ctaText');
     if (!document.getElementById('thankyouMsg').value.trim()) return showError('thankyouMsg', 'err-thankyouMsg');
   }
-  if (step === 5) {
-    if (!uploadedImageUrl) {
-      document.getElementById('err-image').classList.add('visible');
-      return false;
-    }
-  }
-  // Step 6 has no required validation
+  // Step 5: image upload is optional (images now have their own step)
+  // Step 6: image preferences — all optional
+  // Step 7: email settings — no required validation
   return true;
 }
 
@@ -1509,6 +1592,128 @@ function toggleEmail() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Image Preferences (Step 6)
+// ═══════════════════════════════════════════════════════════════
+function setImageMode(mode) {
+  imageMode = mode;
+  document.getElementById('btn-with-images').classList.toggle('active', mode === 'with_images');
+  document.getElementById('btn-css-only').classList.toggle('active', mode === 'css_only');
+  document.getElementById('image-options').style.display = mode === 'with_images' ? 'block' : 'none';
+}
+
+function setHeroImageMode(mode) {
+  heroImageMode = mode;
+  document.getElementById('btn-hero-direct').classList.toggle('active', mode === 'direct');
+  document.getElementById('btn-hero-inspiration').classList.toggle('active', mode === 'inspiration');
+}
+
+function setFold2ImageMode(mode) {
+  fold2ImageMode = mode;
+  document.getElementById('btn-fold2-direct').classList.toggle('active', mode === 'direct');
+  document.getElementById('btn-fold2-inspiration').classList.toggle('active', mode === 'inspiration');
+}
+
+function toggleFold2() {
+  fold2Enabled = !fold2Enabled;
+  const toggle = document.getElementById('fold2Toggle');
+  toggle.classList.toggle('on', fold2Enabled);
+  document.getElementById('fold2UploadSection').style.display = fold2Enabled ? 'block' : 'none';
+}
+
+async function handleHeroUpload(file) {
+  if (!file.type.startsWith('image/')) { showToast('נא לבחור קובץ תמונה'); return; }
+  if (file.size > 5 * 1024 * 1024) { showToast('הקובץ גדול מדי — עד 5MB'); return; }
+
+  const zone = document.getElementById('heroUploadZone');
+  const preview = document.getElementById('heroUploadPreview');
+  const progressEl = document.getElementById('heroUploadProgress');
+  const fillEl = document.getElementById('heroUploadProgressFill');
+  const statusEl = document.getElementById('heroUploadStatus');
+
+  // Preview
+  const reader = new FileReader();
+  reader.onload = (e) => { preview.src = e.target.result; zone.classList.add('has-image'); };
+  reader.readAsDataURL(file);
+
+  progressEl.style.display = 'block';
+  fillEl.style.width = '10%';
+  statusEl.textContent = 'מעלה...';
+  statusEl.className = 'upload-status';
+
+  const ext = file.name.split('.').pop() || 'jpg';
+  const fileName = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const filePath = `uploads/${fileName}`;
+
+  try {
+    fillEl.style.width = '40%';
+    const { data, error } = await sb.storage.from('lp-images').upload(filePath, file, { contentType: file.type, upsert: true });
+    if (error) throw error;
+
+    fillEl.style.width = '80%';
+    const { data: urlData } = sb.storage.from('lp-images').getPublicUrl(filePath);
+    heroImageUrl = urlData.publicUrl;
+
+    fillEl.style.width = '100%';
+    statusEl.textContent = 'הועלה בהצלחה!';
+    statusEl.className = 'upload-status success';
+
+    document.getElementById('heroModeChoice').style.display = 'block';
+    document.getElementById('heroSkipHint').style.display = 'none';
+  } catch (err) {
+    console.error('Hero upload error:', err);
+    fillEl.style.width = '100%';
+    statusEl.textContent = 'שגיאה בהעלאה: ' + (err.message || 'Unknown error');
+    statusEl.className = 'upload-status error';
+  }
+}
+
+async function handleFold2Upload(file) {
+  if (!file.type.startsWith('image/')) { showToast('נא לבחור קובץ תמונה'); return; }
+  if (file.size > 5 * 1024 * 1024) { showToast('הקובץ גדול מדי — עד 5MB'); return; }
+
+  const zone = document.getElementById('fold2UploadZone');
+  const preview = document.getElementById('fold2UploadPreview');
+  const progressEl = document.getElementById('fold2UploadProgress');
+  const fillEl = document.getElementById('fold2UploadProgressFill');
+  const statusEl = document.getElementById('fold2UploadStatus');
+
+  // Preview
+  const reader = new FileReader();
+  reader.onload = (e) => { preview.src = e.target.result; zone.classList.add('has-image'); };
+  reader.readAsDataURL(file);
+
+  progressEl.style.display = 'block';
+  fillEl.style.width = '10%';
+  statusEl.textContent = 'מעלה...';
+  statusEl.className = 'upload-status';
+
+  const ext = file.name.split('.').pop() || 'jpg';
+  const fileName = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const filePath = `uploads/${fileName}`;
+
+  try {
+    fillEl.style.width = '40%';
+    const { data, error } = await sb.storage.from('lp-images').upload(filePath, file, { contentType: file.type, upsert: true });
+    if (error) throw error;
+
+    fillEl.style.width = '80%';
+    const { data: urlData } = sb.storage.from('lp-images').getPublicUrl(filePath);
+    fold2ImageUrl = urlData.publicUrl;
+
+    fillEl.style.width = '100%';
+    statusEl.textContent = 'הועלה בהצלחה!';
+    statusEl.className = 'upload-status success';
+
+    document.getElementById('fold2ModeChoice').style.display = 'block';
+  } catch (err) {
+    console.error('Fold2 upload error:', err);
+    fillEl.style.width = '100%';
+    statusEl.textContent = 'שגיאה בהעלאה: ' + (err.message || 'Unknown error');
+    statusEl.className = 'upload-status error';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Image Upload
 // ═══════════════════════════════════════════════════════════════
 function setupUpload(zoneId, inputId, previewId, progressId, fillId, statusId, isQuestionnaireMode) {
@@ -1615,6 +1820,29 @@ async function uploadToStorage(file, isQuestionnaire, progressId, fillId, status
 setupUpload('uploadZone', 'fileInput', 'uploadPreview', 'uploadProgress', 'uploadProgressFill', 'uploadStatus', true);
 setupUpload('briefUploadZone', 'briefFileInput', 'briefUploadPreview', 'briefUploadProgress', 'briefUploadProgressFill', 'briefUploadStatus', false);
 
+// Init hero and fold2 upload zones (drag & drop + file input)
+(function() {
+  function setupImageStepUpload(zoneId, inputId, handler) {
+    const zone = document.getElementById(zoneId);
+    const input = document.getElementById(inputId);
+    ['dragenter', 'dragover'].forEach(e => {
+      zone.addEventListener(e, (ev) => { ev.preventDefault(); zone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(e => {
+      zone.addEventListener(e, (ev) => { ev.preventDefault(); zone.classList.remove('dragover'); });
+    });
+    zone.addEventListener('drop', (ev) => {
+      const files = ev.dataTransfer.files;
+      if (files.length) handler(files[0]);
+    });
+    input.addEventListener('change', () => {
+      if (input.files.length) handler(input.files[0]);
+    });
+  }
+  setupImageStepUpload('heroUploadZone', 'heroFileInput', handleHeroUpload);
+  setupImageStepUpload('fold2UploadZone', 'fold2FileInput', handleFold2Upload);
+})();
+
 // ═══════════════════════════════════════════════════════════════
 // Slug Generation
 // ═══════════════════════════════════════════════════════════════
@@ -1674,7 +1902,12 @@ function collectQuestionnaireData() {
     color_mode: colorMode,
     color_value: colorMode === 'specify' ? document.getElementById('colorHex').value.trim() : null,
     tone: selectedTone,
-    mode: 'questionnaire'
+    mode: 'questionnaire',
+    hero_image_url: heroImageUrl || null,
+    hero_image_url_mode: heroImageUrl ? heroImageMode : null,
+    fold2_enabled: fold2Enabled,
+    fold2_image_url: fold2ImageUrl || null,
+    fold2_image_url_mode: fold2ImageUrl ? fold2ImageMode : null
   };
 }
 
@@ -1708,6 +1941,7 @@ async function submitQuestionnaire() {
       status: 'draft',
       questionnaire_data: data,
       image_url: uploadedImageUrl,
+      image_mode: imageMode,
       email_enabled: emailEnabled,
       email_subject: emailEnabled ? document.getElementById('emailSubject').value.trim() : null,
       email_body: emailEnabled ? document.getElementById('emailBody').value.trim() : null

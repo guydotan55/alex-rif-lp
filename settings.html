@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LP Builder | הגדרות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --navy: #0a1628;
+    --navy-light: #0f2037;
+    --navy-mid: #132a46;
+    --navy-card: #0e1e35;
+    --navy-surface: #112640;
+    --gold: #f5c842;
+    --gold-soft: #ffe680;
+    --gold-dim: rgba(245, 200, 66, 0.15);
+    --gold-glow: rgba(245, 200, 66, 0.08);
+    --cream: #f0e8d8;
+    --text: #c8bfa8;
+    --text-dim: #8a8270;
+    --white: #ffffff;
+    --error: #ff5252;
+    --success: #4caf50;
+    --border: rgba(245, 200, 66, 0.1);
+    --border-strong: rgba(245, 200, 66, 0.2);
+    --radius: 14px;
+    --radius-sm: 10px;
+    --radius-xs: 6px;
+    --transition: 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Heebo', sans-serif;
+    background: var(--navy);
+    color: var(--cream);
+    direction: rtl;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ── Background decoration ───────────────────────────── */
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+    opacity: 0.35;
+  }
+  .bg-grid::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(245, 200, 66, 0.06) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(245, 200, 66, 0.04) 0%, transparent 50%);
+  }
+  .bg-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(100px);
+    animation: orbFloat 20s ease-in-out infinite;
+  }
+  .bg-orb-1 { width: 400px; height: 400px; background: rgba(245, 200, 66, 0.05); top: -100px; right: -100px; animation-delay: 0s; }
+  .bg-orb-2 { width: 300px; height: 300px; background: rgba(245, 200, 66, 0.03); bottom: 10%; left: -80px; animation-delay: -7s; }
+  .bg-orb-3 { width: 200px; height: 200px; background: rgba(100, 150, 255, 0.03); top: 50%; right: 20%; animation-delay: -14s; }
+  @keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -20px) scale(1.05); }
+    66% { transform: translate(-20px, 30px) scale(0.95); }
+  }
+
+  /* ── Scrollbar ───────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
+
+  /* ── Login Screen ────────────────────────────────────── */
+  #login-screen {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .login-card {
+    background: var(--navy-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 48px 40px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4), 0 0 60px var(--gold-glow);
+    position: relative;
+    overflow: hidden;
+  }
+  .login-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .login-logo { text-align: center; margin-bottom: 36px; }
+  .login-logo-icon {
+    width: 56px; height: 56px;
+    background: var(--gold-dim);
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px;
+    font-size: 26px;
+  }
+  .login-logo h1 { font-size: 22px; font-weight: 700; color: var(--white); }
+  .login-logo p { font-size: 14px; color: var(--text-dim); margin-top: 6px; }
+
+  .field-group { margin-bottom: 20px; }
+  .field-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .field-input {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--navy);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--white);
+    font-family: 'Heebo', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--transition);
+    direction: ltr;
+    text-align: left;
+  }
+  .field-input:focus { border-color: var(--gold); }
+  .field-input::placeholder { color: var(--text-dim); }
+
+  .field-select {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--navy);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--white);
+    font-family: 'Heebo', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--transition);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238a8270' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: left 14px center;
+  }
+  .field-select:focus { border-color: var(--gold); }
+
+  .btn-primary {
+    width: 100%;
+    padding: 13px;
+    background: linear-gradient(135deg, var(--gold), #e6b832);
+    color: var(--navy);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: 'Heebo', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all var(--transition);
+    margin-top: 8px;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245, 200, 66, 0.3); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .err-msg {
+    background: rgba(255, 82, 82, 0.1);
+    border: 1px solid rgba(255, 82, 82, 0.25);
+    color: #ff7b7b;
+    padding: 10px 14px;
+    border-radius: var(--radius-xs);
+    font-size: 13px;
+    margin-top: 14px;
+    text-align: center;
+    display: none;
+  }
+
+  /* ── Settings Layout ─────────────────────────────────── */
+  #settings { display: none; position: relative; z-index: 1; min-height: 100vh; }
+
+  .dash-header {
+    background: rgba(14, 30, 53, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .dash-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--white);
+  }
+  .dash-brand-icon {
+    width: 32px; height: 32px;
+    background: var(--gold-dim);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .dash-brand span { color: var(--gold); }
+  .dash-user {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .dash-user-email {
+    font-size: 13px;
+    color: var(--text-dim);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: ltr;
+  }
+  .btn-logout {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'Heebo', sans-serif;
+    font-size: 13px;
+    padding: 6px 16px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .btn-logout:hover { border-color: var(--error); color: var(--error); }
+
+  /* ── Content area ────────────────────────────────────── */
+  .settings-content {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 28px 60px;
+  }
+  .settings-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+  }
+  .settings-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--white);
+  }
+  .back-link {
+    color: var(--text);
+    text-decoration: none;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color var(--transition);
+  }
+  .back-link:hover { color: var(--gold); }
+
+  /* ── Tabs ────────────────────────────────────────────── */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+  .tab-btn {
+    padding: 10px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-dim);
+    font-family: 'Heebo', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    margin-bottom: -1px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Section header ──────────────────────────────────── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--white);
+  }
+
+  /* ── Action buttons ──────────────────────────────────── */
+  .btn-action {
+    padding: 8px 20px;
+    background: var(--gold-dim);
+    border: 1px solid var(--gold);
+    border-radius: var(--radius-xs);
+    color: var(--gold);
+    font-family: 'Heebo', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .btn-action:hover { background: rgba(245, 200, 66, 0.25); }
+  .btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-sm {
+    padding: 5px 12px;
+    font-size: 12px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .btn-sm:hover { border-color: var(--gold); color: var(--gold); }
+  .btn-sm.danger { color: var(--text-dim); }
+  .btn-sm.danger:hover { border-color: var(--error); color: var(--error); }
+
+  /* ── Table ───────────────────────────────────────────── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--navy-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .data-table th {
+    text-align: right;
+    padding: 12px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--navy-surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table td {
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--gold-glow); }
+
+  .data-table .actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+
+  /* ── Role badge ──────────────────────────────────────── */
+  .role-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .role-badge.super_admin {
+    background: rgba(245, 200, 66, 0.15);
+    color: var(--gold);
+  }
+  .role-badge.admin {
+    background: rgba(100, 150, 255, 0.15);
+    color: #8ab4ff;
+  }
+  .role-badge.manager {
+    background: rgba(76, 175, 80, 0.15);
+    color: #81c784;
+  }
+
+  /* ── Empty state ─────────────────────────────────────── */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  /* ── Loading ─────────────────────────────────────────── */
+  .loading-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  .small-spin {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-left: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Modal ───────────────────────────────────────────── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal-overlay.open {
+    display: flex;
+  }
+  .modal {
+    background: var(--navy-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+    position: relative;
+  }
+  .modal h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 20px;
+  }
+  .modal-close {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .modal-close:hover { color: var(--white); }
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .modal-actions .btn-primary { width: auto; flex: 1; margin-top: 0; }
+  .modal-actions .btn-cancel {
+    flex: 1;
+    padding: 12px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .modal-actions .btn-cancel:hover { border-color: var(--text); }
+
+  /* ── Toast ───────────────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--navy-card);
+    border: 1px solid var(--border);
+    color: var(--cream);
+    padding: 12px 24px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    z-index: 300;
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast.error { border-color: rgba(255, 82, 82, 0.4); color: #ff7b7b; }
+  .toast.success { border-color: rgba(76, 175, 80, 0.4); color: #81c784; }
+
+  /* ── Responsive ──────────────────────────────────────── */
+  @media (max-width: 640px) {
+    .settings-content { padding: 20px 16px 40px; }
+    .settings-top { flex-direction: column-reverse; align-items: flex-start; gap: 12px; }
+    .data-table { font-size: 13px; }
+    .data-table th, .data-table td { padding: 10px 12px; }
+    .modal { padding: 24px 20px; }
+    .dash-header { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid">
+  <div class="bg-orb bg-orb-1"></div>
+  <div class="bg-orb bg-orb-2"></div>
+  <div class="bg-orb bg-orb-3"></div>
+</div>
+
+<!-- ══════════ LOGIN ══════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">&#9670;</div>
+      <h1>LP Builder</h1>
+      <p>הגדרות מערכת</p>
+    </div>
+
+    <div id="login-form-magic">
+      <div class="field-group">
+        <label>כתובת מייל</label>
+        <input type="email" id="l-email" class="field-input" placeholder="your@email.com" autocomplete="email" />
+      </div>
+      <button class="btn-primary" id="l-btn" onclick="doLogin()">שלחו לי קישור</button>
+    </div>
+
+    <div class="err-msg" id="l-err"></div>
+  </div>
+</div>
+
+<!-- ══════════ SETTINGS ══════════ -->
+<div id="settings">
+  <header class="dash-header">
+    <div class="dash-brand">
+      <div class="dash-brand-icon">&#9670;</div>
+      LP <span>Builder</span>
+    </div>
+    <div class="dash-user">
+      <span class="dash-user-email" id="user-email"></span>
+      <button class="btn-logout" onclick="doLogout()">התנתק</button>
+    </div>
+  </header>
+
+  <div class="settings-content">
+    <div class="settings-top">
+      <h2 class="settings-title">הגדרות</h2>
+      <a href="/dashboard" class="back-link">חזרה לדשבורד &#8592;</a>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="communities" onclick="switchTab('communities')">קהילות</button>
+      <button class="tab-btn" data-tab="users" onclick="switchTab('users')">משתמשים</button>
+    </div>
+
+    <!-- Communities Tab -->
+    <div class="tab-panel active" id="tab-communities">
+      <div class="section-header">
+        <h3>ניהול קהילות</h3>
+        <button class="btn-action" onclick="createCommunity()">+ צור קהילה חדשה</button>
+      </div>
+      <div id="communities-table-wrap">
+        <div class="loading-state"><span class="small-spin"></span> טוען קהילות...</div>
+      </div>
+    </div>
+
+    <!-- Users Tab -->
+    <div class="tab-panel" id="tab-users">
+      <div class="section-header">
+        <h3>ניהול משתמשים</h3>
+        <button class="btn-action" onclick="openInviteModal()">+ הזמן משתמש</button>
+      </div>
+      <div id="users-table-wrap">
+        <div class="loading-state"><span class="small-spin"></span> טוען משתמשים...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ INVITE USER MODAL ══════════ -->
+<div class="modal-overlay" id="invite-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeInviteModal()">&times;</button>
+    <h3>הזמנת משתמש חדש</h3>
+
+    <div class="field-group">
+      <label>כתובת מייל</label>
+      <input type="email" id="invite-email" class="field-input" placeholder="user@example.com" />
+    </div>
+
+    <div class="field-group">
+      <label>תפקיד</label>
+      <select id="invite-role" class="field-select" onchange="onInviteRoleChange()">
+        <option value="admin">אדמין</option>
+        <option value="manager">מנהל קהילה</option>
+      </select>
+    </div>
+
+    <div class="field-group" id="invite-community-group" style="display:none;">
+      <label>קהילה</label>
+      <select id="invite-community" class="field-select">
+        <option value="">בחר קהילה...</option>
+      </select>
+    </div>
+
+    <div class="err-msg" id="invite-err"></div>
+
+    <div class="modal-actions">
+      <button class="btn-primary" id="invite-submit-btn" onclick="submitInvite()">שלח הזמנה</button>
+      <button class="btn-cancel" onclick="closeInviteModal()">ביטול</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Supabase Config ───────────────────────────────────────
+const SUPABASE_URL = 'https://uaspcafukqvgiztzdnfu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhc3BjYWZ1a3F2Z2l6dHpkbmZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MTA1NzcsImV4cCI6MjA4NzI4NjU3N30.BOqlLF8TQ7VabhsOrSgXyoLIwHCZP8M-LRt7Ok6FbWE';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── State ─────────────────────────────────────────────────
+let userRole = null;
+let communities = [];
+let users = [];
+
+// ── Auth ──────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const btn = document.getElementById('l-btn');
+  const err = document.getElementById('l-err');
+  err.style.display = 'none';
+  if (!email) { showErr('נא למלא כתובת מייל'); return; }
+  btn.disabled = true; btn.textContent = 'בודק...';
+
+  try {
+    const checkRes = await fetch('/api/check-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const checkData = await checkRes.json();
+    if (!checkData.allowed) {
+      showErr('לא נמצא חשבון. פנה למנהל המערכת.');
+      btn.disabled = false;
+      btn.textContent = 'שלחו לי קישור';
+      return;
+    }
+  } catch (e) {
+    // If check fails, proceed anyway
+  }
+
+  btn.textContent = 'שולח...';
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin + '/settings' }
+  });
+  if (error) {
+    showErr('שגיאה: ' + error.message);
+    btn.disabled = false; btn.textContent = 'שלחו לי קישור';
+  } else {
+    document.getElementById('login-form-magic').innerHTML = '<p style="text-align:center;color:var(--gold);font-size:1rem;padding:16px 0;">שלחנו קישור לאימייל שלכם!<br>לחצו עליו כדי להיכנס.</p>';
+  }
+}
+
+function showErr(msg) {
+  const el = document.getElementById('l-err');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  document.getElementById('settings').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+document.getElementById('l-email').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+// ── Session check ─────────────────────────────────────────
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) showSettings();
+})();
+
+async function showSettings() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session?.user?.id) return;
+
+  document.getElementById('user-email').textContent = session.user.email || '';
+
+  // Fetch user role
+  const { data: roleData } = await sb.from('user_roles')
+    .select('role, organization_id, community_id, email')
+    .eq('user_id', session.user.id)
+    .single();
+
+  if (!roleData) {
+    await sb.auth.signOut();
+    showErr('לא נמצא תפקיד למשתמש.');
+    return;
+  }
+
+  userRole = roleData;
+
+  // Only admin/super_admin can access settings
+  if (userRole.role !== 'admin' && userRole.role !== 'super_admin') {
+    window.location.href = '/dashboard';
+    return;
+  }
+
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('settings').style.display = 'block';
+
+  await Promise.all([loadCommunities(), loadUsers()]);
+}
+
+// ── Helpers ───────────────────────────────────────────────
+async function getToken() {
+  const { data: { session } } = await sb.auth.getSession();
+  return session?.access_token;
+}
+
+function showToast(msg, type = '') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => { toast.className = 'toast'; }, 3000);
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('he-IL', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
+function roleLabel(role) {
+  const labels = {
+    super_admin: 'סופר אדמין',
+    admin: 'אדמין',
+    manager: 'מנהל קהילה',
+  };
+  return labels[role] || role;
+}
+
+// ── Tabs ──────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+}
+
+// ── Communities ───────────────────────────────────────────
+async function loadCommunities() {
+  const wrap = document.getElementById('communities-table-wrap');
+  wrap.innerHTML = '<div class="loading-state"><span class="small-spin"></span> טוען קהילות...</div>';
+
+  try {
+    const token = await getToken();
+    const res = await fetch('/api/manage-communities', {
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load communities');
+    communities = data.communities || data || [];
+    renderCommunities();
+  } catch (e) {
+    wrap.innerHTML = '<div class="empty-state">שגיאה בטעינת קהילות: ' + e.message + '</div>';
+  }
+}
+
+function renderCommunities() {
+  const wrap = document.getElementById('communities-table-wrap');
+  if (!communities.length) {
+    wrap.innerHTML = '<div class="empty-state">אין קהילות עדיין. צרו קהילה חדשה.</div>';
+    return;
+  }
+
+  let html = '<table class="data-table"><thead><tr>';
+  html += '<th>שם</th><th>פרויקטים</th><th>פעולות</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const c of communities) {
+    html += '<tr>';
+    html += '<td>' + escHtml(c.name) + '</td>';
+    html += '<td>' + (c.project_count ?? c.projects_count ?? 0) + '</td>';
+    html += '<td class="actions">';
+    html += '<button class="btn-sm" onclick="editCommunity(\'' + c.id + '\', \'' + escAttr(c.name) + '\')">עריכה</button>';
+    html += '<button class="btn-sm danger" onclick="deleteCommunity(\'' + c.id + '\', \'' + escAttr(c.name) + '\')">מחיקה</button>';
+    html += '</td>';
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+async function createCommunity() {
+  const name = prompt('שם הקהילה החדשה:');
+  if (!name || !name.trim()) return;
+
+  try {
+    const token = await getToken();
+    const res = await fetch('/api/manage-communities', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to create community');
+    showToast('הקהילה נוצרה בהצלחה', 'success');
+    await loadCommunities();
+  } catch (e) {
+    showToast('שגיאה: ' + e.message, 'error');
+  }
+}
+
+async function editCommunity(id, currentName) {
+  const name = prompt('שם חדש לקהילה:', currentName);
+  if (!name || !name.trim() || name.trim() === currentName) return;
+
+  try {
+    const token = await getToken();
+    const res = await fetch('/api/manage-communities', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({ id, name: name.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to update community');
+    showToast('הקהילה עודכנה בהצלחה', 'success');
+    await loadCommunities();
+  } catch (e) {
+    showToast('שגיאה: ' + e.message, 'error');
+  }
+}
+
+async function deleteCommunity(id, name) {
+  if (!confirm('למחוק את הקהילה "' + name + '"?\nלא ניתן למחוק קהילה שיש לה פרויקטים.')) return;
+
+  try {
+    const token = await getToken();
+    const res = await fetch('/api/manage-communities', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({ id }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to delete community');
+    showToast('הקהילה נמחקה', 'success');
+    await loadCommunities();
+  } catch (e) {
+    showToast('שגיאה: ' + e.message, 'error');
+  }
+}
+
+// ── Users ─────────────────────────────────────────────────
+async function loadUsers() {
+  const wrap = document.getElementById('users-table-wrap');
+  wrap.innerHTML = '<div class="loading-state"><span class="small-spin"></span> טוען משתמשים...</div>';
+
+  try {
+    const token = await getToken();
+    const res = await fetch('/api/admin-users', {
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load users');
+    users = data.users || data || [];
+    renderUsers();
+  } catch (e) {
+    wrap.innerHTML = '<div class="empty-state">שגיאה בטעינת משתמשים: ' + e.message + '</div>';
+  }
+}
+
+function renderUsers() {
+  const wrap = document.getElementById('users-table-wrap');
+  if (!users.length) {
+    wrap.innerHTML = '<div class="empty-state">אין משתמשים. הזמינו משתמש חדש.</div>';
+    return;
+  }
+
+  let html = '<table class="data-table"><thead><tr>';
+  html += '<th>מייל</th><th>תפקיד</th><th>קהילה</th><th>תאריך יצירה</th><th>פעולות</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const u of users) {
+    const communityName = u.community_name || u.communities?.name || '-';
+    html += '<tr>';
+    html += '<td style="direction:ltr;text-align:right;">' + escHtml(u.email) + '</td>';
+    html += '<td><span class="role-badge ' + u.role + '">' + roleLabel(u.role) + '</span></td>';
+    html += '<td>' + escHtml(communityName) + '</td>';
+    html += '<td>' + formatDate(u.created_at) + '</td>';
+    html += '<td class="actions">';
+    // Don't show delete for super_admin or self
+    if (u.role !== 'super_admin') {
+      html += '<button class="btn-sm danger" onclick="removeUser(\'' + u.user_id + '\', \'' + escAttr(u.email) + '\')">הסרה</button>';
+    }
+    html += '</td>';
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+async function removeUser(userId, email) {
+  if (!confirm('להסיר את המשתמש ' + email + '?')) return;
+
+  try {
+    const token = await getToken();
+    const res = await fetch('/api/admin-users', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to remove user');
+    showToast('המשתמש הוסר בהצלחה', 'success');
+    await loadUsers();
+  } catch (e) {
+    showToast('שגיאה: ' + e.message, 'error');
+  }
+}
+
+// ── Invite Modal ──────────────────────────────────────────
+function openInviteModal() {
+  document.getElementById('invite-email').value = '';
+  document.getElementById('invite-role').value = 'admin';
+  document.getElementById('invite-err').style.display = 'none';
+  document.getElementById('invite-community-group').style.display = 'none';
+
+  // Populate community select
+  const sel = document.getElementById('invite-community');
+  sel.innerHTML = '<option value="">בחר קהילה...</option>';
+  for (const c of communities) {
+    sel.innerHTML += '<option value="' + c.id + '">' + escHtml(c.name) + '</option>';
+  }
+
+  document.getElementById('invite-modal').classList.add('open');
+}
+
+function closeInviteModal() {
+  document.getElementById('invite-modal').classList.remove('open');
+}
+
+function onInviteRoleChange() {
+  const role = document.getElementById('invite-role').value;
+  document.getElementById('invite-community-group').style.display = role === 'manager' ? '' : 'none';
+}
+
+async function submitInvite() {
+  const email = document.getElementById('invite-email').value.trim();
+  const role = document.getElementById('invite-role').value;
+  const communityId = document.getElementById('invite-community').value;
+  const errEl = document.getElementById('invite-err');
+  const btn = document.getElementById('invite-submit-btn');
+
+  errEl.style.display = 'none';
+
+  if (!email) {
+    errEl.textContent = 'נא למלא כתובת מייל';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (role === 'manager' && !communityId) {
+    errEl.textContent = 'נא לבחור קהילה למנהל';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'שולח...';
+
+  try {
+    const token = await getToken();
+    const body = { email, role };
+    if (role === 'manager') body.community_id = communityId;
+
+    const res = await fetch('/api/invite-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to invite user');
+    showToast('ההזמנה נשלחה בהצלחה', 'success');
+    closeInviteModal();
+    await loadUsers();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'שלח הזמנה';
+  }
+}
+
+// Close modal on overlay click
+document.getElementById('invite-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeInviteModal();
+});
+
+// ── HTML Escaping ─────────────────────────────────────────
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function escAttr(s) {
+  if (!s) return '';
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+</script>
+</body>
+</html>

@@ -1299,6 +1299,45 @@
       <div class="field-error" id="err-briefImage">נא להעלות תמונה</div>
     </div>
 
+    <div class="field" style="border-top:1px solid rgba(245,200,66,0.1);padding-top:16px;">
+      <label class="field-label" style="margin-bottom:10px;">תמונות בדף הנחיתה</label>
+      <div class="color-mode-group" style="margin-bottom:16px;">
+        <button type="button" class="color-mode-btn active" id="btn-brief-with-images" onclick="setBriefImageMode('with_images', this)">כן, עם תמונות</button>
+        <button type="button" class="color-mode-btn" id="btn-brief-css-only" onclick="setBriefImageMode('css_only', this)">לא, עיצוב בלבד</button>
+      </div>
+
+      <div id="briefImageOptions">
+        <label class="field-label">תמונת Hero</label>
+        <span class="field-hint">תמונה ראשית לראש העמוד (אופציונלי)</span>
+        <div class="upload-zone" id="briefHeroUploadZone" onclick="document.getElementById('briefHeroFileInput').click()">
+          <div class="upload-placeholder" id="briefHeroUploadPrompt">
+            <span class="upload-icon">&#x1F4F7;</span>
+            <div class="upload-text">גררו תמונה לכאן או <strong>לחצו לבחירה</strong><br><span style="font-size:0.78rem;color:var(--text-dim)">JPG, PNG, WebP — עד 5MB</span></div>
+          </div>
+          <img class="upload-preview" id="briefHeroUploadPreview" alt="Preview">
+        </div>
+        <input type="file" id="briefHeroFileInput" accept="image/*" hidden>
+        <div class="upload-progress" id="briefHeroUploadProgress">
+          <div class="upload-progress-bar"><div class="upload-progress-fill" id="briefHeroUploadProgressFill"></div></div>
+          <div class="upload-status" id="briefHeroUploadStatus">מעלה...</div>
+        </div>
+
+        <div id="briefHeroModeChoice" style="display:none;margin-top:12px;">
+          <span class="field-hint" style="text-align:center;display:block;margin-bottom:10px;">איך להשתמש בתמונה?</span>
+          <div class="color-mode-group">
+            <button type="button" class="color-mode-btn active" id="btn-brief-hero-direct" onclick="setBriefHeroImageMode('direct')">השתמשו בתמונה הזו</button>
+            <button type="button" class="color-mode-btn" id="btn-brief-hero-inspiration" onclick="setBriefHeroImageMode('inspiration')">השתמשו כהשראה</button>
+          </div>
+          <p style="font-size:0.75rem;color:var(--text-dim);margin-top:8px;text-align:center;max-width:360px;margin-left:auto;margin-right:auto;line-height:1.6;">
+            "השראה" אומר שננתח את האווירה, הסגנון והצבעים כדי למצוא או ליצור תמונה מתאימה עבורכם
+          </p>
+        </div>
+        <p id="briefHeroSkipHint" style="text-align:center;color:var(--text-dim);font-size:0.78rem;margin-top:10px;">
+          או דלגו — נמצא תמונה מתאימה אוטומטית לפי התיאור שלכם
+        </p>
+      </div>
+    </div>
+
     <div class="nav-bar">
       <button class="nav-btn nav-btn-submit" id="briefSubmitBtn" onclick="submitBrief()" style="flex:1">&#x2728; צרו לי דף נחיתה</button>
     </div>
@@ -1337,6 +1376,9 @@ let heroImageMode = 'direct';
 let fold2Enabled = false;
 let fold2ImageUrl = null;
 let fold2ImageMode = 'direct';
+let briefImageMode = 'with_images';
+let briefHeroImageUrl = null;
+let briefHeroImageUrlMode = 'direct';
 
 // ═══════════════════════════════════════════════════════════════
 // Progress bar init
@@ -1620,6 +1662,65 @@ function toggleFold2() {
   document.getElementById('fold2UploadSection').style.display = fold2Enabled ? 'block' : 'none';
 }
 
+function setBriefImageMode(mode, btn) {
+  briefImageMode = mode;
+  document.getElementById('btn-brief-with-images').classList.toggle('active', mode === 'with_images');
+  document.getElementById('btn-brief-css-only').classList.toggle('active', mode === 'css_only');
+  document.getElementById('briefImageOptions').style.display = mode === 'with_images' ? 'block' : 'none';
+}
+
+function setBriefHeroImageMode(mode) {
+  briefHeroImageUrlMode = mode;
+  document.getElementById('btn-brief-hero-direct').classList.toggle('active', mode === 'direct');
+  document.getElementById('btn-brief-hero-inspiration').classList.toggle('active', mode === 'inspiration');
+}
+
+async function handleBriefHeroUpload(file) {
+  if (!file.type.startsWith('image/')) { showToast('נא לבחור קובץ תמונה'); return; }
+  if (file.size > 5 * 1024 * 1024) { showToast('הקובץ גדול מדי — עד 5MB'); return; }
+
+  const zone = document.getElementById('briefHeroUploadZone');
+  const preview = document.getElementById('briefHeroUploadPreview');
+  const progressEl = document.getElementById('briefHeroUploadProgress');
+  const fillEl = document.getElementById('briefHeroUploadProgressFill');
+  const statusEl = document.getElementById('briefHeroUploadStatus');
+
+  const reader = new FileReader();
+  reader.onload = (e) => { preview.src = e.target.result; zone.classList.add('has-image'); };
+  reader.readAsDataURL(file);
+
+  progressEl.style.display = 'block';
+  fillEl.style.width = '10%';
+  statusEl.textContent = 'מעלה...';
+  statusEl.className = 'upload-status';
+
+  const ext = file.name.split('.').pop() || 'jpg';
+  const fileName = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const filePath = `uploads/${fileName}`;
+
+  try {
+    fillEl.style.width = '40%';
+    const { data, error } = await sb.storage.from('lp-images').upload(filePath, file, { contentType: file.type, upsert: true });
+    if (error) throw error;
+
+    fillEl.style.width = '80%';
+    const { data: urlData } = sb.storage.from('lp-images').getPublicUrl(filePath);
+    briefHeroImageUrl = urlData.publicUrl;
+
+    fillEl.style.width = '100%';
+    statusEl.textContent = 'הועלה בהצלחה!';
+    statusEl.className = 'upload-status success';
+
+    document.getElementById('briefHeroModeChoice').style.display = 'block';
+    document.getElementById('briefHeroSkipHint').style.display = 'none';
+  } catch (err) {
+    console.error('Brief hero upload error:', err);
+    fillEl.style.width = '100%';
+    statusEl.textContent = 'שגיאה בהעלאה: ' + (err.message || 'Unknown error');
+    statusEl.className = 'upload-status error';
+  }
+}
+
 async function handleHeroUpload(file) {
   if (!file.type.startsWith('image/')) { showToast('נא לבחור קובץ תמונה'); return; }
   if (file.size > 5 * 1024 * 1024) { showToast('הקובץ גדול מדי — עד 5MB'); return; }
@@ -1841,6 +1942,7 @@ setupUpload('briefUploadZone', 'briefFileInput', 'briefUploadPreview', 'briefUpl
   }
   setupImageStepUpload('heroUploadZone', 'heroFileInput', handleHeroUpload);
   setupImageStepUpload('fold2UploadZone', 'fold2FileInput', handleFold2Upload);
+  setupImageStepUpload('briefHeroUploadZone', 'briefHeroFileInput', handleBriefHeroUpload);
 })();
 
 // ═══════════════════════════════════════════════════════════════
@@ -1994,6 +2096,10 @@ async function submitBrief() {
     if (briefFileUrl) {
       briefData.brief_file_url = briefFileUrl;
     }
+    if (briefHeroImageUrl) {
+      briefData.hero_image_url = briefHeroImageUrl;
+      briefData.hero_image_url_mode = briefHeroImageUrlMode;
+    }
 
     const { data: project, error: projectError } = await sb.from('projects').insert({
       user_id: session.user.id,
@@ -2003,6 +2109,7 @@ async function submitBrief() {
       status: 'draft',
       questionnaire_data: briefData,
       image_url: briefUploadedImageUrl,
+      image_mode: briefImageMode,
       email_enabled: false,
       email_subject: null,
       email_body: null

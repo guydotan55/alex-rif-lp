@@ -1,146 +1,151 @@
 // POST /api/invite-user
-// Body: { email, is_manager }
-// Headers: Authorization: Bearer <access_token>
-//
-// 1. Verify caller is a manager (check user_profiles)
-// 2. Create user via Supabase admin API (auth.admin.createUser)
-// 3. Create user_profiles row with is_manager flag
-// 4. Return success
+// Body: { email, role, community_id?, organization_id? }
+// Authorization: Bearer <access_token>
+import { authenticateAndAuthorize, hasMinRole } from "./lib/auth-helper.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export default async function handler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing authorization token' });
-  }
-  const accessToken = authHeader.replace('Bearer ', '');
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    // 1. Verify caller identity
-    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'apikey': SUPABASE_SERVICE_ROLE_KEY
-      }
-    });
-    if (!userRes.ok) {
-      return res.status(401).json({ error: 'Invalid access token' });
-    }
-    const callerUser = await userRes.json();
+    // Auth: must be at least admin to invite
+    const auth = await authenticateAndAuthorize(req, res, { minRole: "admin" });
+    if (!auth) return;
 
-    // 2. Check caller is a manager
-    const profileRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_profiles?user_id=eq.${callerUser.id}&select=is_manager`,
-      {
-        headers: {
-          'apikey': SUPABASE_SERVICE_ROLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-        }
+    const { email, role, community_id } = req.body || {};
+    if (!email || !role) {
+      return res.status(400).json({ error: "email and role are required" });
+    }
+
+    // Validate role
+    if (!["admin", "manager"].includes(role)) {
+      return res.status(400).json({ error: "Role must be admin or manager" });
+    }
+
+    // Admins can only invite managers
+    if (auth.role.role === "admin" && role !== "manager") {
+      return res.status(403).json({ error: "Admins can only invite managers" });
+    }
+
+    // Manager role requires community_id
+    if (role === "manager" && !community_id) {
+      return res.status(400).json({ error: "community_id is required for manager role" });
+    }
+
+    // Verify community exists and belongs to the inviter's org
+    if (community_id) {
+      const commRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/communities?id=eq.${encodeURIComponent(community_id)}&select=id,organization_id`,
+        { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+      );
+      const comms = await commRes.json();
+      if (!comms?.length) return res.status(400).json({ error: "Community not found" });
+
+      // Admin must be in the same org as the community
+      if (auth.role.role === "admin" && comms[0].organization_id !== auth.role.organization_id) {
+        return res.status(403).json({ error: "Community is not in your organization" });
       }
+    }
+
+    // Check if user already has a role
+    const existingRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_roles?email=eq.${encodeURIComponent(email)}&select=id`,
+      { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
     );
-    const profiles = await profileRes.json();
-    if (!profiles.length || !profiles[0].is_manager) {
-      return res.status(403).json({ error: 'Only managers can invite users' });
+    const existing = await existingRes.json();
+    if (existing?.length > 0) {
+      return res.status(400).json({ error: "User already has a role assigned" });
     }
 
-    // 3. Parse request body
-    const { email, is_manager } = req.body || {};
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-
-    // 4. Invite user via Supabase invite endpoint (sends magic link email)
-    let newUser;
+    // Invite user via Supabase Admin API (creates auth.users row + sends invite email)
     const inviteRes = await fetch(`${SUPABASE_URL}/auth/v1/invite`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        'apikey': SUPABASE_SERVICE_ROLE_KEY
+        "Content-Type": "application/json",
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email }),
     });
 
+    let newUser;
     if (inviteRes.ok) {
       newUser = await inviteRes.json();
     } else {
-      // Fallback: create user with email_confirm: false so Supabase sends confirmation email
+      // Fallback: create user directly
       const createRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_SERVICE_ROLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+          "Content-Type": "application/json",
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         },
-        body: JSON.stringify({
-          email,
-          email_confirm: false,
-          password: generateTempPassword()
-        })
+        body: JSON.stringify({ email, email_confirm: false }),
       });
-
       if (!createRes.ok) {
-        const errData = await createRes.json();
-        return res.status(400).json({ error: errData.msg || errData.message || 'Failed to create user' });
+        const err = await createRes.json();
+        return res.status(400).json({ error: err.msg || err.message || "Failed to invite user" });
       }
       newUser = await createRes.json();
     }
 
-    // 5. Create user_profiles row
-    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
-      method: 'POST',
+    // Create user_roles row
+    const organization_id = auth.role.organization_id || auth.role.role === "super_admin"
+      ? (community_id ? (await fetch(
+          `${SUPABASE_URL}/rest/v1/communities?id=eq.${encodeURIComponent(community_id)}&select=organization_id`,
+          { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+        ).then(r => r.json()).then(c => c[0]?.organization_id)) : null)
+      : auth.role.organization_id;
+
+    const roleRow = {
+      user_id: newUser.id,
+      email,
+      role,
+      organization_id: role === "admin" ? organization_id : (organization_id || null),
+      community_id: role === "manager" ? community_id : null,
+    };
+
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/user_roles`, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_SERVICE_ROLE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        'Prefer': 'return=representation'
+        "Content-Type": "application/json",
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Prefer: "return=representation",
       },
-      body: JSON.stringify({
-        user_id: newUser.id,
-        is_manager: !!is_manager,
-        email: email
-      })
+      body: JSON.stringify(roleRow),
     });
 
     if (!insertRes.ok) {
-      const errData = await insertRes.json();
-      console.error('Profile insert error:', errData);
-      // User was created but profile failed — not fatal
+      const err = await insertRes.text();
+      console.error("Role insert failed:", err);
+      return res.status(500).json({ error: "Failed to assign role" });
     }
+
+    // Also create/update user_profiles for basic info
+    await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Prefer: "resolution=merge-duplicates",
+      },
+      body: JSON.stringify({ user_id: newUser.id, email }),
+    });
 
     return res.status(200).json({
       success: true,
-      message: 'Invitation email sent. The user will receive an email to set up their account.',
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        is_manager: !!is_manager
-      }
+      user: { id: newUser.id, email, role, community_id },
     });
-
   } catch (err) {
-    console.error('invite-user error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("invite-user error:", err);
+    return res.status(500).json({ error: "Internal server error" });
   }
-}
-
-function generateTempPassword() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
-  let pass = '';
-  for (let i = 0; i < 16; i++) {
-    pass += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return pass;
 }

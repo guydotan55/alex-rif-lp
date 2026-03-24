@@ -1183,6 +1183,9 @@
           <button class="tab-btn" data-tab="edit" onclick="switchTab('edit', this)">
             <span class="tab-icon">&#9998;</span> עריכת טקסט
           </button>
+          <button class="tab-btn" data-tab="images" onclick="switchTab('images', this)">
+            <span class="tab-icon">&#128247;</span> החלפת תמונות
+          </button>
           <button class="tab-btn" data-tab="email" onclick="switchTab('email', this)">
             <span class="tab-icon">&#9993;</span> הגדרות מייל
           </button>
@@ -1220,6 +1223,21 @@
               <div class="gen-spinner"></div>
               <div class="gen-progress-text">מייצר את דף הנחיתה...</div>
               <div class="gen-progress-sub">התהליך עשוי לקחת 30-60 שניות</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Image Swap -->
+        <div class="tab-pane" id="tab-images">
+          <div class="card" style="margin:24px 28px;">
+            <div class="card-head">
+              <div>
+                <div class="card-title">החלפת תמונות</div>
+                <div class="card-subtitle">בחרו תמונה חדשה מהעלאה, Stock Photo או AI</div>
+              </div>
+            </div>
+            <div class="card-body" id="image-slots-list" style="padding:20px;">
+              <div style="color:var(--text-dim);text-align:center;padding:20px;">טוען תמונות...</div>
             </div>
           </div>
         </div>
@@ -1748,6 +1766,60 @@ function switchTab(name, btn) {
   document.querySelectorAll('#project-detail .tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   if (btn) btn.classList.add('active');
+  if (name === 'images') loadImageSlots();
+}
+
+// ── Image Slots Tab ─────────────────────────────────────
+async function loadImageSlots() {
+  if (!selectedProject) return;
+  const container = document.getElementById('image-slots-list');
+  container.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">טוען תמונות...</div>';
+
+  const variantId = selectedVariant?.id;
+  if (!variantId) {
+    container.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">אין וריאנט נבחר</div>';
+    return;
+  }
+
+  // Fetch current images for this variant
+  const { data: images } = await sb.from('lp_image_content')
+    .select('slot, image_url, source')
+    .eq('variant_id', variantId);
+
+  const slots = [
+    { key: 'hero', label: 'תמונת Hero', desc: 'התמונה הראשית בראש העמוד' },
+    { key: 'fold2', label: 'תמונת Fold שני', desc: 'תמונה בחלק הסיפור' },
+  ];
+
+  const imageMap = {};
+  (images || []).forEach(img => imageMap[img.slot] = img);
+
+  container.innerHTML = slots.map(slot => {
+    const img = imageMap[slot.key];
+    return `
+      <div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div>
+            <div style="font-weight:600;color:var(--text);">${slot.label}</div>
+            <div style="font-size:12px;color:var(--text-dim);">${slot.desc}</div>
+          </div>
+          <button class="btn-action" onclick="openImagePicker('${slot.key}')" style="font-size:13px;padding:6px 14px;">
+            🖼️ ${img ? 'החלף' : 'בחר תמונה'}
+          </button>
+        </div>
+        ${img ? `
+          <div style="border-radius:8px;overflow:hidden;max-height:200px;">
+            <img src="${img.image_url}" style="width:100%;object-fit:cover;max-height:200px;" alt="${slot.label}">
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">מקור: ${img.source === 'pexels' ? 'Stock Photo' : img.source === 'imagen' ? 'AI Generated' : 'העלאה'}</div>
+        ` : `
+          <div style="border:2px dashed var(--border);border-radius:8px;padding:40px;text-align:center;color:var(--text-dim);">
+            אין תמונה — לחץ "בחר תמונה" להוספה
+          </div>
+        `}
+      </div>
+    `;
+  }).join('');
 }
 
 // ── Preview Tab ──────────────────────────────────────────

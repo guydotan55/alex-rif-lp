@@ -187,7 +187,14 @@ async function handleCreateCommunity(req, res) {
   const { name, organization_id } = req.body || {};
   if (!name) return res.status(400).json({ error: "name is required" });
 
-  const orgId = organization_id || auth.role.organization_id;
+  let orgId = organization_id || auth.role.organization_id;
+
+  // Super admin has no org_id — fetch the first org as default
+  if (!orgId) {
+    const orgRes = await fetch(`${SUPABASE_URL}/rest/v1/organizations?select=id&limit=1`, { headers: SB_HEADERS });
+    const orgs = await orgRes.json();
+    orgId = orgs?.[0]?.id;
+  }
   if (!orgId)
     return res.status(400).json({ error: "organization_id is required" });
 
@@ -365,25 +372,31 @@ async function handleInviteUser(req, res) {
       newUser = await createRes.json();
     }
 
-    // Create user_roles row
-    const organization_id =
-      auth.role.organization_id || auth.role.role === "super_admin"
-        ? community_id
-          ? await fetch(
-              `${SUPABASE_URL}/rest/v1/communities?id=eq.${encodeURIComponent(community_id)}&select=organization_id`,
-              { headers: SB_HEADERS }
-            )
-              .then((r) => r.json())
-              .then((c) => c[0]?.organization_id)
-          : null
-        : auth.role.organization_id;
+    // Resolve organization_id for the new role
+    let orgIdForRole = auth.role.organization_id;
+
+    // Super admin has no org — resolve from community or fetch default
+    if (!orgIdForRole) {
+      if (community_id) {
+        const commRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/communities?id=eq.${encodeURIComponent(community_id)}&select=organization_id`,
+          { headers: SB_HEADERS }
+        );
+        const comms = await commRes.json();
+        orgIdForRole = comms?.[0]?.organization_id;
+      }
+      if (!orgIdForRole) {
+        const orgRes = await fetch(`${SUPABASE_URL}/rest/v1/organizations?select=id&limit=1`, { headers: SB_HEADERS });
+        const orgs = await orgRes.json();
+        orgIdForRole = orgs?.[0]?.id;
+      }
+    }
 
     const roleRow = {
       user_id: newUser.id,
       email,
       role,
-      organization_id:
-        role === "admin" ? organization_id : organization_id || null,
+      organization_id: orgIdForRole || null,
       community_id: role === "manager" ? community_id : null,
     };
 

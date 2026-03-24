@@ -1053,6 +1053,44 @@
     transition: border-color 0.2s;
   }
   .upload-zone:hover { border-color: var(--gold); }
+
+  /* ── Community Filter & Settings ────────────────────── */
+  .community-filter {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .community-filter select {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--navy);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    color: var(--cream);
+    font-family: 'Heebo', sans-serif;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color var(--transition);
+  }
+  .community-filter select:focus { border-color: var(--gold); }
+  .sidebar-settings-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 13px;
+    text-decoration: none;
+    transition: all var(--transition);
+  }
+  .sidebar-settings-link:hover { color: var(--gold); background: var(--gold-glow); }
+  .community-badge {
+    font-size: 10px;
+    color: var(--text-dim);
+    opacity: 0.7;
+    margin-top: 2px;
+  }
 </style>
 </head>
 <body>
@@ -1106,12 +1144,14 @@
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-head">
-        <span class="sidebar-title">הפרויקטים שלי</span>
+        <span class="sidebar-title" id="sidebar-title">הפרויקטים שלי</span>
         <a href="/new" class="btn-new-project">+ דף נחיתה חדש</a>
       </div>
+      <div class="community-filter" id="community-filter" style="display:none;"></div>
       <div class="project-list" id="project-list">
         <div class="sidebar-loading"><div class="loading-block"><div class="small-spin"></div> טוען...</div></div>
       </div>
+      <a href="/settings" class="sidebar-settings-link" id="sidebar-settings-link" style="display:none;">&#9881; הגדרות</a>
     </aside>
 
     <!-- Main -->
@@ -1430,7 +1470,9 @@ document.getElementById('l-email').addEventListener('keydown', e => { if (e.key 
   if (session) showDashboard();
 })();
 
-let isManager = false;
+let userRole = null; // { role, organization_id, community_id, email }
+let communities = [];
+let selectedCommunityFilter = 'all';
 
 async function showDashboard() {
   document.getElementById('login-screen').style.display = 'none';
@@ -1441,18 +1483,36 @@ async function showDashboard() {
     document.getElementById('user-email').textContent = session.user.email;
   }
 
-  // Fetch or auto-create user profile
+  // Fetch user role
   if (session?.user?.id) {
-    const { data: profile } = await sb.from('user_profiles')
-      .select('is_manager, email')
+    const { data: roleData } = await sb.from('user_roles')
+      .select('role, organization_id, community_id, email')
       .eq('user_id', session.user.id)
       .single();
 
-    if (!profile) {
-      await sb.from('user_profiles').insert({ user_id: session.user.id, is_manager: false, email: session.user.email });
-      isManager = false;
-    } else {
-      isManager = profile.is_manager || false;
+    if (!roleData) {
+      await sb.auth.signOut();
+      document.getElementById('dashboard').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+      showErr('לא נמצא תפקיד למשתמש. פנה למנהל המערכת.');
+      return;
+    }
+    userRole = roleData;
+
+    // Load communities for admin/super_admin
+    if (userRole.role === 'admin' || userRole.role === 'super_admin') {
+      const { data: comms } = await sb.from('communities').select('id, name').order('name');
+      communities = comms || [];
+      renderCommunityFilter();
+      document.getElementById('sidebar-settings-link').style.display = 'flex';
+    }
+
+    // Show community name for managers
+    if (userRole.role === 'manager' && userRole.community_id) {
+      const { data: comm } = await sb.from('communities').select('name').eq('id', userRole.community_id).single();
+      if (comm) {
+        document.getElementById('sidebar-title').textContent = comm.name;
+      }
     }
   }
 
@@ -1471,12 +1531,9 @@ async function loadProjects() {
   const list = document.getElementById('project-list');
   list.innerHTML = '<div class="sidebar-loading"><div class="loading-block"><div class="small-spin"></div> טוען פרויקטים...</div></div>';
 
-  let query = sb.from('projects').select('*').order('created_at', { ascending: false });
-  if (!isManager) {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.user?.id) {
-      query = query.eq('user_id', session.user.id);
-    }
+  let query = sb.from('projects').select('*, communities(name)').order('created_at', { ascending: false });
+  if (selectedCommunityFilter !== 'all') {
+    query = query.eq('community_id', selectedCommunityFilter);
   }
   const { data, error } = await query;
   if (error) {
@@ -1487,8 +1544,9 @@ async function loadProjects() {
 
   projects = data || [];
 
-  // Fetch owner emails for manager view
-  if (isManager && projects.length > 0) {
+  // Fetch owner emails for admin view
+  const isAdminLevel = userRole && (userRole.role === 'admin' || userRole.role === 'super_admin');
+  if (isAdminLevel && projects.length > 0) {
     const userIds = [...new Set(projects.map(p => p.user_id))];
     const { data: allProfiles } = await sb.from('user_profiles').select('user_id, email').in('user_id', userIds);
     const emailMap = {};
@@ -1506,7 +1564,9 @@ async function loadProjects() {
   }
 
   list.innerHTML = projects.map(p => {
-    const ownerLine = isManager && p.owner_email ? `<div class="project-card-meta" style="opacity:.6;font-size:11px;">${esc(p.owner_email)}</div>` : '';
+    const ownerLine = isAdminLevel && p.owner_email ? `<div class="project-card-meta" style="opacity:.6;font-size:11px;">${esc(p.owner_email)}</div>` : '';
+    const communityName = p.communities?.name;
+    const communityLine = isAdminLevel && communityName ? `<div class="community-badge">${esc(communityName)}</div>` : '';
     return `
     <div class="project-card ${selectedProject?.id === p.id ? 'active' : ''}"
          onclick="selectProject('${p.id}')" data-project-id="${p.id}">
@@ -1516,9 +1576,33 @@ async function loadProjects() {
         <button class="rename-btn" onclick="event.stopPropagation(); startRename('${p.id}')" title="שנה שם">&#x270F;</button>
       </div>
       <div class="project-card-meta">${formatDate(p.created_at)}</div>
+      ${communityLine}
       ${ownerLine}
     </div>`;
   }).join('');
+}
+
+// ── Community Filter ──────────────────────────────────────
+function renderCommunityFilter() {
+  const container = document.getElementById('community-filter');
+  if (!communities.length) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'block';
+  const options = communities.map(c =>
+    `<option value="${c.id}" ${selectedCommunityFilter === c.id ? 'selected' : ''}>${esc(c.name)}</option>`
+  ).join('');
+  container.innerHTML = `
+    <select onchange="filterByCommunity(this.value)">
+      <option value="all" ${selectedCommunityFilter === 'all' ? 'selected' : ''}>כל הקהילות</option>
+      ${options}
+    </select>`;
+}
+
+async function filterByCommunity(value) {
+  selectedCommunityFilter = value;
+  await loadProjects();
 }
 
 function startRename(projectId) {

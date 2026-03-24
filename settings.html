@@ -677,10 +677,10 @@ async function doLogin() {
   btn.disabled = true; btn.textContent = 'בודק...';
 
   try {
-    const checkRes = await fetch('/api/check-email', {
+    const checkRes = await fetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ action: 'check-email', email }),
     });
     const checkData = await checkRes.json();
     if (!checkData.allowed) {
@@ -799,8 +799,13 @@ async function loadCommunities() {
 
   try {
     const token = await getToken();
-    const res = await fetch('/api/manage-communities', {
-      headers: { 'Authorization': 'Bearer ' + token },
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({ action: 'list-communities' }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load communities');
@@ -843,13 +848,13 @@ async function createCommunity() {
 
   try {
     const token = await getToken();
-    const res = await fetch('/api/manage-communities', {
+    const res = await fetch('/api/admin', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token,
       },
-      body: JSON.stringify({ name: name.trim() }),
+      body: JSON.stringify({ action: 'create-community', name: name.trim() }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to create community');
@@ -866,13 +871,13 @@ async function editCommunity(id, currentName) {
 
   try {
     const token = await getToken();
-    const res = await fetch('/api/manage-communities', {
-      method: 'PATCH',
+    const res = await fetch('/api/admin', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token,
       },
-      body: JSON.stringify({ id, name: name.trim() }),
+      body: JSON.stringify({ action: 'update-community', id, name: name.trim() }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to update community');
@@ -888,13 +893,13 @@ async function deleteCommunity(id, name) {
 
   try {
     const token = await getToken();
-    const res = await fetch('/api/manage-communities', {
-      method: 'DELETE',
+    const res = await fetch('/api/admin', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token,
       },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ action: 'delete-community', id }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to delete community');
@@ -912,8 +917,13 @@ async function loadUsers() {
 
   try {
     const token = await getToken();
-    const res = await fetch('/api/admin-users', {
-      headers: { 'Authorization': 'Bearer ' + token },
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({ action: 'list-users' }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load users');
@@ -960,13 +970,13 @@ async function removeUser(userId, email) {
 
   try {
     const token = await getToken();
-    const res = await fetch('/api/admin-users', {
-      method: 'DELETE',
+    const res = await fetch('/api/admin', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token,
       },
-      body: JSON.stringify({ user_id: userId }),
+      body: JSON.stringify({ action: 'delete-user', user_id: userId }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to remove user');
@@ -1031,13 +1041,13 @@ async function submitInvite() {
     const body = { email, role };
     if (role === 'manager') body.community_id = communityId;
 
-    const res = await fetch('/api/invite-user', {
+    const res = await fetch('/api/admin', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ action: 'invite-user', ...body }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to invite user');

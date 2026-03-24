@@ -1417,10 +1417,10 @@ async function doLogin() {
 
   // Check if email has a role
   try {
-    const checkRes = await fetch('/api/check-email', {
+    const checkRes = await fetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ action: 'check-email', email }),
     });
     const checkData = await checkRes.json();
     if (!checkData.allowed) {

@@ -971,8 +971,13 @@
 
     try {
       const token = await getAccessToken();
-      const res = await fetch('/api/admin-users', {
-        headers: { 'Authorization': 'Bearer ' + token }
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ action: 'list-users' })
       });
       if (!res.ok) {
         const errData = await res.json();
@@ -1011,13 +1016,13 @@
   async function toggleManager(userId, isManager) {
     try {
       const token = await getAccessToken();
-      const res = await fetch('/api/admin-users', {
-        method: 'PATCH',
+      const res = await fetch('/api/admin', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + token
         },
-        body: JSON.stringify({ user_id: userId, is_manager: isManager })
+        body: JSON.stringify({ action: 'update-user', user_id: userId, is_manager: isManager })
       });
       if (!res.ok) {
         const errData = await res.json();
@@ -1050,13 +1055,13 @@
 
     try {
       const token = await getAccessToken();
-      const res = await fetch('/api/invite-user', {
+      const res = await fetch('/api/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + token
         },
-        body: JSON.stringify({ email, is_manager: isManager })
+        body: JSON.stringify({ action: 'invite-user', email, is_manager: isManager })
       });
 
       const data = await res.json();

@@ -826,6 +826,37 @@
     border-color: #f5c842;
   }
 
+  /* ── Assumption chips ─────────────────────────────────── */
+  .assumption-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 30px;
+    border: 1.5px solid rgba(245, 200, 66, 0.15);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    user-select: none;
+  }
+  .assumption-chip:hover {
+    border-color: rgba(245, 200, 66, 0.4);
+    background: var(--gold-glow);
+  }
+  .assumption-chip.active {
+    background: var(--gold);
+    color: var(--navy);
+    border-color: var(--gold);
+    font-weight: 700;
+  }
+  .assumption-chip input[type="checkbox"] {
+    display: none;
+  }
+
   /* ── Responsive ────────────────────────────────────────── */
   @media (max-width: 600px) {
     .shell { padding: 0 16px; }
@@ -952,6 +983,23 @@
         </div>
         <textarea class="field-textarea" id="targetAudience" rows="3" placeholder="למשל: בעלי עסקים קטנים ובינוניים שמחפשים נוכחות דיגיטלית מקצועית"></textarea>
         <div class="field-error" id="err-targetAudience">נא לתאר את קהל היעד</div>
+      </div>
+
+      <div class="field" id="testAssumptionsField">
+        <label class="field-label">מה אתם רוצים לבדוק?</label>
+        <span class="field-hint">בחרו אחד או יותר (אופציונלי)</span>
+        <div class="test-assumptions-group" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
+          <label class="assumption-chip" onclick="toggleAssumptionChip(this)">
+            <input type="checkbox" value="feasibility"> היתכנות
+          </label>
+          <label class="assumption-chip" onclick="toggleAssumptionChip(this)">
+            <input type="checkbox" value="messaging"> מסרים
+          </label>
+          <label class="assumption-chip" onclick="toggleAssumptionChip(this)">
+            <input type="checkbox" value="product"> מוצר
+          </label>
+        </div>
+        <input type="text" class="field-input" id="customAssumption" placeholder="הנחה נוספת (טקסט חופשי)" style="margin-top:8px;" oninput="updateAssumptions()">
       </div>
     </div>
 
@@ -1379,6 +1427,9 @@ let fold2ImageMode = 'direct';
 let briefImageMode = 'with_images';
 let briefHeroImageUrl = null;
 let briefHeroImageUrlMode = 'direct';
+let selectedCommunityId = null;
+let testAssumptions = [];
+let userRole = null; // will be set after login
 
 // ═══════════════════════════════════════════════════════════════
 // Progress bar init
@@ -1497,6 +1548,10 @@ function showError(fieldId, errId) {
 function validateStep(step) {
   clearErrors();
   if (step === 1) {
+    // Community validation for admins
+    if (userRole && userRole.role !== 'manager' && !selectedCommunityId) {
+      return showError('communitySelect', 'err-community');
+    }
     if (!document.getElementById('businessName').value.trim()) return showError('businessName', 'err-businessName');
     if (!document.getElementById('whatYouDo').value.trim()) return showError('whatYouDo', 'err-whatYouDo');
     if (!document.getElementById('targetAudience').value.trim()) return showError('targetAudience', 'err-targetAudience');
@@ -1519,6 +1574,16 @@ function validateStep(step) {
 
 function validateBrief() {
   clearErrors();
+  // Community validation for admins in brief mode
+  if (userRole && userRole.role !== 'manager' && !selectedCommunityId) {
+    const briefSel = document.getElementById('briefCommunitySelect');
+    if (briefSel) {
+      briefSel.classList.add('error');
+      showToast('נא לבחור קהילה');
+      briefSel.focus();
+      return false;
+    }
+  }
   if (!document.getElementById('briefText').value.trim()) return showError('briefText', 'err-briefText');
   if (!briefUploadedImageUrl) {
     document.getElementById('err-briefImage').classList.add('visible');
@@ -1601,6 +1666,28 @@ function setTone(tone, btn) {
   selectedTone = tone;
   document.querySelectorAll('.tone-chip').forEach(c => c.classList.remove('active'));
   btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Test Assumptions
+// ═══════════════════════════════════════════════════════════════
+function updateAssumptions() {
+  const checked = [...document.querySelectorAll('.assumption-chip input:checked')].map(i => i.value);
+  const custom = document.getElementById('customAssumption')?.value.trim();
+  testAssumptions = [...checked];
+  if (custom) testAssumptions.push('custom: ' + custom);
+
+  // Toggle active class on chips
+  document.querySelectorAll('.assumption-chip').forEach(chip => {
+    const input = chip.querySelector('input[type="checkbox"]');
+    if (input) chip.classList.toggle('active', input.checked);
+  });
+}
+
+function toggleAssumptionChip(chip) {
+  const input = chip.querySelector('input[type="checkbox"]');
+  input.checked = !input.checked;
+  updateAssumptions();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2035,7 +2122,10 @@ async function submitQuestionnaire() {
     const data = collectQuestionnaireData();
     const slug = generateSlug(data.business_name);
 
-    const { data: project, error: projectError } = await sb.from('projects').insert({
+    // Collect test assumptions before submit
+    updateAssumptions();
+
+    const insertData = {
       user_id: session.user.id,
       slug: slug,
       name: data.business_name,
@@ -2046,8 +2136,12 @@ async function submitQuestionnaire() {
       image_mode: imageMode,
       email_enabled: emailEnabled,
       email_subject: emailEnabled ? document.getElementById('emailSubject').value.trim() : null,
-      email_body: emailEnabled ? document.getElementById('emailBody').value.trim() : null
-    }).select().single();
+      email_body: emailEnabled ? document.getElementById('emailBody').value.trim() : null,
+      test_assumptions: testAssumptions.length > 0 ? testAssumptions : []
+    };
+    if (selectedCommunityId) insertData.community_id = selectedCommunityId;
+
+    const { data: project, error: projectError } = await sb.from('projects').insert(insertData).select().single();
 
     if (projectError) throw new Error(projectError.message);
 
@@ -2101,7 +2195,10 @@ async function submitBrief() {
       briefData.hero_image_url_mode = briefHeroImageUrlMode;
     }
 
-    const { data: project, error: projectError } = await sb.from('projects').insert({
+    // Collect test assumptions before submit
+    updateAssumptions();
+
+    const insertData = {
       user_id: session.user.id,
       slug: slug,
       name: projectName,
@@ -2112,8 +2209,12 @@ async function submitBrief() {
       image_mode: briefImageMode,
       email_enabled: false,
       email_subject: null,
-      email_body: null
-    }).select().single();
+      email_body: null,
+      test_assumptions: testAssumptions.length > 0 ? testAssumptions : []
+    };
+    if (selectedCommunityId) insertData.community_id = selectedCommunityId;
+
+    const { data: project, error: projectError } = await sb.from('projects').insert(insertData).select().single();
 
     if (projectError) throw new Error(projectError.message);
 
@@ -2319,6 +2420,8 @@ async function loginAndContinue() {
       const password = document.getElementById('loginPassword').value;
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      // Fetch role after password login and set up UI
+      await setupUserRole(data.session.user.id);
       document.getElementById('loginSection').style.display = 'none';
       document.getElementById('mainContent').style.display = '';
       return;
@@ -2374,10 +2477,83 @@ async function logout() {
 // ═══════════════════════════════════════════════════════════════
 initProgress();
 
-// Session check on load
+// Fetch user role and set up community selector
+async function setupUserRole(userId) {
+  const { data: roleData } = await sb.from('user_roles')
+    .select('role, organization_id, community_id')
+    .eq('user_id', userId)
+    .single();
+
+  if (!roleData) {
+    showToast('אין לך הרשאה. פנה למנהל המערכת.');
+    await sb.auth.signOut();
+    document.getElementById('loginSection').style.display = '';
+    document.getElementById('mainContent').style.display = 'none';
+    return false;
+  }
+
+  userRole = roleData;
+  selectedCommunityId = roleData.community_id || null;
+
+  // For admins/super_admins: inject community selector into Step 1
+  if (roleData.role === 'admin' || roleData.role === 'super_admin') {
+    // Only inject if not already present
+    if (!document.getElementById('communitySelect')) {
+      const { data: comms } = await sb.from('communities').select('id, name').order('name');
+      if (comms && comms.length > 0) {
+        const step1 = document.querySelector('[data-step="1"]');
+        const communityField = document.createElement('div');
+        communityField.className = 'field';
+        communityField.innerHTML = `
+          <label class="field-label">קהילה *</label>
+          <select id="communitySelect" class="field-select" onchange="selectedCommunityId = this.value || null">
+            <option value="">בחר קהילה</option>
+            ${comms.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+          </select>
+          <div class="field-error" id="err-community">נא לבחור קהילה</div>
+        `;
+        step1.querySelector('.step-header').insertAdjacentElement('afterend', communityField);
+
+        // Also inject into brief mode
+        const briefMode = document.getElementById('briefMode');
+        const briefCommunityDiv = document.createElement('div');
+        briefCommunityDiv.className = 'field';
+        briefCommunityDiv.innerHTML = `
+          <label class="field-label">קהילה *</label>
+          <select id="briefCommunitySelect" class="field-select" onchange="selectedCommunityId = this.value || null">
+            <option value="">בחר קהילה</option>
+            ${comms.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+          </select>
+        `;
+        const projectNameField = briefMode.querySelector('#projectName')?.closest('.field');
+        if (projectNameField) {
+          projectNameField.insertAdjacentElement('beforebegin', briefCommunityDiv);
+        }
+
+        // Sync the two selectors
+        document.getElementById('communitySelect').addEventListener('change', function() {
+          const briefSel = document.getElementById('briefCommunitySelect');
+          if (briefSel) briefSel.value = this.value;
+        });
+        document.getElementById('briefCommunitySelect')?.addEventListener('change', function() {
+          const questSel = document.getElementById('communitySelect');
+          if (questSel) questSel.value = this.value;
+          selectedCommunityId = this.value || null;
+        });
+      }
+    }
+  }
+
+  return true;
+}
+
+// Session check on load + fetch user role
 (async () => {
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
+    const ok = await setupUserRole(session.user.id);
+    if (ok === false) return;
+
     document.getElementById('loginSection').style.display = 'none';
     document.getElementById('mainContent').style.display = '';
   } else {

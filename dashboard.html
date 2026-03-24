@@ -1373,7 +1373,27 @@ async function doLogin() {
   const err = document.getElementById('l-err');
   err.style.display = 'none';
   if (!email) { showErr('נא למלא כתובת מייל'); return; }
-  btn.disabled = true; btn.textContent = 'שולח...';
+  btn.disabled = true; btn.textContent = 'בודק...';
+
+  // Check if email has a role
+  try {
+    const checkRes = await fetch('/api/check-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const checkData = await checkRes.json();
+    if (!checkData.allowed) {
+      showErr('לא נמצא חשבון. פנה למנהל המערכת.');
+      btn.disabled = false;
+      btn.textContent = 'שלחו לי קישור';
+      return;
+    }
+  } catch (e) {
+    // If check fails, proceed anyway (don't block on check failure)
+  }
+
+  btn.textContent = 'שולח...';
   const { error } = await sb.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: window.location.origin + '/dashboard' }

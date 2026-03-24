@@ -2312,7 +2312,7 @@ async function loginAndContinue() {
 
   const btn = document.getElementById('loginBtn');
   btn.disabled = true;
-  btn.textContent = loginWithPassword ? 'מתחבר...' : 'שולח...';
+  btn.textContent = loginWithPassword ? 'מתחבר...' : 'בודק...';
 
   try {
     if (loginWithPassword) {
@@ -2324,6 +2324,25 @@ async function loginAndContinue() {
       return;
     }
 
+    // Check if email has a role before sending magic link
+    try {
+      const checkRes = await fetch('/api/check-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const checkData = await checkRes.json();
+      if (!checkData.allowed) {
+        showToast('לא נמצא חשבון. פנה למנהל המערכת.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'שלחו לי קישור';
+        return;
+      }
+    } catch (e) {
+      // If check fails, proceed anyway (don't block on check failure)
+    }
+
+    btn.textContent = 'שולח...';
     const { error } = await sb.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: window.location.origin + '/new' }

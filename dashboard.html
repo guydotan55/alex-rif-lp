@@ -1137,6 +1137,7 @@
     </div>
     <div class="dash-user">
       <span class="dash-user-email" id="user-email"></span>
+      <a href="/settings" id="header-settings-link" style="display:none;color:var(--text-dim); font-size:0.8rem; font-weight:500; text-decoration:none; opacity:0.85; transition:var(--transition); white-space:nowrap;" onmouseover="this.style.opacity='1';this.style.color='var(--gold)'" onmouseout="this.style.opacity='0.85';this.style.color='var(--text-dim)'" >&#9881; הגדרות</a>
       <a href="/new" style="color:var(--gold); font-size:0.8rem; font-weight:500; text-decoration:none; opacity:0.85; transition:var(--transition); white-space:nowrap;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.85'">+ דף נחיתה חדש</a>
       <button class="btn-logout" onclick="doLogout()">התנתק</button>
     </div>
@@ -1155,7 +1156,7 @@
       <div class="project-list" id="project-list">
         <div class="sidebar-loading"><div class="loading-block"><div class="small-spin"></div> טוען...</div></div>
       </div>
-      <a href="/settings" class="sidebar-settings-link" id="sidebar-settings-link" style="display:none;">&#9881; הגדרות</a>
+      <!-- settings link moved to header -->
     </aside>
 
     <!-- Main -->
@@ -1522,7 +1523,7 @@ async function showDashboard() {
       const { data: comms } = await sb.from('communities').select('id, name').order('name');
       communities = comms || [];
       renderCommunityFilter();
-      document.getElementById('sidebar-settings-link').style.display = 'flex';
+      document.getElementById('header-settings-link').style.display = 'inline';
     }
 
     // Show community name for managers

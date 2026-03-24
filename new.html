@@ -2424,6 +2424,7 @@ async function loginAndContinue() {
       await setupUserRole(data.session.user.id);
       document.getElementById('loginSection').style.display = 'none';
       document.getElementById('mainContent').style.display = '';
+      injectCommunitySelectors();
       return;
     }
 
@@ -2495,56 +2496,70 @@ async function setupUserRole(userId) {
   userRole = roleData;
   selectedCommunityId = roleData.community_id || null;
 
-  // For admins/super_admins: inject community selector into Step 1
+  // For admins/super_admins: load communities and inject selector after main content is visible
   if (roleData.role === 'admin' || roleData.role === 'super_admin') {
-    // Only inject if not already present
-    if (!document.getElementById('communitySelect')) {
-      const { data: comms } = await sb.from('communities').select('id, name').order('name');
-      if (comms && comms.length > 0) {
-        const step1 = document.querySelector('[data-step="1"]');
-        const communityField = document.createElement('div');
-        communityField.className = 'field';
-        communityField.innerHTML = `
-          <label class="field-label">קהילה *</label>
-          <select id="communitySelect" class="field-select" onchange="selectedCommunityId = this.value || null">
-            <option value="">בחר קהילה</option>
-            ${comms.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
-          </select>
-          <div class="field-error" id="err-community">נא לבחור קהילה</div>
-        `;
-        step1.querySelector('.step-header').insertAdjacentElement('afterend', communityField);
-
-        // Also inject into brief mode
-        const briefMode = document.getElementById('briefMode');
-        const briefCommunityDiv = document.createElement('div');
-        briefCommunityDiv.className = 'field';
-        briefCommunityDiv.innerHTML = `
-          <label class="field-label">קהילה *</label>
-          <select id="briefCommunitySelect" class="field-select" onchange="selectedCommunityId = this.value || null">
-            <option value="">בחר קהילה</option>
-            ${comms.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
-          </select>
-        `;
-        const projectNameField = briefMode.querySelector('#projectName')?.closest('.field');
-        if (projectNameField) {
-          projectNameField.insertAdjacentElement('beforebegin', briefCommunityDiv);
-        }
-
-        // Sync the two selectors
-        document.getElementById('communitySelect').addEventListener('change', function() {
-          const briefSel = document.getElementById('briefCommunitySelect');
-          if (briefSel) briefSel.value = this.value;
-        });
-        document.getElementById('briefCommunitySelect')?.addEventListener('change', function() {
-          const questSel = document.getElementById('communitySelect');
-          if (questSel) questSel.value = this.value;
-          selectedCommunityId = this.value || null;
-        });
-      }
+    const { data: comms } = await sb.from('communities').select('id, name').order('name');
+    if (comms && comms.length > 0) {
+      // Store for deferred injection
+      window._pendingCommunities = comms;
     }
   }
 
   return true;
+}
+
+// Inject community selectors after main content is shown
+function injectCommunitySelectors() {
+  const comms = window._pendingCommunities;
+  if (!comms || document.getElementById('communitySelect')) return;
+
+  try {
+    const step1 = document.querySelector('[data-step="1"]');
+    if (step1) {
+      const communityField = document.createElement('div');
+      communityField.className = 'field';
+      communityField.innerHTML = `
+        <label class="field-label">קהילה *</label>
+        <select id="communitySelect" class="field-select" onchange="selectedCommunityId = this.value || null">
+          <option value="">בחר קהילה</option>
+          ${comms.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+        </select>
+        <div class="field-error" id="err-community">נא לבחור קהילה</div>
+      `;
+      step1.querySelector('.step-header').insertAdjacentElement('afterend', communityField);
+    }
+
+    // Also inject into brief mode
+    const briefMode = document.getElementById('briefMode');
+    if (briefMode && !document.getElementById('briefCommunitySelect')) {
+      const briefCommunityDiv = document.createElement('div');
+      briefCommunityDiv.className = 'field';
+      briefCommunityDiv.innerHTML = `
+        <label class="field-label">קהילה *</label>
+        <select id="briefCommunitySelect" class="field-select" onchange="selectedCommunityId = this.value || null">
+          <option value="">בחר קהילה</option>
+          ${comms.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+        </select>
+      `;
+      const projectNameField = briefMode.querySelector('#projectName')?.closest('.field');
+      if (projectNameField) {
+        projectNameField.insertAdjacentElement('beforebegin', briefCommunityDiv);
+      }
+    }
+
+    // Sync the two selectors
+    document.getElementById('communitySelect')?.addEventListener('change', function() {
+      const briefSel = document.getElementById('briefCommunitySelect');
+      if (briefSel) briefSel.value = this.value;
+    });
+    document.getElementById('briefCommunitySelect')?.addEventListener('change', function() {
+      const questSel = document.getElementById('communitySelect');
+      if (questSel) questSel.value = this.value;
+      selectedCommunityId = this.value || null;
+    });
+  } catch (e) {
+    console.error('Failed to inject community selectors:', e);
+  }
 }
 
 // Session check on load + fetch user role
@@ -2556,6 +2571,7 @@ async function setupUserRole(userId) {
 
     document.getElementById('loginSection').style.display = 'none';
     document.getElementById('mainContent').style.display = '';
+    injectCommunitySelectors();
   } else {
     document.getElementById('loginSection').style.display = '';
     document.getElementById('mainContent').style.display = 'none';

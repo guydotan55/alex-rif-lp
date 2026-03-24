@@ -2139,7 +2139,18 @@ async function submitQuestionnaire() {
       email_body: emailEnabled ? document.getElementById('emailBody').value.trim() : null,
       test_assumptions: testAssumptions.length > 0 ? testAssumptions : []
     };
-    if (selectedCommunityId) insertData.community_id = selectedCommunityId;
+
+    // community_id is required — use selected, or fetch default
+    if (selectedCommunityId) {
+      insertData.community_id = selectedCommunityId;
+    } else {
+      const { data: fallbackComms } = await sb.from('communities').select('id').limit(1);
+      if (fallbackComms?.length > 0) {
+        insertData.community_id = fallbackComms[0].id;
+      } else {
+        throw new Error('לא נמצאה קהילה. צור קהילה בהגדרות.');
+      }
+    }
 
     const { data: project, error: projectError } = await sb.from('projects').insert(insertData).select().single();
 
@@ -2212,7 +2223,18 @@ async function submitBrief() {
       email_body: null,
       test_assumptions: testAssumptions.length > 0 ? testAssumptions : []
     };
-    if (selectedCommunityId) insertData.community_id = selectedCommunityId;
+
+    // community_id is required
+    if (selectedCommunityId) {
+      insertData.community_id = selectedCommunityId;
+    } else {
+      const { data: fallbackComms } = await sb.from('communities').select('id').limit(1);
+      if (fallbackComms?.length > 0) {
+        insertData.community_id = fallbackComms[0].id;
+      } else {
+        throw new Error('לא נמצאה קהילה. צור קהילה בהגדרות.');
+      }
+    }
 
     const { data: project, error: projectError } = await sb.from('projects').insert(insertData).select().single();
 

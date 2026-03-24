@@ -1,13 +1,13 @@
 // Vercel Serverless Function — search stock photos or generate AI image for a direction
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
+const PEXELS_KEY = process.env.PEXELS_KEY;
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY;
 
 async function searchPexels(query, orientation = "landscape") {
   const res = await fetch(
     `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=8&orientation=${orientation}`,
-    { headers: { Authorization: PEXELS_API_KEY } }
+    { headers: { Authorization: PEXELS_KEY } }
   );
   if (!res.ok) return [];
   const data = await res.json();

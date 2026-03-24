@@ -1115,7 +1115,11 @@
         <label>כתובת מייל</label>
         <input type="email" id="l-email" class="field-input" placeholder="your@email.com" autocomplete="email" />
       </div>
-      <button class="btn-primary" id="l-btn" onclick="doLogin()">שלחו לי קישור</button>
+      <div class="field-group" style="margin-top:12px;">
+        <label>סיסמה (אופציונלי)</label>
+        <input type="password" id="l-password" class="field-input" placeholder="הזן סיסמה או השאר ריק לקישור מייל" autocomplete="current-password" />
+      </div>
+      <button class="btn-primary" id="l-btn" onclick="doLogin()">התחבר</button>
     </div>
 
     <div class="err-msg" id="l-err"></div>
@@ -1409,11 +1413,12 @@ let compareMode = false;
 // ── Auth ──────────────────────────────────────────────────
 async function doLogin() {
   const email = document.getElementById('l-email').value.trim();
+  const password = document.getElementById('l-password')?.value || '';
   const btn = document.getElementById('l-btn');
   const err = document.getElementById('l-err');
   err.style.display = 'none';
   if (!email) { showErr('נא למלא כתובת מייל'); return; }
-  btn.disabled = true; btn.textContent = 'בודק...';
+  btn.disabled = true; btn.textContent = 'מתחבר...';
 
   // Check if email has a role
   try {
@@ -1426,13 +1431,26 @@ async function doLogin() {
     if (!checkData.allowed) {
       showErr('לא נמצא חשבון. פנה למנהל המערכת.');
       btn.disabled = false;
-      btn.textContent = 'שלחו לי קישור';
+      btn.textContent = 'התחבר';
       return;
     }
   } catch (e) {
-    // If check fails, proceed anyway (don't block on check failure)
+    // If check fails, proceed anyway
   }
 
+  // If password provided, use password login
+  if (password) {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      showErr('שגיאה: ' + error.message);
+      btn.disabled = false; btn.textContent = 'התחבר';
+    } else {
+      window.location.reload();
+    }
+    return;
+  }
+
+  // Otherwise, send magic link
   btn.textContent = 'שולח...';
   const { error } = await sb.auth.signInWithOtp({
     email,
@@ -1440,7 +1458,7 @@ async function doLogin() {
   });
   if (error) {
     showErr('שגיאה: ' + error.message);
-    btn.disabled = false; btn.textContent = 'שלחו לי קישור';
+    btn.disabled = false; btn.textContent = 'התחבר';
   } else {
     document.getElementById('login-form-magic').innerHTML = '<p style="text-align:center;color:var(--gold);font-size:1rem;padding:16px 0;">שלחנו קישור לאימייל שלכם!<br>לחצו עליו כדי להיכנס.</p>';
   }

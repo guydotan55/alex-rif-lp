@@ -1,5 +1,6 @@
 // Vercel Serverless Function — generates 3 visual directions for image swapping
 import Anthropic from "@anthropic-ai/sdk";
+import { verifyUser, canAccessProject } from "./lib/auth-helper.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -17,12 +18,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing project_id or access_token" });
     }
 
-    // Verify user
-    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${access_token}` },
-    });
-    if (!userRes.ok) return res.status(401).json({ error: "Invalid token" });
-    const user = await userRes.json();
+    // Verify user has access (role-based)
+    const user = await verifyUser(access_token);
+    if (!user) return res.status(401).json({ error: "Invalid token" });
+
+    const hasAccess = await canAccessProject(user.id, project_id);
+    if (!hasAccess) return res.status(403).json({ error: "You do not have access to this project" });
 
     // Fetch project
     const projRes = await fetch(
@@ -32,7 +33,6 @@ export default async function handler(req, res) {
     const projects = await projRes.json();
     if (!projects?.length) return res.status(404).json({ error: "Project not found" });
     const project = projects[0];
-    if (user.id !== project.user_id) return res.status(403).json({ error: "Forbidden" });
 
     // Build brief summary
     const q = project.questionnaire_data || {};

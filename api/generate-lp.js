@@ -1,5 +1,6 @@
 // Vercel Serverless Function — generates LP HTML via Claude API (multimodal)
 import Anthropic from "@anthropic-ai/sdk";
+import { verifyUser, canAccessProject } from "./lib/auth-helper.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -244,23 +245,12 @@ export default async function handler(req, res) {
 
     const project = projects[0];
 
-    // 2. Verify user owns the project
-    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: {
-        apikey: SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${access_token}`,
-      },
-    });
+    // 2. Verify user has access to the project (role-based)
+    const user = await verifyUser(access_token);
+    if (!user) return res.status(401).json({ error: "Invalid token" });
 
-    if (!userRes.ok) {
-      return res.status(401).json({ error: "Invalid or expired access token" });
-    }
-
-    const user = await userRes.json();
-
-    if (user.id !== project.user_id) {
-      return res.status(403).json({ error: "You do not have permission to generate LP for this project" });
-    }
+    const hasAccess = await canAccessProject(user.id, project_id);
+    if (!hasAccess) return res.status(403).json({ error: "You do not have access to this project" });
 
     // Check for resolved_images from client (two-phase generation)
     const resolved_images = req.body.resolved_images || null;

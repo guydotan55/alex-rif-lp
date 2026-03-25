@@ -2216,23 +2216,29 @@ async function saveContent() {
   btn.disabled = true;
 
   const fields = document.querySelectorAll('#edit-fields [data-key]');
-  const upserts = [];
+  const items = [];
   fields.forEach(el => {
-    upserts.push({
-      project_id: selectedProject.id,
-      variant_id: selectedVariant?.id || null,
-      key: el.dataset.key,
-      value: el.value
-    });
+    items.push({ key: el.dataset.key, value: el.value });
   });
 
-  if (upserts.length === 0) {
+  if (items.length === 0) {
     btn.disabled = false;
     return;
   }
 
-  const { error } = await sb.from('lp_editable_content')
-    .upsert(upserts, { onConflict: 'variant_id,key' });
+  const token = (await sb.auth.getSession())?.data?.session?.access_token;
+  const resp = await fetch('/api/save-content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      project_id: selectedProject.id,
+      variant_id: selectedVariant?.id || null,
+      access_token: token,
+      items
+    })
+  });
+  const result = await resp.json();
+  const error = resp.ok ? null : { message: result.error || 'Unknown error' };
 
   btn.disabled = false;
 

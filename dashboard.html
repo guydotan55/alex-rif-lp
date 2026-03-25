@@ -2706,6 +2706,8 @@ async function loadDirections() {
       body: JSON.stringify({ project_id: selectedProject.id, access_token: token }),
     });
     const data = await res.json();
+    console.log('image-directions response:', res.status, data);
+    if (!res.ok) throw new Error(data.error || 'API error ' + res.status);
     pickerDirections = data.directions || [];
     if (pickerDirections.length) {
       renderDirections('stock-directions-list');
@@ -2716,8 +2718,8 @@ async function loadDirections() {
     }
   } catch (e) {
     console.error('Failed to load directions:', e);
-    document.getElementById('stock-directions-list').innerHTML = '<div style="color:var(--text-dim);font-size:13px;">שגיאה בטעינת כיוונים — השתמשו בחיפוש למעלה</div>';
-    document.getElementById('ai-directions-list').innerHTML = '<div style="color:var(--text-dim);font-size:13px;">שגיאה בטעינת כיוונים — כתבו פרומפט למעלה</div>';
+    document.getElementById('stock-directions-list').innerHTML = `<div style="color:var(--error);font-size:13px;">שגיאה: ${e.message} — השתמשו בחיפוש למעלה</div>`;
+    document.getElementById('ai-directions-list').innerHTML = `<div style="color:var(--error);font-size:13px;">שגיאה: ${e.message} — כתבו פרומפט למעלה</div>`;
   }
 }
 

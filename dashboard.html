@@ -1896,23 +1896,30 @@ async function loadPreview() {
     const iframe = document.createElement('iframe');
     iframe.sandbox = 'allow-scripts allow-same-origin';
 
-    // Fetch latest text overrides and apply them to the HTML
+    // Fetch latest text overrides via API (bypasses RLS) and apply to HTML
     let previewHtml = htmlSource;
     const variantId = selectedVariant?.id;
     if (variantId) {
-      const { data: textOverrides } = await sb.from('lp_editable_content')
-        .select('key, value')
-        .eq('variant_id', variantId);
-      if (textOverrides && textOverrides.length) {
-        textOverrides.forEach(({ key, value }) => {
-          if (!key || value == null) return;
-          const escaped = value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-          const regex = new RegExp(
-            `(<[^>]*\\bdata-editable\\s*=\\s*"${key}"[^>]*>)([\\s\\S]*?)(<\\/[^>]+>)`, 'gi'
-          );
-          previewHtml = previewHtml.replace(regex, `$1${escaped}$3`);
+      try {
+        const previewToken = (await sb.auth.getSession())?.data?.session?.access_token;
+        const overrideParams = new URLSearchParams({ project_id: selectedProject.id, variant_id: variantId });
+        const overrideResp = await fetch(`/api/save-content?${overrideParams}`, {
+          headers: { Authorization: `Bearer ${previewToken}` }
         });
-      }
+        if (overrideResp.ok) {
+          const textOverrides = await overrideResp.json();
+          if (textOverrides && textOverrides.length) {
+            textOverrides.forEach(({ key, value }) => {
+              if (!key || value == null) return;
+              const escaped = value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+              const regex = new RegExp(
+                `(<[^>]*\\bdata-editable\\s*=\\s*"${key}"[^>]*>)([\\s\\S]*?)(<\\/[^>]+>)`, 'gi'
+              );
+              previewHtml = previewHtml.replace(regex, `$1${escaped}$3`);
+            });
+          }
+        }
+      } catch (e) { console.error('Preview text override fetch failed:', e); }
 
       // Fetch latest image overrides and apply them to the HTML
       const { data: imgOverrides } = await sb.from('lp_image_content')
@@ -2250,7 +2257,9 @@ async function saveContent() {
 
   okEl.style.display = 'block';
   setTimeout(() => okEl.style.display = 'none', 3500);
-  showToast('התוכן נשמר בהצלחה!', 'success');
+  const savedCount = result.saved_count || 0;
+  showToast(`התוכן נשמר בהצלחה! (${savedCount} שדות)`, 'success');
+  console.log('saveContent: API response', result);
 
   // Refresh preview to show updated text
   loadPreview();

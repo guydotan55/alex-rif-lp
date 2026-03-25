@@ -77,11 +77,20 @@ export default async function handler(req, res) {
 
     if (!upsertRes.ok) {
       const err = await upsertRes.text();
-      console.error("save-content upsert error:", err);
-      return res.status(500).json({ error: "Failed to save content" });
+      console.error("save-content upsert error:", upsertRes.status, err);
+      return res.status(500).json({ error: "Failed to save content", detail: err });
     }
 
-    return res.status(200).json({ ok: true });
+    // Verify the save by reading back
+    const verifyFilter = `variant_id=eq.${encodeURIComponent(variant_id)}`;
+    const verifyRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/lp_editable_content?${verifyFilter}&select=key,value&order=key`,
+      { headers: SB_HEADERS }
+    );
+    const saved = verifyRes.ok ? await verifyRes.json() : [];
+    console.log(`save-content: saved ${rows.length} items for variant ${variant_id}, verified ${saved.length} in DB`);
+
+    return res.status(200).json({ ok: true, saved_count: saved.length });
   }
 
   return res.status(405).json({ error: "Method not allowed" });

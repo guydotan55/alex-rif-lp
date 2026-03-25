@@ -27,13 +27,17 @@ async function generateImagen(prompt, aspectRatio = "16:9") {
     if (!GOOGLE_AI_API_KEY) throw new Error("GOOGLE_AI_API_KEY not configured");
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${GOOGLE_AI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${GOOGLE_AI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          instances: [{ prompt }],
-          parameters: { sampleCount: 1, aspectRatio },
+          prompt,
+          config: {
+            numberOfImages: 1,
+            aspectRatio,
+            outputMimeType: "image/png",
+          },
         }),
       }
     );
@@ -43,7 +47,7 @@ async function generateImagen(prompt, aspectRatio = "16:9") {
       throw new Error(`Imagen API ${res.status}: ${errText.slice(0, 200)}`);
     }
     const data = await res.json();
-    const b64 = data.predictions?.[0]?.bytesBase64Encoded;
+    const b64 = data.generatedImages?.[0]?.image?.imageBytes;
     if (!b64) {
       console.error("Imagen returned no image data:", JSON.stringify(data).slice(0, 300));
       throw new Error("Imagen returned no image data");

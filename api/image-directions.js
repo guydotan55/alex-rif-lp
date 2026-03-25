@@ -45,25 +45,25 @@ export default async function handler(req, res) {
     if (q.brief) briefLines.push(`Brief: ${q.brief}`);
 
     const client = new Anthropic();
-    const userContent = [];
 
-    // Include inspiration image if available
-    if (project.image_url) {
+    // Try with image first, fall back to text-only if image causes an error
+    async function callClaude(includeImage) {
+      const userContent = [];
+      if (includeImage && project.image_url) {
+        userContent.push({
+          type: "image",
+          source: { type: "url", url: project.image_url },
+        });
+      }
       userContent.push({
-        type: "image",
-        source: { type: "url", url: project.image_url },
-      });
-    }
-
-    userContent.push({
-      type: "text",
-      text: `Based on this landing page brief, suggest 3 different visual directions for imagery. Each direction should be a short description (8-15 words) of a scene or mood that would work as a hero/section image.
+        type: "text",
+        text: `Based on this landing page brief, suggest 3 different visual directions for imagery. Each direction should be a short description (8-15 words) of a scene or mood that would work as a hero/section image.
 
 The directions should:
 - All be relevant to the brand and its story
 - Each take a DIFFERENT visual approach (e.g., people/community, environment/setting, symbolic/abstract)
 - Have a Mediterranean aesthetic — warm tones, authentic, not generic stock
-${project.image_url ? "- Be inspired by the mood and style of the attached reference image" : ""}
+${includeImage && project.image_url ? "- Be inspired by the mood and style of the attached reference image" : ""}
 
 BRIEF:
 ${briefLines.join("\n")}
@@ -76,19 +76,29 @@ Respond in this exact JSON format (no markdown fences):
     "direction 3 description"
   ]
 }`,
-    });
+      });
 
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 300,
-      messages: [{ role: "user", content: userContent }],
-    });
+      const response = await client.messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 300,
+        messages: [{ role: "user", content: userContent }],
+      });
+      return response;
+    }
+
+    let response;
+    try {
+      response = await callClaude(true);
+    } catch (imgErr) {
+      console.warn("image-directions: failed with image, retrying without:", imgErr.message);
+      response = await callClaude(false);
+    }
 
     const text = response.content[0].text.trim();
     const parsed = JSON.parse(text);
     return res.status(200).json(parsed);
   } catch (err) {
-    console.error("image-directions error:", err);
-    return res.status(500).json({ error: "Failed to generate directions" });
+    console.error("image-directions error:", err?.message || err, err?.status, err?.error);
+    return res.status(500).json({ error: `Failed to generate directions: ${err?.message || String(err)}` });
   }
 }

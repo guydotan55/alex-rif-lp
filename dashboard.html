@@ -2684,6 +2684,21 @@ function switchPickerTab(tab) {
 async function loadDirections() {
   const { data: { session } } = await sb.auth.getSession();
   const token = session?.access_token;
+
+  // Pre-populate search inputs from project brief
+  const q = selectedProject?.questionnaire_data || {};
+  const hint = q.what_you_do || q.main_benefit || selectedProject?.name || '';
+  if (hint) {
+    const stockInput = document.getElementById('stock-search-input');
+    const aiInput = document.getElementById('ai-prompt-input');
+    if (stockInput && !stockInput.value) stockInput.placeholder = `למשל: ${hint}`;
+    if (aiInput && !aiInput.value) aiInput.placeholder = `למשל: ${hint}`;
+  }
+
+  // Show loading state
+  document.getElementById('stock-directions-list').innerHTML = '<div style="color:var(--text-dim);font-size:13px;">טוען כיוונים מהבריף...</div>';
+  document.getElementById('ai-directions-list').innerHTML = '<div style="color:var(--text-dim);font-size:13px;">טוען כיוונים מהבריף...</div>';
+
   try {
     const res = await fetch('/api/image-directions', {
       method: 'POST',
@@ -2692,10 +2707,17 @@ async function loadDirections() {
     });
     const data = await res.json();
     pickerDirections = data.directions || [];
-    renderDirections('stock-directions-list');
-    renderDirections('ai-directions-list');
+    if (pickerDirections.length) {
+      renderDirections('stock-directions-list');
+      renderDirections('ai-directions-list');
+    } else {
+      document.getElementById('stock-directions-list').innerHTML = '<div style="color:var(--text-dim);font-size:13px;">לא נמצאו כיוונים — השתמשו בחיפוש למעלה</div>';
+      document.getElementById('ai-directions-list').innerHTML = '<div style="color:var(--text-dim);font-size:13px;">לא נמצאו כיוונים — כתבו פרומפט למעלה</div>';
+    }
   } catch (e) {
     console.error('Failed to load directions:', e);
+    document.getElementById('stock-directions-list').innerHTML = '<div style="color:var(--text-dim);font-size:13px;">שגיאה בטעינת כיוונים — השתמשו בחיפוש למעלה</div>';
+    document.getElementById('ai-directions-list').innerHTML = '<div style="color:var(--text-dim);font-size:13px;">שגיאה בטעינת כיוונים — כתבו פרומפט למעלה</div>';
   }
 }
 

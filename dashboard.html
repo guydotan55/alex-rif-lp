@@ -2257,40 +2257,58 @@ async function loadEditableContent() {
       }
     }
 
-    // Backfill features section — look for card-like structures with icons/emojis
-    if (!existingKeys.has('feature_1_title')) {
-      // Try to find features section title
-      const featuresSectionMatch = htmlSource.match(/<(?:h[23]|div)[^>]*class="[^"]*section-title[^"]*"[^>]*>([\s\S]*?)<\/(?:h[23]|div)>/i)
-        || htmlSource.match(/<h2[^>]*>([\s\S]*?)<\/h2>/gi);
+    // Backfill features section using DOMParser for robust extraction
+    if (!existingKeys.has('feature_1_title') && htmlSource) {
+      try {
+        const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
 
-      // Extract feature cards by finding repeated card patterns
-      // Look for elements that contain an emoji + title + description
-      const cardPattern = /<(?:div|article)[^>]*class="[^"]*(?:card|feature|benefit)[^"]*"[^>]*>([\s\S]*?)<\/(?:div|article)>/gi;
-      const cards = [];
-      let cardMatch;
-      while ((cardMatch = cardPattern.exec(htmlSource)) !== null) {
-        const cardHtml = cardMatch[1];
-        // Extract emoji (single emoji character or entity)
-        const emojiMatch = cardHtml.match(/([\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]+)/u);
-        // Extract title (first h3/h4 or strong)
-        const titleMatch = cardHtml.match(/<(?:h[34]|strong)[^>]*>([\s\S]*?)<\/(?:h[34]|strong)>/i);
-        // Extract description (first p tag after title)
-        const descMatch = cardHtml.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
-        if (titleMatch) {
-          cards.push({
-            icon: emojiMatch ? emojiMatch[1] : '',
-            title: titleMatch[1].replace(/<[^>]*>/g, '').trim(),
-            text: descMatch ? descMatch[1].replace(/<[^>]*>/g, '').trim() : ''
-          });
+        // Find cards: elements that have a sibling structure (emoji + heading + text)
+        // Strategy: find all h3/h4 elements, then check their parent container for card-like structure
+        const headings = doc.querySelectorAll('h3, h4');
+        const cards = [];
+
+        for (const h of headings) {
+          const parent = h.parentElement;
+          if (!parent) continue;
+          // Skip if this heading is the main form title or section title
+          if (h.closest('form') || h.closest('[data-editable]')) continue;
+
+          const title = h.textContent.trim();
+          if (!title) continue;
+
+          // Look for emoji: check preceding siblings or child elements
+          let icon = '';
+          const allText = parent.textContent;
+          const emojiMatch = allText.match(/([\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\u{2702}-\u{27B0}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{231A}-\u{23F3}\u{2328}\u{23CF}\u{23E9}-\u{23F3}\u{23F8}-\u{23FA}\u{25AA}\u{25AB}\u{25B6}\u{25C0}\u{25FB}-\u{25FE}\u{2614}\u{2615}\u{2648}-\u{2653}\u{267F}\u{2693}\u{26A1}\u{26AA}\u{26AB}\u{26BD}\u{26BE}\u{26C4}\u{26C5}\u{26CE}\u{26D4}\u{26EA}\u{26F2}\u{26F3}\u{26F5}\u{26FA}\u{26FD}\u{2934}\u{2935}\u{2B05}-\u{2B07}\u{2B1B}\u{2B1C}\u{2B50}\u{2B55}\u{3030}\u{303D}\u{3297}\u{3299}])/u);
+          if (emojiMatch) icon = emojiMatch[1];
+
+          // Look for description: next p sibling or p inside parent
+          let text = '';
+          const pElements = parent.querySelectorAll('p');
+          for (const p of pElements) {
+            const pText = p.textContent.trim();
+            if (pText && pText !== title && !pText.match(/^[\u{1F300}-\u{1FAFF}]$/u)) {
+              text = pText;
+              break;
+            }
+          }
+
+          cards.push({ icon, title, text });
         }
-      }
 
-      for (let i = 0; i < Math.min(cards.length, 3); i++) {
-        const n = i + 1;
-        if (cards[i].icon) newItems.push({ key: `feature_${n}_icon`, value: cards[i].icon });
-        if (cards[i].title) newItems.push({ key: `feature_${n}_title`, value: cards[i].title });
-        if (cards[i].text) newItems.push({ key: `feature_${n}_text`, value: cards[i].text });
-      }
+        // Filter: keep only cards that look like feature cards (have description)
+        const featureCards = cards.filter(c => c.text && c.title.length < 60);
+
+        // If we found 2-4 cards, these are likely the feature cards
+        if (featureCards.length >= 2 && featureCards.length <= 4) {
+          for (let i = 0; i < Math.min(featureCards.length, 3); i++) {
+            const n = i + 1;
+            newItems.push({ key: `feature_${n}_icon`, value: featureCards[i].icon || '' });
+            newItems.push({ key: `feature_${n}_title`, value: featureCards[i].title });
+            newItems.push({ key: `feature_${n}_text`, value: featureCards[i].text });
+          }
+        }
+      } catch (e) { console.error('Feature extraction failed:', e); }
     }
 
     // Save backfilled items to DB
@@ -2399,9 +2417,18 @@ function renderFeaturesGroup(featureFields) {
 
   if (!cards && !sectionTitle) return '';
 
+  // Check if LP was generated with data-editable for features (new LPs have it)
+  const htmlSource = selectedVariant?.generated_html || selectedProject?.generated_html || '';
+  const hasFeatureEditable = htmlSource.includes('data-editable="feature_1_title"');
+  const regenHint = !hasFeatureEditable ? `
+    <div style="background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--gold-soft);line-height:1.6;">
+      &#128161; כדי שהשינויים יופיעו בדף — לחצו ״ייצר מחדש״ בלשונית תצוגה מקדימה. דפים ישנים לא תומכים בעדכון ישיר של סקשן זה.
+    </div>` : '';
+
   return `
     <div class="edit-section-group">
       <div class="edit-section-group-title">&#10024; מה אני מציע/ה — תכונות ויתרונות</div>
+      ${regenHint}
       ${sectionTitle !== undefined ? `
         <div class="edit-field">
           <label>${esc(FIELD_LABELS['features_title'] || 'כותרת הסקשן')}</label>

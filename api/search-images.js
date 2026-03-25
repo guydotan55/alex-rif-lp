@@ -24,6 +24,8 @@ async function searchPexels(query, orientation = "landscape") {
 
 async function generateImagen(prompt, aspectRatio = "16:9") {
   try {
+    if (!GOOGLE_AI_API_KEY) throw new Error("GOOGLE_AI_API_KEY not configured");
+
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${GOOGLE_AI_API_KEY}`,
       {
@@ -35,10 +37,17 @@ async function generateImagen(prompt, aspectRatio = "16:9") {
         }),
       }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("Imagen API error:", res.status, errText);
+      throw new Error(`Imagen API ${res.status}: ${errText.slice(0, 200)}`);
+    }
     const data = await res.json();
     const b64 = data.predictions?.[0]?.bytesBase64Encoded;
-    if (!b64) return null;
+    if (!b64) {
+      console.error("Imagen returned no image data:", JSON.stringify(data).slice(0, 300));
+      throw new Error("Imagen returned no image data");
+    }
 
     // Cache to Supabase Storage
     const buffer = Buffer.from(b64, "base64");
@@ -69,7 +78,7 @@ async function generateImagen(prompt, aspectRatio = "16:9") {
     }];
   } catch (e) {
     console.error("Imagen failed:", e.message);
-    return null;
+    throw e;
   }
 }
 
@@ -105,7 +114,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ results });
   } catch (err) {
-    console.error("search-images error:", err);
-    return res.status(500).json({ error: "Image search failed" });
+    console.error("search-images error:", err?.message || err);
+    return res.status(500).json({ error: `Image search failed: ${err?.message || String(err)}` });
   }
 }

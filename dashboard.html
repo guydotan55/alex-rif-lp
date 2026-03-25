@@ -2836,7 +2836,11 @@ async function selectDirection(containerId, index) {
         }),
       });
       const data = await res.json();
-      renderAiResult(data.results || [], direction);
+      if (!res.ok || data.error) {
+        document.getElementById('ai-result').innerHTML = `<p style="color:var(--error);font-size:13px;">שגיאה: ${data.error || 'Unknown error'}</p>`;
+      } else {
+        renderAiResult(data.results || [], direction);
+      }
     } finally {
       document.getElementById('ai-loading').style.display = 'none';
     }
@@ -2881,7 +2885,11 @@ async function generateAiManual() {
       }),
     });
     const data = await res.json();
-    renderAiResult(data.results || [], prompt);
+    if (!res.ok || data.error) {
+      document.getElementById('ai-result').innerHTML = `<p style="color:var(--error);font-size:13px;">שגיאה: ${data.error || 'Unknown error'}</p>`;
+    } else {
+      renderAiResult(data.results || [], prompt);
+    }
   } finally {
     document.getElementById('ai-loading').style.display = 'none';
   }

@@ -23,11 +23,19 @@ async function searchPexels(query, orientation = "landscape") {
 }
 
 async function generateImagen(prompt, aspectRatio = "16:9") {
-  try {
-    if (!GOOGLE_AI_API_KEY) throw new Error("GOOGLE_AI_API_KEY not configured");
+  if (!GOOGLE_AI_API_KEY) throw new Error("GOOGLE_AI_API_KEY not configured");
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${GOOGLE_AI_API_KEY}`,
+  // Try multiple model names — availability varies by API version
+  const models = [
+    "imagen-3.0-generate-002",
+    "imagen-3.0-generate-001",
+    "imagen-3.0-fast-generate-001",
+  ];
+
+  let res;
+  for (const model of models) {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateImages?key=${GOOGLE_AI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,49 +49,50 @@ async function generateImagen(prompt, aspectRatio = "16:9") {
         }),
       }
     );
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("Imagen API error:", res.status, errText);
-      throw new Error(`Imagen API ${res.status}: ${errText.slice(0, 200)}`);
-    }
-    const data = await res.json();
-    const b64 = data.generatedImages?.[0]?.image?.imageBytes;
-    if (!b64) {
-      console.error("Imagen returned no image data:", JSON.stringify(data).slice(0, 300));
-      throw new Error("Imagen returned no image data");
-    }
-
-    // Cache to Supabase Storage
-    const buffer = Buffer.from(b64, "base64");
-    const timestamp = Date.now();
-    const rand = Math.random().toString(36).slice(2, 8);
-    const path = `generated/${timestamp}_${rand}.png`;
-
-    const uploadRes = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/lp-images/${path}`,
-      {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-          "Content-Type": "image/png",
-          "x-upsert": "true",
-        },
-        body: buffer,
-      }
-    );
-    if (!uploadRes.ok) return null;
-
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/lp-images/${path}`;
-    return [{
-      url: publicUrl,
-      thumbnail_url: publicUrl,
-      source_meta: { prompt, aspect_ratio: aspectRatio },
-    }];
-  } catch (e) {
-    console.error("Imagen failed:", e.message);
-    throw e;
+    if (res.ok || res.status !== 404) break;
+    console.warn(`Imagen model ${model} returned 404, trying next...`);
   }
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("Imagen API error:", res.status, errText);
+    throw new Error(`Imagen API ${res.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const b64 = data.generatedImages?.[0]?.image?.imageBytes;
+  if (!b64) {
+    console.error("Imagen returned no image data:", JSON.stringify(data).slice(0, 300));
+    throw new Error("Imagen returned no image data");
+  }
+
+  // Cache to Supabase Storage
+  const buffer = Buffer.from(b64, "base64");
+  const timestamp = Date.now();
+  const rand = Math.random().toString(36).slice(2, 8);
+  const path = `generated/${timestamp}_${rand}.png`;
+
+  const uploadRes = await fetch(
+    `${SUPABASE_URL}/storage/v1/object/lp-images/${path}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "image/png",
+        "x-upsert": "true",
+      },
+      body: buffer,
+    }
+  );
+  if (!uploadRes.ok) throw new Error("Failed to cache image to storage");
+
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/lp-images/${path}`;
+  return [{
+    url: publicUrl,
+    thumbnail_url: publicUrl,
+    source_meta: { prompt, aspect_ratio: aspectRatio },
+  }];
 }
 
 export default async function handler(req, res) {

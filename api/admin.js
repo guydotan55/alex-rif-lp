@@ -343,33 +343,55 @@ async function handleInviteUser(req, res) {
         .json({ error: "User already has a role assigned" });
     }
 
-    // Invite user via Supabase Admin API (creates auth.users row + sends invite email)
-    const inviteRes = await fetch(`${SUPABASE_URL}/auth/v1/invite`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...SB_HEADERS },
-      body: JSON.stringify({ email }),
-    });
-
+    // Check if user already exists in auth.users (e.g. previously removed from a community)
     let newUser;
-    if (inviteRes.ok) {
-      newUser = await inviteRes.json();
-    } else {
-      // Fallback: create user directly
-      const createRes = await fetch(
-        `${SUPABASE_URL}/auth/v1/admin/users`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...SB_HEADERS },
-          body: JSON.stringify({ email, email_confirm: false }),
-        }
-      );
-      if (!createRes.ok) {
-        const err = await createRes.json();
-        return res
-          .status(400)
-          .json({ error: err.msg || err.message || "Failed to invite user" });
+    let existingAuthUser = null;
+    const lookupRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/rpc/get_user_id_by_email`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...SB_HEADERS },
+        body: JSON.stringify({ lookup_email: email }),
       }
-      newUser = await createRes.json();
+    );
+    if (lookupRes.ok) {
+      const lookupData = await lookupRes.json();
+      if (lookupData) {
+        existingAuthUser = { id: lookupData };
+      }
+    }
+
+    if (existingAuthUser) {
+      // User exists in auth.users — reuse their ID
+      newUser = existingAuthUser;
+    } else {
+      // Invite user via Supabase Admin API (creates auth.users row + sends invite email)
+      const inviteRes = await fetch(`${SUPABASE_URL}/auth/v1/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...SB_HEADERS },
+        body: JSON.stringify({ email }),
+      });
+
+      if (inviteRes.ok) {
+        newUser = await inviteRes.json();
+      } else {
+        // Fallback: create user directly
+        const createRes = await fetch(
+          `${SUPABASE_URL}/auth/v1/admin/users`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...SB_HEADERS },
+            body: JSON.stringify({ email, email_confirm: false }),
+          }
+        );
+        if (!createRes.ok) {
+          const err = await createRes.json();
+          return res
+            .status(400)
+            .json({ error: err.msg || err.message || "Failed to invite user" });
+        }
+        newUser = await createRes.json();
+      }
     }
 
     // Resolve organization_id for the new role

@@ -25,6 +25,20 @@ async function searchPexels(query, orientation = "landscape") {
 async function generateImagen(prompt, aspectRatio = "16:9") {
   if (!GOOGLE_AI_API_KEY) throw new Error("GOOGLE_AI_API_KEY not configured");
 
+  // First, discover which models support image generation
+  const listRes = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models?key=${GOOGLE_AI_API_KEY}`
+  );
+  if (listRes.ok) {
+    const listData = await listRes.json();
+    const imageModels = (listData.models || []).filter(m =>
+      m.supportedGenerationMethods?.some(method =>
+        method === "generateImages" || method === "generateContent"
+      ) && (m.name?.includes("imagen") || m.name?.includes("gemini"))
+    ).map(m => `${m.name} [${(m.supportedGenerationMethods||[]).join(",")}]`);
+    console.log("Available image-capable models:", imageModels.join(" | "));
+  }
+
   // Use Gemini 2.0 Flash with native image generation
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GOOGLE_AI_API_KEY}`,
@@ -45,6 +59,13 @@ async function generateImagen(prompt, aspectRatio = "16:9") {
   if (!res.ok) {
     const errText = await res.text();
     console.error("Gemini image gen error:", res.status, errText);
+    // On 404, list available models to help diagnose
+    if (res.status === 404 && listRes?.ok) {
+      const listData = await listRes.json().catch(() => null);
+      if (!listData) {
+        // listRes already consumed, re-fetch
+      }
+    }
     throw new Error(`Gemini API ${res.status}: ${errText.slice(0, 200)}`);
   }
 

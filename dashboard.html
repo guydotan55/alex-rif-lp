@@ -2164,14 +2164,14 @@ async function loadEditableContent() {
   const container = document.getElementById('edit-fields');
   container.innerHTML = '<div class="loading-block"><div class="small-spin"></div> טוען תוכן...</div>';
 
-  let ecQuery = sb.from('lp_editable_content').select('*');
-  if (selectedVariant) {
-    ecQuery = ecQuery.eq('variant_id', selectedVariant.id);
-  } else {
-    ecQuery = ecQuery.eq('project_id', selectedProject.id);
-  }
-  ecQuery = ecQuery.order('key');
-  const { data, error } = await ecQuery;
+  const token = (await sb.auth.getSession())?.data?.session?.access_token;
+  const params = new URLSearchParams({ project_id: selectedProject.id });
+  if (selectedVariant) params.set('variant_id', selectedVariant.id);
+  const resp = await fetch(`/api/save-content?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = resp.ok ? await resp.json() : null;
+  const error = resp.ok ? null : { message: 'Failed to load content' };
 
   if (error) {
     container.innerHTML = '<div style="padding:20px;color:var(--text-dim);">שגיאה בטעינת התוכן</div>';

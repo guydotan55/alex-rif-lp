@@ -1,4 +1,4 @@
-// Vercel Serverless Function — save editable text content for an LP variant
+// Vercel Serverless Function — load and save editable text content for an LP variant
 import { authenticateAndAuthorize } from "./lib/auth-helper.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -8,47 +8,81 @@ const SB_HEADERS = {
   apikey: SUPABASE_SERVICE_ROLE_KEY,
   Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
   "Content-Type": "application/json",
-  Prefer: "resolution=merge-duplicates",
 };
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  const { project_id, variant_id, items } = req.body || {};
-
-  if (!project_id || !variant_id || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: "Missing project_id, variant_id, or items" });
-  }
-
-  // Auth + project access check
-  const auth = await authenticateAndAuthorize(req, res, { projectId: project_id });
-  if (!auth) return;
-
-  // Build upsert rows
-  const rows = items.map(({ key, value }) => ({
-    project_id,
-    variant_id,
-    key,
-    value,
-  }));
-
-  // Upsert via PostgREST with service_role key
-  const upsertRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/lp_editable_content?on_conflict=variant_id,key`,
-    {
-      method: "POST",
-      headers: SB_HEADERS,
-      body: JSON.stringify(rows),
+  // GET: load editable content for a variant or project
+  if (req.method === "GET") {
+    const { project_id, variant_id } = req.query;
+    if (!project_id) {
+      return res.status(400).json({ error: "Missing project_id" });
     }
-  );
 
-  if (!upsertRes.ok) {
-    const err = await upsertRes.text();
-    console.error("save-content upsert error:", err);
-    return res.status(500).json({ error: "Failed to save content" });
+    // Auth + project access check
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (!token) return res.status(401).json({ error: "Missing access token" });
+
+    const auth = await authenticateAndAuthorize(req, res, { projectId: project_id });
+    if (!auth) return;
+
+    // Build query filter
+    let filter = variant_id
+      ? `variant_id=eq.${encodeURIComponent(variant_id)}`
+      : `project_id=eq.${encodeURIComponent(project_id)}`;
+
+    const fetchRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/lp_editable_content?${filter}&select=*&order=key`,
+      { headers: SB_HEADERS }
+    );
+
+    if (!fetchRes.ok) {
+      const err = await fetchRes.text();
+      console.error("load-content fetch error:", err);
+      return res.status(500).json({ error: "Failed to load content" });
+    }
+
+    const data = await fetchRes.json();
+    return res.status(200).json(data);
   }
 
-  return res.status(200).json({ ok: true });
+  // POST: save editable content
+  if (req.method === "POST") {
+    const { project_id, variant_id, items } = req.body || {};
+
+    if (!project_id || !variant_id || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "Missing project_id, variant_id, or items" });
+    }
+
+    // Auth + project access check
+    const auth = await authenticateAndAuthorize(req, res, { projectId: project_id });
+    if (!auth) return;
+
+    // Build upsert rows
+    const rows = items.map(({ key, value }) => ({
+      project_id,
+      variant_id,
+      key,
+      value,
+    }));
+
+    // Upsert via PostgREST with service_role key
+    const upsertRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/lp_editable_content?on_conflict=variant_id,key`,
+      {
+        method: "POST",
+        headers: { ...SB_HEADERS, Prefer: "resolution=merge-duplicates" },
+        body: JSON.stringify(rows),
+      }
+    );
+
+    if (!upsertRes.ok) {
+      const err = await upsertRes.text();
+      console.error("save-content upsert error:", err);
+      return res.status(500).json({ error: "Failed to save content" });
+    }
+
+    return res.status(200).json({ ok: true });
+  }
+
+  return res.status(405).json({ error: "Method not allowed" });
 }

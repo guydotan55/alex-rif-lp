@@ -1835,7 +1835,7 @@ async function loadImageSlots() {
 }
 
 // ── Preview Tab ──────────────────────────────────────────
-function loadPreview() {
+async function loadPreview() {
   if (!selectedProject) return;
 
   const wrap = document.getElementById('preview-frame-wrap');
@@ -1886,20 +1886,30 @@ function loadPreview() {
       urlBar.style.display = 'none';
     }
 
-    // Create iframe
+    // Create iframe — always use blob with latest image overrides applied
     const iframe = document.createElement('iframe');
     iframe.sandbox = 'allow-scripts allow-same-origin';
 
-    if (isPublished && selectedProject.slug) {
-      if (selectedVariant && !selectedVariant.is_default) {
-        iframe.src = '/lp/' + selectedProject.slug + '/' + selectedVariant.variant_slug;
-      } else {
-        iframe.src = '/lp/' + selectedProject.slug;
+    // Fetch latest image overrides and apply them to the HTML
+    let previewHtml = htmlSource;
+    const variantId = selectedVariant?.id;
+    if (variantId) {
+      const { data: imgOverrides } = await sb.from('lp_image_content')
+        .select('slot, image_url')
+        .eq('variant_id', variantId);
+      if (imgOverrides && imgOverrides.length) {
+        imgOverrides.forEach(({ slot, image_url }) => {
+          // Handle src after data-image-slot
+          const r1 = new RegExp(`(<img[^>]*data-image-slot=["']${slot}["'][^>]*\\bsrc=["'])([^"']*)(["'])`, 'gi');
+          previewHtml = previewHtml.replace(r1, `$1${image_url}$3`);
+          // Handle src before data-image-slot
+          const r2 = new RegExp(`(<img[^>]*\\bsrc=["'])([^"']*)(["'][^>]*data-image-slot=["']${slot}["'])`, 'gi');
+          previewHtml = previewHtml.replace(r2, `$1${image_url}$3`);
+        });
       }
-    } else {
-      const blob = new Blob([htmlSource], { type: 'text/html' });
-      iframe.src = URL.createObjectURL(blob);
     }
+    const blob = new Blob([previewHtml], { type: 'text/html' });
+    iframe.src = URL.createObjectURL(blob);
 
     // After iframe loads, inject image hover overlays
     iframe.onload = function() {

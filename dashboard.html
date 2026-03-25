@@ -1377,8 +1377,14 @@
 
     <!-- Stock Tab -->
     <div id="picker-stock" class="picker-tab-content" style="display:none;padding:24px;">
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input type="text" id="stock-search-input" class="field-input" placeholder="חפשו תמונה... (למשל: אנשים עובדים במשרד)" style="flex:1;padding:10px 14px;font-size:13px;">
+          <button onclick="searchStockManual()" class="btn-action" style="white-space:nowrap;padding:10px 16px;font-size:13px;">🔍 חפש</button>
+        </div>
+      </div>
       <div id="stock-directions" style="margin-bottom:16px;">
-        <p style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">בחרו כיוון ויזואלי:</p>
+        <p style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">או בחרו כיוון ויזואלי:</p>
         <div id="stock-directions-list" style="display:flex;gap:8px;flex-wrap:wrap;">
           <div style="color:var(--text-dim);font-size:13px;">טוען כיוונים...</div>
         </div>
@@ -1389,8 +1395,14 @@
 
     <!-- AI Tab -->
     <div id="picker-ai" class="picker-tab-content" style="display:none;padding:24px;">
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input type="text" id="ai-prompt-input" class="field-input" placeholder="תארו את התמונה שאתם רוצים..." style="flex:1;padding:10px 14px;font-size:13px;">
+          <button onclick="generateAiManual()" class="btn-action" style="white-space:nowrap;padding:10px 16px;font-size:13px;">✨ צור</button>
+        </div>
+      </div>
       <div id="ai-directions" style="margin-bottom:16px;">
-        <p style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">בחרו כיוון ויזואלי:</p>
+        <p style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">או בחרו כיוון ויזואלי:</p>
         <div id="ai-directions-list" style="display:flex;gap:8px;flex-wrap:wrap;">
           <div style="color:var(--text-dim);font-size:13px;">טוען כיוונים...</div>
         </div>
@@ -1808,8 +1820,8 @@ async function loadImageSlots() {
           </button>
         </div>
         ${img ? `
-          <div style="border-radius:8px;overflow:hidden;max-height:200px;">
-            <img src="${img.image_url}" style="width:100%;object-fit:cover;max-height:200px;" alt="${slot.label}">
+          <div style="border-radius:8px;overflow:hidden;">
+            <img src="${img.image_url}" style="display:block;width:100%;" alt="${slot.label}">
           </div>
           <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">מקור: ${img.source === 'pexels' ? 'Stock Photo' : img.source === 'imagen' ? 'AI Generated' : 'העלאה'}</div>
         ` : `
@@ -2745,6 +2757,56 @@ async function selectDirection(containerId, index) {
     }
   }
 }
+
+async function searchStockManual() {
+  const query = document.getElementById('stock-search-input').value.trim();
+  if (!query) return;
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session?.access_token;
+  document.getElementById('stock-loading').style.display = 'block';
+  document.getElementById('stock-results').innerHTML = '';
+  try {
+    const res = await fetch('/api/search-images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        direction: query, source_type: 'pexels', slot: currentPickerSlot, access_token: token
+      }),
+    });
+    const data = await res.json();
+    renderStockResults(data.results || []);
+  } finally {
+    document.getElementById('stock-loading').style.display = 'none';
+  }
+}
+
+async function generateAiManual() {
+  const prompt = document.getElementById('ai-prompt-input').value.trim();
+  if (!prompt) return;
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session?.access_token;
+  document.getElementById('ai-loading').style.display = 'block';
+  document.getElementById('ai-result').innerHTML = '';
+  try {
+    const res = await fetch('/api/search-images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        direction: prompt, source_type: 'imagen', slot: currentPickerSlot, access_token: token
+      }),
+    });
+    const data = await res.json();
+    renderAiResult(data.results || [], prompt);
+  } finally {
+    document.getElementById('ai-loading').style.display = 'none';
+  }
+}
+
+// Enter key support for search inputs
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.id === 'stock-search-input') searchStockManual();
+  if (e.key === 'Enter' && e.target.id === 'ai-prompt-input') generateAiManual();
+});
 
 function renderStockResults(results) {
   const container = document.getElementById('stock-results');

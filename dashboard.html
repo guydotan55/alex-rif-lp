@@ -1384,7 +1384,10 @@
         </div>
       </div>
       <div id="stock-directions" style="margin-bottom:16px;">
-        <p style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">או בחרו כיוון ויזואלי:</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <p style="font-size:13px;color:var(--text-dim);margin:0;">או בחרו כיוון ויזואלי:</p>
+          <button onclick="refreshDirections()" id="btn-mix-stock" class="btn-action" style="font-size:12px;padding:4px 12px;">🔀 מיקס</button>
+        </div>
         <div id="stock-directions-list" style="display:flex;gap:8px;flex-wrap:wrap;">
           <div style="color:var(--text-dim);font-size:13px;">טוען כיוונים...</div>
         </div>
@@ -1402,7 +1405,10 @@
         </div>
       </div>
       <div id="ai-directions" style="margin-bottom:16px;">
-        <p style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">או בחרו כיוון ויזואלי:</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <p style="font-size:13px;color:var(--text-dim);margin:0;">או בחרו כיוון ויזואלי:</p>
+          <button onclick="refreshDirections()" id="btn-mix-ai" class="btn-action" style="font-size:12px;padding:4px 12px;">🔀 מיקס</button>
+        </div>
         <div id="ai-directions-list" style="display:flex;gap:8px;flex-wrap:wrap;">
           <div style="color:var(--text-dim);font-size:13px;">טוען כיוונים...</div>
         </div>
@@ -2731,6 +2737,18 @@ async function loadDirections() {
     document.getElementById('stock-directions-list').innerHTML = `<div style="color:var(--error);font-size:13px;">שגיאה: ${e.message} — השתמשו בחיפוש למעלה</div>`;
     document.getElementById('ai-directions-list').innerHTML = `<div style="color:var(--error);font-size:13px;">שגיאה: ${e.message} — כתבו פרומפט למעלה</div>`;
   }
+}
+
+async function refreshDirections() {
+  document.getElementById('btn-mix-stock').disabled = true;
+  document.getElementById('btn-mix-ai').disabled = true;
+  document.getElementById('btn-mix-stock').textContent = '⏳ טוען...';
+  document.getElementById('btn-mix-ai').textContent = '⏳ טוען...';
+  await loadDirections();
+  document.getElementById('btn-mix-stock').disabled = false;
+  document.getElementById('btn-mix-ai').disabled = false;
+  document.getElementById('btn-mix-stock').textContent = '🔀 מיקס';
+  document.getElementById('btn-mix-ai').textContent = '🔀 מיקס';
 }
 
 function renderDirections(containerId) {

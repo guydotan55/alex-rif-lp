@@ -94,7 +94,9 @@ Respond in this exact JSON format (no markdown fences):
       response = await callClaude(false);
     }
 
-    const text = response.content[0].text.trim();
+    let text = response.content[0].text.trim();
+    // Strip markdown fences if model wraps in ```json ... ```
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const parsed = JSON.parse(text);
     return res.status(200).json(parsed);
   } catch (err) {

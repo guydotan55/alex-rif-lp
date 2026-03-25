@@ -2924,7 +2924,19 @@ async function applySelectedImage() {
 
     closeImagePicker();
     showToast('התמונה הוחלפה בהצלחה!', 'success');
+    // Reload variant data so preview gets the updated HTML
+    const { data: freshVariant } = await sb.from('lp_variants')
+      .select('*')
+      .eq('id', variantId)
+      .single();
+    if (freshVariant) {
+      selectedVariant = freshVariant;
+      // Also update in the projectVariants array
+      const idx = projectVariants.findIndex(v => v.id === variantId);
+      if (idx >= 0) projectVariants[idx] = freshVariant;
+    }
     loadPreview();
+    loadImageSlots();
   } catch (e) {
     showToast('שגיאה בשמירת התמונה', 'error');
   }

@@ -100,6 +100,38 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Failed to save image" });
     }
 
+    // Also update the image URL inside generated_html so the preview reflects the change
+    const variantRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/lp_variants?id=eq.${encodeURIComponent(variant_id)}&select=generated_html`,
+      { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+    );
+    const variants = await variantRes.json();
+    if (variants?.length && variants[0].generated_html) {
+      let html = variants[0].generated_html;
+      // Replace src in <img data-image-slot="hero|fold2"> tags
+      const regex = new RegExp(`(<img[^>]*data-image-slot=["']${slot}["'][^>]*src=["'])([^"']+)(["'])`, 'g');
+      const updatedHtml = html.replace(regex, `$1${cachedUrl}$3`);
+      // Also handle case where src comes before data-image-slot
+      const regex2 = new RegExp(`(<img[^>]*src=["'])([^"']+)(["'][^>]*data-image-slot=["']${slot}["'])`, 'g');
+      const finalHtml = updatedHtml.replace(regex2, `$1${cachedUrl}$3`);
+
+      if (finalHtml !== html) {
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/lp_variants?id=eq.${encodeURIComponent(variant_id)}`,
+          {
+            method: "PATCH",
+            headers: {
+              apikey: SUPABASE_SERVICE_ROLE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+            },
+            body: JSON.stringify({ generated_html: finalHtml }),
+          }
+        );
+      }
+    }
+
     return res.status(200).json({ success: true, cached_url: cachedUrl });
   } catch (err) {
     console.error("apply-image error:", err);

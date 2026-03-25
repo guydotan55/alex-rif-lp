@@ -93,6 +93,7 @@ CRITICAL RULES:
    - data-editable="cta_text" on the primary CTA button text
    - data-editable="form_title" on the form section headline
    - data-editable="thankyou_text" on the hidden thank-you element
+   - data-editable="footer_text" on the footer paragraph/text element
 9. Add class="cta-button" and data-cta="true" to ALL CTA buttons.
 10. MOBILE IS THE #1 PRIORITY — 95% of traffic comes from mobile devices:
     - Design mobile-first: start with the mobile layout, then enhance for larger screens

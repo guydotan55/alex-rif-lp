@@ -90,6 +90,17 @@ CRITICAL RULES:
    - data-editable="hero_title" on the main hero headline
    - data-editable="hero_subtitle" on the hero subtitle
    - data-editable="story_text" on the story/about paragraph
+   - data-editable="features_title" on the features/benefits section headline
+   - data-editable="features_subtitle" on the features/benefits section subtitle (if exists)
+   - data-editable="feature_1_icon" on the first feature card icon/emoji element (a small span or div containing only the emoji)
+   - data-editable="feature_1_title" on the first feature card title
+   - data-editable="feature_1_text" on the first feature card description
+   - data-editable="feature_2_icon" on the second feature card icon/emoji element
+   - data-editable="feature_2_title" on the second feature card title
+   - data-editable="feature_2_text" on the second feature card description
+   - data-editable="feature_3_icon" on the third feature card icon/emoji element
+   - data-editable="feature_3_title" on the third feature card title
+   - data-editable="feature_3_text" on the third feature card description
    - data-editable="cta_text" on the primary CTA button text
    - data-editable="form_title" on the form section headline
    - data-editable="thankyou_text" on the hidden thank-you element

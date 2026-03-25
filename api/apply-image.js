@@ -102,7 +102,7 @@ export default async function handler(req, res) {
 
     // Also update the image URL inside generated_html so the preview reflects the change
     const variantRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/lp_variants?id=eq.${encodeURIComponent(variant_id)}&select=generated_html`,
+      `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${encodeURIComponent(variant_id)}&select=generated_html`,
       { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
     );
     const variants = await variantRes.json();
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
 
       if (finalHtml !== html) {
         await fetch(
-          `${SUPABASE_URL}/rest/v1/lp_variants?id=eq.${encodeURIComponent(variant_id)}`,
+          `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${encodeURIComponent(variant_id)}`,
           {
             method: "PATCH",
             headers: {

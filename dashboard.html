@@ -2935,7 +2935,7 @@ async function applySelectedImage() {
     closeImagePicker();
     showToast('התמונה הוחלפה בהצלחה!', 'success');
     // Reload variant data so preview gets the updated HTML
-    const { data: freshVariant } = await sb.from('lp_variants')
+    const { data: freshVariant } = await sb.from('project_variants')
       .select('*')
       .eq('id', variantId)
       .single();

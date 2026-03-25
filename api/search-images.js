@@ -25,52 +25,46 @@ async function searchPexels(query, orientation = "landscape") {
 async function generateImagen(prompt, aspectRatio = "16:9") {
   if (!GOOGLE_AI_API_KEY) throw new Error("GOOGLE_AI_API_KEY not configured");
 
-  // Try multiple model names — availability varies by API version
-  const models = [
-    "imagen-3.0-generate-002",
-    "imagen-3.0-generate-001",
-    "imagen-3.0-fast-generate-001",
-  ];
-
-  let res;
-  for (const model of models) {
-    res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateImages?key=${GOOGLE_AI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          config: {
-            numberOfImages: 1,
-            aspectRatio,
-            outputMimeType: "image/png",
-          },
-        }),
-      }
-    );
-    if (res.ok || res.status !== 404) break;
-    console.warn(`Imagen model ${model} returned 404, trying next...`);
-  }
+  // Use Gemini 2.0 Flash with native image generation
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GOOGLE_AI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: `Generate a high-quality professional photograph: ${prompt}. Aspect ratio: ${aspectRatio}. Style: editorial, warm Mediterranean tones, authentic feel.` }]
+        }],
+        generationConfig: {
+          responseModalities: ["IMAGE", "TEXT"],
+        },
+      }),
+    }
+  );
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error("Imagen API error:", res.status, errText);
-    throw new Error(`Imagen API ${res.status}: ${errText.slice(0, 200)}`);
+    console.error("Gemini image gen error:", res.status, errText);
+    throw new Error(`Gemini API ${res.status}: ${errText.slice(0, 200)}`);
   }
 
   const data = await res.json();
-  const b64 = data.generatedImages?.[0]?.image?.imageBytes;
-  if (!b64) {
-    console.error("Imagen returned no image data:", JSON.stringify(data).slice(0, 300));
-    throw new Error("Imagen returned no image data");
+  // Find the image part in the response
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith("image/"));
+  if (!imagePart) {
+    console.error("Gemini returned no image:", JSON.stringify(data).slice(0, 300));
+    throw new Error("Gemini returned no image in response");
   }
+  const b64 = imagePart.inlineData.data;
+  const mimeType = imagePart.inlineData.mimeType;
+  const ext = mimeType.includes("png") ? "png" : "jpg";
 
   // Cache to Supabase Storage
   const buffer = Buffer.from(b64, "base64");
   const timestamp = Date.now();
   const rand = Math.random().toString(36).slice(2, 8);
-  const path = `generated/${timestamp}_${rand}.png`;
+  const path = `generated/${timestamp}_${rand}.${ext}`;
 
   const uploadRes = await fetch(
     `${SUPABASE_URL}/storage/v1/object/lp-images/${path}`,
@@ -79,7 +73,7 @@ async function generateImagen(prompt, aspectRatio = "16:9") {
       headers: {
         apikey: SUPABASE_SERVICE_ROLE_KEY,
         Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        "Content-Type": "image/png",
+        "Content-Type": mimeType,
         "x-upsert": "true",
       },
       body: buffer,

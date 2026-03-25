@@ -79,27 +79,28 @@ async function searchPexels(query, orientation = "landscape") {
 async function generateImagen(prompt, aspectRatio = "16:9") {
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${GOOGLE_AI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GOOGLE_AI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt,
-          config: {
-            numberOfImages: 1,
-            aspectRatio,
-            outputMimeType: "image/png",
+          contents: [{
+            parts: [{ text: `Generate a high-quality professional photograph: ${prompt}. Aspect ratio: ${aspectRatio}. Style: editorial, warm Mediterranean tones, authentic feel.` }]
+          }],
+          generationConfig: {
+            responseModalities: ["IMAGE", "TEXT"],
           },
         }),
       }
     );
     if (!res.ok) return null;
     const data = await res.json();
-    const b64 = data.generatedImages?.[0]?.image?.imageBytes;
-    if (!b64) return null;
-    return { base64: b64, prompt };
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith("image/"));
+    if (!imagePart) return null;
+    return { base64: imagePart.inlineData.data, prompt };
   } catch (e) {
-    console.error("Imagen generation failed:", e.message);
+    console.error("Image generation failed:", e.message);
     return null;
   }
 }

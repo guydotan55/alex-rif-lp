@@ -1915,7 +1915,15 @@ async function loadPreview() {
               const regex = new RegExp(
                 `(<[^>]*\\bdata-editable\\s*=\\s*"${key}"[^>]*>)([\\s\\S]*?)(<\\/[^>]+>)`, 'gi'
               );
+              const before = previewHtml;
               previewHtml = previewHtml.replace(regex, `$1${escaped}$3`);
+              // Fallback for footer_text on older LPs without data-editable attribute
+              if (key === 'footer_text' && previewHtml === before) {
+                previewHtml = previewHtml.replace(
+                  /(<footer[^>]*>)([\s\S]*?)(<\/footer>)/i,
+                  `$1<p>${escaped}</p>$3`
+                );
+              }
             });
           }
         }
@@ -2188,10 +2196,43 @@ async function loadEditableContent() {
 
   projectContent = data || [];
 
+  // For existing LPs: if footer_text is missing, try to extract it from HTML
+  const hasFooter = projectContent.some(item => item.key === 'footer_text');
+  if (!hasFooter && projectContent.length > 0) {
+    const htmlSource = selectedVariant?.generated_html || selectedProject?.generated_html || '';
+    const footerMatch = htmlSource.match(/<footer[^>]*>([\s\S]*?)<\/footer>/i);
+    if (footerMatch) {
+      const footerText = footerMatch[1].replace(/<[^>]*>/g, '').trim();
+      if (footerText) {
+        projectContent.push({ key: 'footer_text', value: footerText, project_id: selectedProject.id, variant_id: selectedVariant?.id });
+        // Save it to DB so it persists
+        const saveToken = (await sb.auth.getSession())?.data?.session?.access_token;
+        fetch('/api/save-content', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${saveToken}` },
+          body: JSON.stringify({
+            project_id: selectedProject.id,
+            variant_id: selectedVariant?.id || null,
+            access_token: saveToken,
+            items: [{ key: 'footer_text', value: footerText }]
+          })
+        }).catch(() => {});
+      }
+    }
+  }
+
   if (projectContent.length === 0) {
     container.innerHTML = '<div style="padding:24px;color:var(--text-dim);text-align:center;">אין תוכן לעריכה עדיין.<br><span style="font-size:13px;">ייצר את דף הנחיתה קודם.</span></div>';
     return;
   }
+
+  // Sort fields in LP page order (top to bottom)
+  const fieldOrder = ['hero_title', 'hero_subtitle', 'story_text', 'cta_text', 'form_title', 'thankyou_text', 'footer_text'];
+  projectContent.sort((a, b) => {
+    const ia = fieldOrder.indexOf(a.key);
+    const ib = fieldOrder.indexOf(b.key);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
 
   container.innerHTML = projectContent.map(item => {
     const prettyKey = prettifyKey(item.key);
@@ -2209,8 +2250,18 @@ async function loadEditableContent() {
   }).join('');
 }
 
+const FIELD_LABELS = {
+  hero_title: 'כותרת ראשית',
+  hero_subtitle: 'תת כותרת',
+  story_text: 'טקסט הסיפור',
+  cta_text: 'כפתור קריאה לפעולה',
+  form_title: 'כותרת טופס',
+  thankyou_text: 'הודעת תודה',
+  footer_text: 'טקסט תחתית העמוד',
+};
+
 function prettifyKey(key) {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 async function saveContent() {

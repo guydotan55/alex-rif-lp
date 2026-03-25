@@ -24,12 +24,21 @@ function applyOverrides(html, overrides) {
     if (!key || value == null) continue;
     const escapedValue = escapeHtml(value);
     // Match elements with data-editable="key" and replace their inner content
-    // Handles both self-closing-style and normal elements
     const regex = new RegExp(
       `(<[^>]*\\bdata-editable\\s*=\\s*"${key}"[^>]*>)([\\s\\S]*?)(<\\/[^>]+>)`,
       "gi"
     );
+    const before = html;
     html = html.replace(regex, `$1${escapedValue}$3`);
+
+    // For footer_text on older LPs without data-editable attribute:
+    // replace the inner content of <footer> directly
+    if (key === "footer_text" && html === before) {
+      html = html.replace(
+        /(<footer[^>]*>)([\s\S]*?)(<\/footer>)/i,
+        `$1<p>${escapedValue}</p>$3`
+      );
+    }
   }
 
   return html;

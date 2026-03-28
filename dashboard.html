@@ -590,6 +590,19 @@
     direction: rtl;
   }
   .edit-input:focus, .edit-textarea:focus { border-color: var(--gold); }
+  .btn-clear-field {
+    background: none;
+    border: 1px solid rgba(255,82,82,0.3);
+    color: var(--error);
+    font-size: 11px;
+    font-family: 'Heebo', sans-serif;
+    padding: 2px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn-clear-field:hover { background: rgba(255,82,82,0.1); border-color: var(--error); }
   .edit-textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
 
   .edit-section-group {
@@ -2452,9 +2465,13 @@ function renderEditField(item) {
   const prettyKey = prettifyKey(item.key);
   const val = item.value || '';
   const isLong = val.length > 80 || val.includes('\n');
+  const fieldId = `edit-field-${item.key}`;
   return `
     <div class="edit-field">
-      <label>${esc(prettyKey)} <span class="key-name">(${esc(item.key)})</span></label>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <label>${esc(prettyKey)} <span class="key-name">(${esc(item.key)})</span></label>
+        ${val ? `<button class="btn-clear-field" onclick="clearEditField('${esc(item.key)}')" title="נקה שדה">🗑️ הסר</button>` : ''}
+      </div>
       ${isLong
         ? `<textarea class="edit-textarea" data-key="${esc(item.key)}" rows="4">${esc(val)}</textarea>`
         : `<input class="edit-input" data-key="${esc(item.key)}" value="${escAttr(val)}" />`
@@ -2547,6 +2564,16 @@ const FIELD_LABELS = {
 
 function prettifyKey(key) {
   return FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function clearEditField(key) {
+  const el = document.querySelector(`[data-key="${key}"]`);
+  if (!el) return;
+  el.value = '';
+  el.focus();
+  // Remove the clear button since field is now empty
+  const btn = el.closest('.edit-field')?.querySelector('.btn-clear-field');
+  if (btn) btn.remove();
 }
 
 async function saveContent() {

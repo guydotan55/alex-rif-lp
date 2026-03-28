@@ -29,7 +29,15 @@ function applyOverrides(html, overrides) {
       "gi"
     );
     const before = html;
-    html = html.replace(regex, `$1${escapedValue}$3`);
+    if (value === '') {
+      // Empty value: hide the element entirely by adding display:none
+      html = html.replace(regex, (match, open, content, close) => {
+        const hiddenOpen = open.replace(/>$/, ' style="display:none;">');
+        return hiddenOpen + close;
+      });
+    } else {
+      html = html.replace(regex, `$1${escapedValue}$3`);
+    }
 
     // For footer_text on older LPs without data-editable attribute:
     // replace the inner content of <footer> directly

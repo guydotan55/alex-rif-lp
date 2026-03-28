@@ -3330,14 +3330,15 @@ async function applySelectedImage() {
 // ── Community Image Library ──────────────────────────────
 async function saveToLibrary(imageUrl, source, sourceMeta) {
   if (!selectedProject?.community_id) return;
-  const { data: { user } } = await sb.auth.getUser();
-  await sb.from('community_image_library').upsert({
+  const { data: { session } } = await sb.auth.getSession();
+  const { error } = await sb.from('community_image_library').upsert({
     community_id: selectedProject.community_id,
     image_url: imageUrl,
     source,
     source_meta: sourceMeta,
-    added_by: user?.id,
+    added_by: session?.user?.id,
   }, { onConflict: 'community_id,image_url', ignoreDuplicates: true });
+  if (error) console.error('saveToLibrary failed:', error.message);
 }
 
 async function loadLibrary() {
@@ -3350,7 +3351,7 @@ async function loadLibrary() {
   loading.style.display = 'block';
 
   const { data: images } = await sb.from('community_image_library')
-    .select('*')
+    .select('id, image_url, source, source_meta')
     .eq('community_id', selectedProject.community_id)
     .order('created_at', { ascending: false });
 
@@ -3363,7 +3364,7 @@ async function loadLibrary() {
 
   grid.innerHTML = images.map((img, i) => `
     <div class="library-image-card" onclick="selectLibraryImage(${i})">
-      <button class="lib-delete-btn" onclick="event.stopPropagation();deleteLibraryImage('${img.id}',this.parentElement)" title="מחק">&times;</button>
+      <button class="lib-delete-btn" onclick="event.stopPropagation();deleteLibraryImage('${escAttr(img.id)}',this.parentElement)" title="מחק">&times;</button>
       <img src="${esc(img.image_url)}" alt="Library image" loading="lazy">
     </div>
   `).join('');

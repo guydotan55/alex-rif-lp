@@ -71,7 +71,8 @@ function applyImageOverrides(html, imageOverrides) {
       html = html.replace(regex2, `$1${image_url}$3`);
     } else if (slot === "fold2") {
       // Inject fold2 image into the story/about section
-      const imgTag = `<div style="margin:32px 0;border-radius:16px;overflow:hidden;"><img data-image-slot="fold2" src="${image_url}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
+      const safeUrl = image_url.replace(/"/g, '&quot;');
+      const imgTag = `<div style="margin:32px 0;border-radius:16px;overflow:hidden;"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
       // Try to inject after story_text editable, or after the second <section>
       const storyMatch = html.match(/(<[^>]*data-editable\s*=\s*"story_text"[^>]*>[\s\S]*?<\/[^>]+>)/i);
       if (storyMatch) {

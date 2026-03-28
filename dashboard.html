@@ -2072,7 +2072,8 @@ async function loadPreview() {
             previewHtml = previewHtml.replace(r2, `$1${image_url}$3`);
           } else if (slot === 'fold2') {
             // Inject fold2 image if slot doesn't exist in HTML
-            const imgTag = `<div style="margin:32px 0;border-radius:16px;overflow:hidden;"><img data-image-slot="fold2" src="${image_url}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
+            const safeUrl = image_url.replace(/"/g, '&amp;quot;');
+            const imgTag = `<div style="margin:32px 0;border-radius:16px;overflow:hidden;"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
             const storyMatch = previewHtml.match(/(<[^>]*data-editable\s*=\s*"story_text"[^>]*>[\s\S]*?<\/[^>]+>)/i);
             if (storyMatch) {
               previewHtml = previewHtml.replace(storyMatch[0], storyMatch[0] + imgTag);

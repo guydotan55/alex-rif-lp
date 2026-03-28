@@ -89,6 +89,7 @@ CRITICAL RULES:
 8. Add data-editable attributes to these elements so text can be edited later:
    - data-editable="hero_title" on the main hero headline
    - data-editable="hero_subtitle" on the hero subtitle
+   - data-editable="story_title" on the story/about section headline (e.g. "הסיפור שלי")
    - data-editable="story_text" on the story/about paragraph
    - data-editable="features_title" on the features/benefits section headline
    - data-editable="features_subtitle" on the features/benefits section subtitle (if exists)
@@ -103,6 +104,7 @@ CRITICAL RULES:
    - data-editable="feature_3_text" on the third feature card description
    - data-editable="cta_text" on the primary CTA button text
    - data-editable="form_title" on the form section headline
+   - data-editable="form_subtitle" on the form section subtitle/description text (e.g. "השאירו את כתובת המייל שלכם")
    - data-editable="thankyou_text" on the hidden thank-you element
    - data-editable="footer_text" on the footer paragraph/text element
 9. Add class="cta-button" and data-cta="true" to ALL CTA buttons.

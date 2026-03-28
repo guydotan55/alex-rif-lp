@@ -2290,6 +2290,42 @@ async function loadEditableContent() {
     const htmlSource = selectedVariant?.generated_html || selectedProject?.generated_html || '';
     const newItems = [];
 
+    // Backfill story_title from HTML
+    if (!existingKeys.has('story_title') && htmlSource) {
+      try {
+        const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
+        // Find story section: look for a section/div containing the story_text editable
+        const storyEl = doc.querySelector('[data-editable="story_text"]');
+        if (storyEl) {
+          const section = storyEl.closest('section') || storyEl.parentElement;
+          const heading = section?.querySelector('h2, h3');
+          if (heading && !heading.hasAttribute('data-editable')) {
+            newItems.push({ key: 'story_title', value: heading.textContent.trim() });
+          }
+        }
+      } catch (e) { console.error('story_title backfill failed:', e); }
+    }
+
+    // Backfill form_subtitle from HTML
+    if (!existingKeys.has('form_subtitle') && htmlSource) {
+      try {
+        const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
+        const formTitleEl = doc.querySelector('[data-editable="form_title"]');
+        if (formTitleEl) {
+          const section = formTitleEl.closest('section') || formTitleEl.parentElement;
+          // Look for a p or span after the form title heading
+          const candidates = section?.querySelectorAll('p, span');
+          for (const el of (candidates || [])) {
+            const text = el.textContent.trim();
+            if (text && text.length > 5 && text.length < 200 && !el.closest('form') && !el.hasAttribute('data-editable')) {
+              newItems.push({ key: 'form_subtitle', value: text });
+              break;
+            }
+          }
+        }
+      } catch (e) { console.error('form_subtitle backfill failed:', e); }
+    }
+
     // Backfill footer_text
     if (!existingKeys.has('footer_text')) {
       const footerMatch = htmlSource.match(/<footer[^>]*>([\s\S]*?)<\/footer>/i);
@@ -2377,12 +2413,12 @@ async function loadEditableContent() {
 
   // Sort fields in LP page order (top to bottom)
   const fieldOrder = [
-    'hero_title', 'hero_subtitle', 'story_text',
+    'hero_title', 'hero_subtitle', 'story_title', 'story_text',
     'features_title', 'features_subtitle',
     'feature_1_icon', 'feature_1_title', 'feature_1_text',
     'feature_2_icon', 'feature_2_title', 'feature_2_text',
     'feature_3_icon', 'feature_3_title', 'feature_3_text',
-    'cta_text', 'form_title', 'thankyou_text', 'footer_text'
+    'cta_text', 'form_title', 'form_subtitle', 'thankyou_text', 'footer_text'
   ];
   projectContent.sort((a, b) => {
     const ia = fieldOrder.indexOf(a.key);
@@ -2489,6 +2525,7 @@ function renderFeaturesGroup(featureFields) {
 const FIELD_LABELS = {
   hero_title: 'כותרת ראשית',
   hero_subtitle: 'תת כותרת',
+  story_title: 'כותרת הסיפור',
   story_text: 'טקסט הסיפור',
   features_title: 'כותרת הסקשן',
   features_subtitle: 'תת כותרת הסקשן',
@@ -2503,6 +2540,7 @@ const FIELD_LABELS = {
   feature_3_text: 'תיאור 3',
   cta_text: 'כפתור קריאה לפעולה',
   form_title: 'כותרת טופס',
+  form_subtitle: 'תת כותרת טופס',
   thankyou_text: 'הודעת תודה',
   footer_text: 'טקסט תחתית העמוד',
 };

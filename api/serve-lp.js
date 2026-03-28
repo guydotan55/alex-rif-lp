@@ -56,15 +56,34 @@ function applyImageOverrides(html, imageOverrides) {
   if (!imageOverrides || imageOverrides.length === 0) return html;
   for (const { slot, image_url } of imageOverrides) {
     if (!slot || !image_url) continue;
-    // Handle src before or after data-image-slot in the tag
-    const regex1 = new RegExp(
-      `(<img\\b[^>]*data-image-slot\\s*=\\s*"${slot}"[^>]*\\bsrc=")([^"]*)(")`, "gi"
-    );
-    const regex2 = new RegExp(
-      `(<img\\b[^>]*\\bsrc=")([^"]*)("[^>]*data-image-slot\\s*=\\s*"${slot}")`, "gi"
-    );
-    html = html.replace(regex1, `$1${image_url}$3`);
-    html = html.replace(regex2, `$1${image_url}$3`);
+    // Check if slot exists in the HTML
+    const slotExists = html.includes(`data-image-slot="${slot}"`);
+
+    if (slotExists) {
+      // Replace existing image src
+      const regex1 = new RegExp(
+        `(<img\\b[^>]*data-image-slot\\s*=\\s*"${slot}"[^>]*\\bsrc=")([^"]*)(")`, "gi"
+      );
+      const regex2 = new RegExp(
+        `(<img\\b[^>]*\\bsrc=")([^"]*)("[^>]*data-image-slot\\s*=\\s*"${slot}")`, "gi"
+      );
+      html = html.replace(regex1, `$1${image_url}$3`);
+      html = html.replace(regex2, `$1${image_url}$3`);
+    } else if (slot === "fold2") {
+      // Inject fold2 image into the story/about section
+      const imgTag = `<div style="margin:32px 0;border-radius:16px;overflow:hidden;"><img data-image-slot="fold2" src="${image_url}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
+      // Try to inject after story_text editable, or after the second <section>
+      const storyMatch = html.match(/(<[^>]*data-editable\s*=\s*"story_text"[^>]*>[\s\S]*?<\/[^>]+>)/i);
+      if (storyMatch) {
+        html = html.replace(storyMatch[0], storyMatch[0] + imgTag);
+      } else {
+        // Fallback: inject before the last <section> (form section)
+        const lastSectionIdx = html.lastIndexOf("<section");
+        if (lastSectionIdx > 0) {
+          html = html.slice(0, lastSectionIdx) + imgTag + html.slice(lastSectionIdx);
+        }
+      }
+    }
   }
   return html;
 }

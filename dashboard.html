@@ -1079,6 +1079,38 @@
   .stock-image-card:hover { border-color: var(--border-strong); }
   .stock-image-card.selected { border-color: var(--gold); }
   .stock-image-card img { width: 100%; height: 100%; object-fit: cover; }
+  .library-image-card {
+    position: relative;
+    aspect-ratio: 3/2;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: border-color 0.2s;
+  }
+  .library-image-card:hover { border-color: var(--border-strong); }
+  .library-image-card.selected { border-color: var(--gold); }
+  .library-image-card img { width: 100%; height: 100%; object-fit: cover; }
+  .library-image-card .lib-delete-btn {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    border: none;
+    font-size: 13px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    z-index: 2;
+  }
+  .library-image-card:hover .lib-delete-btn { display: flex; }
+  .library-image-card .lib-delete-btn:hover { background: var(--error); }
   .direction-chip {
     padding: 8px 14px;
     border-radius: var(--radius-xs);
@@ -1409,6 +1441,7 @@
       <button class="picker-tab active" onclick="switchPickerTab('upload')" id="tab-picker-upload">&#128247; העלאה</button>
       <button class="picker-tab" onclick="switchPickerTab('stock')" id="tab-picker-stock">&#128269; Stock Photo</button>
       <button class="picker-tab" onclick="switchPickerTab('ai')" id="tab-picker-ai">&#10024; AI Generated</button>
+      <button class="picker-tab" onclick="switchPickerTab('library')" id="tab-picker-library">&#128193; הספרייה שלי</button>
     </div>
 
     <!-- Upload Tab -->
@@ -1461,6 +1494,15 @@
       </div>
       <div id="ai-result" style="text-align:center;"></div>
       <div id="ai-loading" style="display:none;text-align:center;padding:20px;color:var(--text-dim);">יוצר תמונה... (5-8 שניות)</div>
+    </div>
+
+    <!-- Library Tab -->
+    <div id="picker-library" class="picker-tab-content" style="display:none;padding:24px;">
+      <div id="library-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;"></div>
+      <div id="library-empty" style="display:none;text-align:center;padding:40px 20px;color:var(--text-dim);">
+        אין תמונות שמורות — תמונות שתבחרו יישמרו כאן אוטומטית
+      </div>
+      <div id="library-loading" style="display:none;text-align:center;padding:20px;color:var(--text-dim);">טוען ספרייה...</div>
     </div>
 
     <!-- Apply button -->
@@ -2984,6 +3026,7 @@ function switchPickerTab(tab) {
   document.querySelectorAll('.picker-tab-content').forEach(c => c.style.display = 'none');
   document.getElementById('tab-picker-' + tab).classList.add('active');
   document.getElementById('picker-' + tab).style.display = 'block';
+  if (tab === 'library') loadLibrary();
 }
 
 async function loadDirections() {
@@ -3192,12 +3235,27 @@ function renderAiResult(results, direction) {
   img.style.cssText = 'width:100%;border-radius:12px;margin-bottom:12px;';
   container.appendChild(img);
 
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
+
   const retryBtn = document.createElement('button');
   retryBtn.className = 'btn-action';
-  retryBtn.style.cssText = 'width:100%;justify-content:center;';
+  retryBtn.style.cssText = 'flex:1;justify-content:center;';
   retryBtn.textContent = '\uD83D\uDD04 יצירת וריאציה נוספת';
   retryBtn.onclick = () => selectDirection('ai-directions-list', lastAiDirectionIndex);
-  container.appendChild(retryBtn);
+  btnRow.appendChild(retryBtn);
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn-action';
+  saveBtn.style.cssText = 'flex:1;justify-content:center;';
+  saveBtn.textContent = '\uD83D\uDCBE שמור לספרייה';
+  saveBtn.onclick = async () => {
+    await saveToLibrary(r.url, 'imagen', r.source_meta || {});
+    saveBtn.textContent = '✓ נשמר!';
+    saveBtn.disabled = true;
+  };
+  btnRow.appendChild(saveBtn);
+  container.appendChild(btnRow);
 
   selectedPickerImage = { url: r.url, source: 'imagen', source_meta: r.source_meta };
   document.getElementById('picker-apply-bar').style.display = 'block';
@@ -3249,6 +3307,8 @@ async function applySelectedImage() {
 
     closeImagePicker();
     showToast('התמונה הוחלפה בהצלחה!', 'success');
+    // Auto-save to community library
+    await saveToLibrary(selectedPickerImage.url, selectedPickerImage.source, selectedPickerImage.source_meta || {});
     // Reload variant data so preview gets the updated HTML
     const { data: freshVariant } = await sb.from('project_variants')
       .select('*')
@@ -3264,6 +3324,69 @@ async function applySelectedImage() {
     loadImageSlots();
   } catch (e) {
     showToast('שגיאה בשמירת התמונה', 'error');
+  }
+}
+
+// ── Community Image Library ──────────────────────────────
+async function saveToLibrary(imageUrl, source, sourceMeta) {
+  if (!selectedProject?.community_id) return;
+  const { data: { user } } = await sb.auth.getUser();
+  await sb.from('community_image_library').upsert({
+    community_id: selectedProject.community_id,
+    image_url: imageUrl,
+    source,
+    source_meta: sourceMeta,
+    added_by: user?.id,
+  }, { onConflict: 'community_id,image_url', ignoreDuplicates: true });
+}
+
+async function loadLibrary() {
+  if (!selectedProject?.community_id) return;
+  const grid = document.getElementById('library-grid');
+  const empty = document.getElementById('library-empty');
+  const loading = document.getElementById('library-loading');
+  grid.innerHTML = '';
+  empty.style.display = 'none';
+  loading.style.display = 'block';
+
+  const { data: images } = await sb.from('community_image_library')
+    .select('*')
+    .eq('community_id', selectedProject.community_id)
+    .order('created_at', { ascending: false });
+
+  loading.style.display = 'none';
+
+  if (!images || images.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+
+  grid.innerHTML = images.map((img, i) => `
+    <div class="library-image-card" onclick="selectLibraryImage(${i})">
+      <button class="lib-delete-btn" onclick="event.stopPropagation();deleteLibraryImage('${img.id}',this.parentElement)" title="מחק">&times;</button>
+      <img src="${esc(img.image_url)}" alt="Library image" loading="lazy">
+    </div>
+  `).join('');
+  grid._images = images;
+}
+
+function selectLibraryImage(index) {
+  const grid = document.getElementById('library-grid');
+  grid.querySelectorAll('.library-image-card').forEach((c, i) =>
+    c.classList.toggle('selected', i === index)
+  );
+  const img = grid._images[index];
+  selectedPickerImage = { url: img.image_url, source: img.source, source_meta: img.source_meta };
+  document.getElementById('picker-apply-bar').style.display = 'block';
+}
+
+async function deleteLibraryImage(id, cardEl) {
+  const { error } = await sb.from('community_image_library').delete().eq('id', id);
+  if (error) { showToast('שגיאה במחיקה', 'error'); return; }
+  cardEl.remove();
+  const grid = document.getElementById('library-grid');
+  if (!grid.children.length) {
+    document.getElementById('library-empty').style.display = 'block';
   }
 }
 

@@ -1900,9 +1900,9 @@ async function loadImageSlots() {
     return;
   }
 
-  // Fetch current images for this variant
+  // Fetch current images for this variant (include enabled field)
   const { data: images } = await sb.from('lp_image_content')
-    .select('slot, image_url, source')
+    .select('slot, image_url, source, enabled')
     .eq('variant_id', variantId);
 
   const slots = [
@@ -1915,16 +1915,26 @@ async function loadImageSlots() {
 
   container.innerHTML = slots.map(slot => {
     const img = imageMap[slot.key];
+    const isEnabled = img ? img.enabled !== false : false;
+    const showToggle = slot.key === 'fold2' && img;
     return `
-      <div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
+      <div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);${showToggle && !isEnabled ? 'opacity:0.5;' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
           <div>
             <div style="font-weight:600;color:var(--text);">${slot.label}</div>
             <div style="font-size:12px;color:var(--text-dim);">${slot.desc}</div>
           </div>
-          <button class="btn-action" onclick="openImagePicker('${slot.key}')" style="font-size:13px;padding:6px 14px;">
-            🖼️ ${img ? 'החלף' : 'בחר תמונה'}
-          </button>
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${showToggle ? `
+              <label class="toggle-switch" style="transform:scale(0.85);">
+                <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleFold2Image(this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            ` : ''}
+            <button class="btn-action" onclick="openImagePicker('${slot.key}')" style="font-size:13px;padding:6px 14px;">
+              🖼️ ${img ? 'החלף' : 'בחר תמונה'}
+            </button>
+          </div>
         </div>
         ${img ? `
           <div style="border-radius:8px;overflow:hidden;">
@@ -1939,6 +1949,22 @@ async function loadImageSlots() {
       </div>
     `;
   }).join('');
+}
+
+async function toggleFold2Image(enabled) {
+  const variantId = selectedVariant?.id;
+  if (!variantId) return;
+  const { error } = await sb.from('lp_image_content')
+    .update({ enabled })
+    .eq('variant_id', variantId)
+    .eq('slot', 'fold2');
+  if (error) {
+    showToast('שגיאה בעדכון', 'error');
+    return;
+  }
+  showToast(enabled ? 'תמונת Fold שני מופעלת' : 'תמונת Fold שני מוסתרת', 'success');
+  loadImageSlots();
+  loadPreview();
 }
 
 // ── Preview Tab ──────────────────────────────────────────
@@ -2033,7 +2059,8 @@ async function loadPreview() {
       // Fetch latest image overrides and apply them to the HTML
       const { data: imgOverrides } = await sb.from('lp_image_content')
         .select('slot, image_url')
-        .eq('variant_id', variantId);
+        .eq('variant_id', variantId)
+        .eq('enabled', true);
       if (imgOverrides && imgOverrides.length) {
         imgOverrides.forEach(({ slot, image_url }) => {
           const slotExists = previewHtml.includes(`data-image-slot="${slot}"`);

@@ -291,7 +291,7 @@ export default async function handler(req, res) {
         // Serve legacy project HTML without variant tracking
         let html = fallbackProjects[0].generated_html;
         const imageOverridesRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/lp_image_content?project_id=eq.${project.id}&select=slot,image_url`,
+          `${SUPABASE_URL}/rest/v1/lp_image_content?project_id=eq.${project.id}&select=slot,image_url&enabled=eq.true`,
           { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
         );
         if (imageOverridesRes.ok) {
@@ -337,7 +337,7 @@ export default async function handler(req, res) {
 
     // Fetch image overrides scoped to this variant
     const imageOverridesRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${variant.id}&select=slot,image_url`,
+      `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${variant.id}&select=slot,image_url&enabled=eq.true`,
       {
         headers: {
           apikey: SUPABASE_SERVICE_ROLE_KEY,

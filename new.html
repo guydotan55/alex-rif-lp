@@ -2302,8 +2302,18 @@ async function remixField(btn, fieldName) {
     language: selectedLang || 'he'
   };
 
-  // Map field names for features
-  let apiField = fieldName;
+  // Map frontend camelCase field names to API snake_case
+  const fieldMap = {
+    whatYouDo: 'what_you_do',
+    targetAudience: 'target_audience',
+    mainBenefit: 'main_benefit',
+    socialProof: 'social_proof',
+    priceDesc: 'price_description',
+    ctaText: 'cta_text',
+    thankyouMsg: 'thankyou_text',
+    briefText: 'brief_text'
+  };
+  let apiField = fieldMap[fieldName] || fieldName;
   if (fieldName.startsWith('feature_title_')) apiField = 'feature_title';
   if (fieldName.startsWith('feature_desc_')) apiField = 'feature_description';
 

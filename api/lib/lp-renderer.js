@@ -209,7 +209,7 @@ export async function fetchAndRenderVariant(projectId, variantId, testId) {
   };
 
   const variantRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${variantId}&select=generated_html&limit=1`,
+    `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${encodeURIComponent(variantId)}&select=generated_html&limit=1`,
     { headers }
   );
   if (!variantRes.ok) return { html: null, error: "Failed to fetch variant" };
@@ -221,7 +221,7 @@ export async function fetchAndRenderVariant(projectId, variantId, testId) {
   let html = variants[0].generated_html;
 
   const overridesRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/lp_editable_content?variant_id=eq.${variantId}&select=key,value`,
+    `${SUPABASE_URL}/rest/v1/lp_editable_content?variant_id=eq.${encodeURIComponent(variantId)}&select=key,value`,
     { headers }
   );
   if (overridesRes.ok) {
@@ -230,7 +230,7 @@ export async function fetchAndRenderVariant(projectId, variantId, testId) {
   }
 
   const imageRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${variantId}&select=slot,image_url&enabled=eq.true`,
+    `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${encodeURIComponent(variantId)}&select=slot,image_url&enabled=eq.true`,
     { headers }
   );
   if (imageRes.ok) {
@@ -239,7 +239,7 @@ export async function fetchAndRenderVariant(projectId, variantId, testId) {
   }
 
   const projRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/projects?id=eq.${projectId}&select=email_enabled&limit=1`,
+    `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(projectId)}&select=email_enabled&limit=1`,
     { headers }
   );
   let emailEnabled = false;

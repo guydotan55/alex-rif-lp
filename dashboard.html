@@ -1516,7 +1516,7 @@
           <span style="margin-right:auto;"></span>
           <div id="test-url-bar" style="display:none; direction:ltr; background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:4px 6px 4px 12px; align-items:center; gap:8px; overflow:hidden;">
             <a id="test-url-link" href="#" target="_blank" style="color:var(--gold-soft); font-size:12px; text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; direction:ltr;"></a>
-            <button onclick="copyTestUrl()" style="background:var(--gold-dim); border:1px solid var(--gold); border-radius:6px; color:var(--gold); cursor:pointer; font-family:'Heebo',sans-serif; font-size:11px; padding:3px 10px; white-space:nowrap;">העתק</button>
+            <button onclick="copyTestUrl(event)" style="background:var(--gold-dim); border:1px solid var(--gold); border-radius:6px; color:var(--gold); cursor:pointer; font-family:'Heebo',sans-serif; font-size:11px; padding:3px 10px; white-space:nowrap;">העתק</button>
           </div>
         </div>
 
@@ -2397,10 +2397,10 @@ function renderTestLeads() {
     </tr>`).join('');
 }
 
-function copyTestUrl() {
+function copyTestUrl(e) {
   const link = document.getElementById('test-url-link');
   navigator.clipboard.writeText(link.href);
-  const btn = event.target;
+  const btn = e ? e.target : document.querySelector('#test-url-bar button');
   btn.textContent = 'הועתק!';
   setTimeout(() => btn.textContent = 'העתק', 1500);
 }
@@ -2492,7 +2492,10 @@ async function deleteTest() {
   if (!selectedTest) return;
   if (!confirm(`למחוק את הטסט "${selectedTest.name}"?\n\nנתוני האנליטיקס של דפי הנחיתה לא יימחקו.`)) return;
 
-  await sb.from('test_variants').delete().eq('test_id', selectedTest.id);
+  // Clear winner_variant_id first to avoid FK constraint, then delete (CASCADE handles test_variants)
+  if (selectedTest.winner_variant_id) {
+    await sb.from('tests').update({ winner_variant_id: null }).eq('id', selectedTest.id);
+  }
   const { error } = await sb.from('tests').delete().eq('id', selectedTest.id);
 
   if (error) {
@@ -3086,10 +3089,25 @@ async function loadEditableContent() {
   projectContent = data || [];
 
   // For existing LPs: backfill missing editable keys from generated HTML
+  // Also bootstrap from HTML if no editable content exists yet
   const existingKeys = new Set(projectContent.map(item => item.key));
-  if (projectContent.length > 0) {
+  {
     const htmlSource = selectedVariant?.generated_html || selectedProject?.generated_html || '';
     const newItems = [];
+
+    // If no content at all, extract all data-editable keys from the HTML
+    if (projectContent.length === 0 && htmlSource) {
+      try {
+        const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
+        doc.querySelectorAll('[data-editable]').forEach(el => {
+          const key = el.getAttribute('data-editable');
+          if (key && !existingKeys.has(key)) {
+            newItems.push({ key, value: el.textContent.trim() });
+            existingKeys.add(key);
+          }
+        });
+      } catch (e) { console.error('HTML extraction failed:', e); }
+    }
 
     // Backfill story_title from HTML
     if (!existingKeys.has('story_title') && htmlSource) {

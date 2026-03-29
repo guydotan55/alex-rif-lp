@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS test_variants (
 -- Add FK for winner_variant_id now that test_variants exists
 ALTER TABLE tests
   ADD CONSTRAINT fk_tests_winner_variant
-  FOREIGN KEY (winner_variant_id) REFERENCES test_variants(id);
+  FOREIGN KEY (winner_variant_id) REFERENCES test_variants(id) ON DELETE SET NULL;
 
 -- 3. Add test_id to analytics_events and leads
 ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS test_id UUID REFERENCES tests(id);

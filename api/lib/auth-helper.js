@@ -87,6 +87,51 @@ export async function canAccessProject(userId, projectId) {
 }
 
 /**
+ * Check if a user can access a specific test.
+ * Same logic as canAccessProject but uses test's community_id.
+ */
+export async function canAccessTest(userId, testId) {
+  const role = await getUserRole(userId);
+  if (!role) return false;
+  if (role.role === "super_admin") return true;
+
+  // Fetch test's community_id
+  const testRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/tests?id=eq.${encodeURIComponent(testId)}&select=community_id`,
+    {
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    }
+  );
+  const tests = await testRes.json();
+  if (!tests?.length) return false;
+  const testCommunityId = tests[0].community_id;
+
+  if (role.role === "manager") {
+    return role.community_id === testCommunityId;
+  }
+
+  if (role.role === "admin") {
+    const commRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/communities?id=eq.${encodeURIComponent(testCommunityId)}&select=organization_id`,
+      {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    );
+    const comms = await commRes.json();
+    if (!comms?.length) return false;
+    return comms[0].organization_id === role.organization_id;
+  }
+
+  return false;
+}
+
+/**
  * Check if user has a specific role (or higher).
  * Hierarchy: super_admin > admin > manager
  */

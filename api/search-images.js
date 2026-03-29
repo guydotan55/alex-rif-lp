@@ -1,4 +1,7 @@
-// Vercel Serverless Function — search stock photos or generate AI image for a direction
+// Vercel Serverless Function — search stock photos, generate AI images, or get directions
+import Anthropic from "@anthropic-ai/sdk";
+import { verifyUser, canAccessProject } from "./lib/auth-helper.js";
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
@@ -97,7 +100,50 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { direction, source_type, slot, access_token } = req.body;
+    const { action, direction, source_type, slot, access_token, project_id } = req.body;
+
+    // ── Action: directions ──────────────────────────────
+    if (action === 'directions') {
+      if (!project_id || !access_token) return res.status(400).json({ error: "Missing project_id or access_token" });
+      const user = await verifyUser(access_token);
+      if (!user) return res.status(401).json({ error: "Invalid token" });
+      const hasAccess = await canAccessProject(user.id, project_id);
+      if (!hasAccess) return res.status(403).json({ error: "No access" });
+
+      const projRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(project_id)}&select=*`,
+        { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+      );
+      const projects = await projRes.json();
+      if (!projects?.length) return res.status(404).json({ error: "Project not found" });
+      const project = projects[0];
+
+      const q = project.questionnaire_data || {};
+      const briefLines = [`Business: ${project.name || "Untitled"}`];
+      if (q.what_you_do) briefLines.push(`What they do: ${q.what_you_do}`);
+      if (q.target_audience) briefLines.push(`Audience: ${q.target_audience}`);
+      if (q.main_benefit) briefLines.push(`Benefit: ${q.main_benefit}`);
+      if (q.story) briefLines.push(`Story: ${q.story}`);
+      if (q.brief) briefLines.push(`Brief: ${q.brief}`);
+
+      const client = new Anthropic();
+      async function callClaude(includeImage) {
+        const userContent = [];
+        if (includeImage && project.image_url) {
+          userContent.push({ type: "image", source: { type: "url", url: project.image_url } });
+        }
+        userContent.push({ type: "text", text: `Based on this landing page brief, suggest 3 different visual directions for imagery. Each direction should be a short description (8-15 words) of a scene or mood that would work as a hero/section image.\n\nThe directions should:\n- All be relevant to the brand and its story\n- Each take a DIFFERENT visual approach\n- Have a Mediterranean aesthetic — warm tones, authentic, not generic stock\n${includeImage && project.image_url ? "- Be inspired by the mood and style of the attached reference image" : ""}\n\nBRIEF:\n${briefLines.join("\n")}\n\nRespond in this exact JSON format (no markdown fences):\n{\n  "directions": [\n    "direction 1 description",\n    "direction 2 description",\n    "direction 3 description"\n  ]\n}` });
+        return await client.messages.create({ model: "claude-haiku-4-5", max_tokens: 300, temperature: 1, messages: [{ role: "user", content: userContent }] });
+      }
+
+      let response;
+      try { response = await callClaude(true); } catch { response = await callClaude(false); }
+      let text = response.content[0].text.trim();
+      text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      return res.status(200).json(JSON.parse(text));
+    }
+
+    // ── Action: search/generate (default) ───────────────
     if (!direction || !source_type || !access_token) {
       return res.status(400).json({ error: "Missing required fields" });
     }

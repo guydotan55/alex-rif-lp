@@ -4038,10 +4038,10 @@ async function loadDirections() {
   document.getElementById('ai-directions-list').innerHTML = '<div style="color:var(--text-dim);font-size:13px;">טוען כיוונים מהבריף...</div>';
 
   try {
-    const res = await fetch('/api/image-directions', {
+    const res = await fetch('/api/search-images', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project_id: selectedProject.id, access_token: token }),
+      body: JSON.stringify({ action: 'directions', project_id: selectedProject.id, access_token: token }),
     });
     const data = await res.json();
     console.log('image-directions response:', res.status, data);

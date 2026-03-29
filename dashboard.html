@@ -1654,6 +1654,40 @@
   </div>
 </div>
 
+<!-- Test Creation Modal -->
+<div id="create-test-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); align-items:center; justify-content:center;">
+  <div style="background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius); padding:28px; width:90%; max-width:560px; max-height:80vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h3 style="color:var(--white); margin:0; font-size:18px;">טסט חדש</h3>
+      <button onclick="closeCreateTestModal()" style="background:none; border:none; color:var(--text-dim); font-size:20px; cursor:pointer;">&times;</button>
+    </div>
+
+    <!-- Test name -->
+    <div style="margin-bottom:16px;">
+      <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:6px;">שם הטסט</label>
+      <input type="text" id="test-name-input" placeholder="לדוגמה: מסע אישי vs רוחניות" style="width:100%; padding:10px 14px; background:var(--navy); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box;">
+    </div>
+
+    <!-- LP picker -->
+    <div style="margin-bottom:16px;">
+      <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:6px;">בחר דפי נחיתה לטסט (לפחות 2)</label>
+      <div id="test-lp-picker" style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;"></div>
+    </div>
+
+    <!-- Weight controls (shown after LPs selected) -->
+    <div id="test-weight-controls" style="display:none; margin-bottom:16px;">
+      <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:6px;">חלוקת תנועה</label>
+      <div id="test-weight-sliders"></div>
+    </div>
+
+    <!-- Create button -->
+    <div style="display:flex; gap:10px; justify-content:flex-end;">
+      <button onclick="closeCreateTestModal()" style="padding:10px 20px; background:none; border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-dim); cursor:pointer; font-family:'Heebo',sans-serif;">ביטול</button>
+      <button id="btn-create-test-submit" onclick="createTest()" style="padding:10px 24px; background:var(--gold-dim); border:1px solid var(--gold); border-radius:var(--radius-sm); color:var(--gold); cursor:pointer; font-family:'Heebo',sans-serif; font-weight:600;">צור טסט</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast notification -->
 <div class="toast" id="toast"></div>
 
@@ -1960,6 +1994,182 @@ async function loadTests() {
       <div class="test-card-meta">${variantCount} דפי נחיתה &middot; ${formatDate(t.created_at)}</div>
     </div>`;
   }).join('');
+}
+
+// ── Test Creation Modal ──────────────────────────────────
+let testModalSelectedLPs = []; // array of { projectId, variantId, projectName }
+
+function showCreateTestModal() {
+  testModalSelectedLPs = [];
+  document.getElementById('test-name-input').value = '';
+  document.getElementById('test-weight-controls').style.display = 'none';
+
+  // Ensure projects are loaded for LP picker
+  (async () => {
+    if (!projects.length) {
+      let query = sb.from('projects').select('*, communities(name)').order('created_at', { ascending: false });
+      if (selectedCommunityFilter !== 'all') {
+        query = query.eq('community_id', selectedCommunityFilter);
+      }
+      const { data } = await query;
+      projects = data || [];
+    }
+
+    const picker = document.getElementById('test-lp-picker');
+    const publishedProjects = projects.filter(p => p.status === 'published');
+
+    if (publishedProjects.length < 2) {
+      picker.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:12px;">צריך לפחות 2 פרויקטים מפורסמים כדי ליצור טסט. פרסם עוד דפי נחיתה ונסה שוב.</div>';
+      document.getElementById('btn-create-test-submit').style.display = 'none';
+    } else {
+      document.getElementById('btn-create-test-submit').style.display = '';
+      picker.innerHTML = publishedProjects.map(p => `
+        <label style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--navy); border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; transition:var(--transition);"
+               onmouseover="this.style.borderColor='var(--gold-dim)'" onmouseout="this.style.borderColor='var(--border)'">
+          <input type="checkbox" value="${p.id}" data-name="${esc(p.name || 'ללא שם')}" onchange="toggleTestLP(this)" style="accent-color:var(--gold);">
+          <span style="color:var(--white); font-size:14px;">${esc(p.name || 'ללא שם')}</span>
+          <span class="status-badge badge-published" style="font-size:10px;margin-right:auto;">מפורסם</span>
+        </label>
+      `).join('');
+    }
+
+    document.getElementById('create-test-modal').style.display = 'flex';
+  })();
+}
+
+function closeCreateTestModal() {
+  document.getElementById('create-test-modal').style.display = 'none';
+}
+
+async function toggleTestLP(checkbox) {
+  const projectId = checkbox.value;
+  const projectName = checkbox.dataset.name;
+
+  if (checkbox.checked) {
+    const { data: variants } = await sb.from('project_variants')
+      .select('id, variant_slug, variant_name, is_default')
+      .eq('project_id', projectId)
+      .eq('status', 'published');
+
+    const defaultVariant = variants?.find(v => v.is_default) || variants?.[0];
+    if (!defaultVariant) {
+      checkbox.checked = false;
+      alert('לפרויקט זה אין וריאנטים מפורסמים');
+      return;
+    }
+
+    testModalSelectedLPs.push({
+      projectId,
+      variantId: defaultVariant.id,
+      projectName,
+      variants: variants || [],
+      weight: 1
+    });
+  } else {
+    testModalSelectedLPs = testModalSelectedLPs.filter(lp => lp.projectId !== projectId);
+  }
+
+  updateWeightControls();
+}
+
+function updateWeightControls() {
+  const container = document.getElementById('test-weight-controls');
+  const sliders = document.getElementById('test-weight-sliders');
+
+  if (testModalSelectedLPs.length < 2) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = 'block';
+  const totalWeight = testModalSelectedLPs.reduce((sum, lp) => sum + lp.weight, 0);
+
+  sliders.innerHTML = testModalSelectedLPs.map((lp, i) => {
+    const pct = Math.round(lp.weight / totalWeight * 100);
+    const variantOptions = lp.variants.map(v =>
+      `<option value="${v.id}" ${v.id === lp.variantId ? 'selected' : ''}>${esc(v.variant_name || v.variant_slug)}</option>`
+    ).join('');
+
+    return `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; padding:8px 12px; background:var(--navy); border-radius:var(--radius-sm);">
+      <span style="color:var(--gold); font-weight:600; min-width:20px;">${String.fromCharCode(65 + i)}</span>
+      <span style="color:var(--white); font-size:13px; flex:1;">${esc(lp.projectName)}</span>
+      <select onchange="testModalSelectedLPs[${i}].variantId = this.value" style="background:var(--navy-card); border:1px solid var(--border); border-radius:4px; color:var(--white); font-size:12px; padding:4px 8px; font-family:'Heebo',sans-serif;">
+        ${variantOptions}
+      </select>
+      <input type="range" min="1" max="10" value="${lp.weight}"
+        onchange="testModalSelectedLPs[${i}].weight = parseInt(this.value); updateWeightControls();"
+        style="width:80px; accent-color:var(--gold);">
+      <span style="color:var(--text-dim); font-size:12px; min-width:35px; text-align:left;">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+async function createTest() {
+  const name = document.getElementById('test-name-input').value.trim();
+  if (!name) { alert('נא להזין שם לטסט'); return; }
+  if (testModalSelectedLPs.length < 2) { alert('נא לבחור לפחות 2 דפי נחיתה'); return; }
+
+  const slug = generateTestSlug(name);
+
+  const firstProject = projects.find(p => p.id === testModalSelectedLPs[0].projectId);
+  const communityId = firstProject?.community_id;
+  if (!communityId) { alert('שגיאה: לא נמצאה קהילה'); return; }
+
+  const { data: { user } } = await sb.auth.getUser();
+
+  const { data: test, error: testErr } = await sb.from('tests').insert({
+    name,
+    slug,
+    community_id: communityId,
+    status: 'draft',
+    created_by: user.id
+  }).select().single();
+
+  if (testErr) {
+    console.error('Create test error:', testErr);
+    alert('שגיאה ביצירת הטסט');
+    return;
+  }
+
+  const tvRows = testModalSelectedLPs.map((lp, i) => ({
+    test_id: test.id,
+    project_id: lp.projectId,
+    variant_id: lp.variantId,
+    weight: lp.weight,
+    label: String.fromCharCode(65 + i)
+  }));
+
+  const { error: tvErr } = await sb.from('test_variants').insert(tvRows);
+  if (tvErr) {
+    console.error('Create test variants error:', tvErr);
+    alert('שגיאה ביצירת וריאנטים לטסט');
+    return;
+  }
+
+  closeCreateTestModal();
+  await loadTests();
+  selectTest(test.id);
+}
+
+function generateTestSlug(name) {
+  const hebrewMap = {
+    'א': 'a', 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z',
+    'ח': 'ch', 'ט': 't', 'י': 'y', 'כ': 'k', 'ך': 'k', 'ל': 'l', 'מ': 'm',
+    'ם': 'm', 'נ': 'n', 'ן': 'n', 'ס': 's', 'ע': 'a', 'פ': 'p', 'ף': 'p',
+    'צ': 'ts', 'ץ': 'ts', 'ק': 'k', 'ר': 'r', 'ש': 'sh', 'ת': 't',
+    '׳': '', '״': ''
+  };
+  let slug = '';
+  for (const ch of name.toLowerCase()) {
+    if (hebrewMap[ch]) slug += hebrewMap[ch];
+    else if (/[a-z0-9]/.test(ch)) slug += ch;
+    else if (ch === ' ' || ch === '-' || ch === '_') slug += '-';
+  }
+  slug = slug.replace(/-+/g, '-').replace(/^-|-$/g, '');
+  if (!slug) slug = 'test';
+  const suffix = Math.random().toString(36).slice(2, 6);
+  return slug + '-' + suffix;
 }
 
 function startRename(projectId) {

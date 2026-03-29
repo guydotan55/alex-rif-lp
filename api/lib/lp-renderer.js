@@ -1,0 +1,263 @@
+// Shared LP rendering — used by serve-lp.js and serve-test.js
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
+export function escapeHtml(str) {
+  if (!str) return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/**
+ * Apply text overrides: replace innerHTML of elements with data-editable="key"
+ */
+export function applyOverrides(html, overrides) {
+  if (!overrides || overrides.length === 0) return html;
+
+  for (const { key, value } of overrides) {
+    if (!key || value == null) continue;
+    const escapedValue = escapeHtml(value);
+    const regex = new RegExp(
+      `(<[^>]*\\bdata-editable\\s*=\\s*"${key}"[^>]*>)([\\s\\S]*?)(<\\/[^>]+>)`,
+      "gi"
+    );
+    const before = html;
+    if (value === '') {
+      html = html.replace(regex, (match, open, content, close) => {
+        const hiddenOpen = open.replace(/>$/, ' style="display:none;">');
+        return hiddenOpen + close;
+      });
+    } else {
+      html = html.replace(regex, `$1${escapedValue}$3`);
+    }
+
+    if (key === "footer_text" && html === before) {
+      html = html.replace(
+        /(<footer[^>]*>)([\s\S]*?)(<\/footer>)/i,
+        `$1<p>${escapedValue}</p>$3`
+      );
+    }
+  }
+
+  return html;
+}
+
+export function applyImageOverrides(html, imageOverrides) {
+  if (!imageOverrides || imageOverrides.length === 0) return html;
+  for (const { slot, image_url } of imageOverrides) {
+    if (!slot || !image_url) continue;
+    const slotExists = html.includes(`data-image-slot="${slot}"`);
+
+    if (slotExists) {
+      const regex1 = new RegExp(
+        `(<img\\b[^>]*data-image-slot\\s*=\\s*"${slot}"[^>]*\\bsrc=")([^"]*)(")`, "gi"
+      );
+      const regex2 = new RegExp(
+        `(<img\\b[^>]*\\bsrc=")([^"]*)("[^>]*data-image-slot\\s*=\\s*"${slot}")`, "gi"
+      );
+      html = html.replace(regex1, `$1${image_url}$3`);
+      html = html.replace(regex2, `$1${image_url}$3`);
+    } else if (slot === "fold2") {
+      const safeUrl = image_url.replace(/"/g, '&quot;');
+      const imgTag = `<div style="margin:32px 0;border-radius:16px;overflow:hidden;"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
+      const storyMatch = html.match(/(<[^>]*data-editable\s*=\s*"story_text"[^>]*>[\s\S]*?<\/[^>]+>)/i);
+      if (storyMatch) {
+        html = html.replace(storyMatch[0], storyMatch[0] + imgTag);
+      } else {
+        const lastSectionIdx = html.lastIndexOf("<section");
+        if (lastSectionIdx > 0) {
+          html = html.slice(0, lastSectionIdx) + imgTag + html.slice(lastSectionIdx);
+        }
+      }
+    }
+  }
+  return html;
+}
+
+/**
+ * Build the client-side analytics + form script.
+ * testId is nullable — only set when served via test URL.
+ */
+export function buildInjectedScript(projectId, variantId, testId, anonKey, supabaseUrl, emailEnabled) {
+  return `
+<!-- LP Builder: Analytics & Form Handling -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function() {
+  var SUPABASE_URL = "${supabaseUrl}";
+  var SUPABASE_ANON_KEY = "${anonKey}";
+  var PROJECT_ID = "${projectId}";
+  var VARIANT_ID = ${variantId ? `"${variantId}"` : "null"};
+  var TEST_ID = ${testId ? `"${testId}"` : "null"};
+  var EMAIL_ENABLED = ${emailEnabled ? "true" : "false"};
+
+  var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  var sessionId = crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36));
+
+  function trackEvent(eventType, eventData) {
+    var row = {
+      event_type: eventType,
+      event_data: eventData || {},
+      source: "lp-builder",
+      session_id: sessionId,
+      project_id: PROJECT_ID
+    };
+    if (VARIANT_ID) row.variant_id = VARIANT_ID;
+    if (TEST_ID) row.test_id = TEST_ID;
+    sb.from("analytics_events").insert(row).then(function() {});
+  }
+
+  trackEvent("page_view", {
+    referrer: document.referrer || null,
+    url: window.location.href,
+    user_agent: navigator.userAgent
+  });
+
+  var formSection = document.getElementById("lp-email-form") || document.querySelector("form");
+  if (formSection) {
+    var foldObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          trackEvent("last_fold_reach", { element: "form" });
+          foldObserver.disconnect();
+        }
+      });
+    }, { threshold: 0.3 });
+    foldObserver.observe(formSection);
+  }
+
+  document.addEventListener("click", function(e) {
+    var el = e.target.closest('[data-cta], button[type="submit"], .cta-button, a.cta');
+    if (el) {
+      trackEvent("button_click", {
+        text: (el.textContent || "").trim().slice(0, 100),
+        tag: el.tagName,
+        href: el.href || null
+      });
+    }
+  });
+
+  var form = document.getElementById("lp-email-form") || document.querySelector("form");
+  if (form) {
+    form.addEventListener("submit", function(e) {
+      e.preventDefault();
+
+      var emailInput = form.querySelector('input[type="email"], input[name="email"]');
+      var nameInput = form.querySelector('input[name="name"]');
+      var phoneInput = form.querySelector('input[name="phone"]');
+
+      var email = emailInput ? emailInput.value.trim() : "";
+      if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+        alert("Please enter a valid email address.");
+        return;
+      }
+
+      var leadData = {
+        email: email,
+        project_id: PROJECT_ID,
+        source: "lp-builder"
+      };
+      if (VARIANT_ID) leadData.variant_id = VARIANT_ID;
+      if (TEST_ID) leadData.test_id = TEST_ID;
+      if (nameInput && nameInput.value.trim()) leadData.name = nameInput.value.trim();
+      if (phoneInput && phoneInput.value.trim()) leadData.phone = phoneInput.value.trim();
+
+      sb.from("leads").insert(leadData).then(function(result) {
+        if (result.error) {
+          console.error("Lead insert error:", result.error);
+        }
+
+        trackEvent("lead_captured", { email: email });
+
+        if (EMAIL_ENABLED) {
+          fetch("/api/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email, project_id: PROJECT_ID })
+          }).catch(function(err) { console.error("Email send error:", err); });
+        }
+
+        var thankyouEl = document.querySelector('[data-editable="thankyou_text"]');
+        if (thankyouEl) {
+          thankyouEl.style.display = "block";
+          form.style.display = "none";
+        } else {
+          form.innerHTML = '<div style="text-align:center;padding:32px 16px;"><p style="font-size:1.4em;font-weight:700;margin-bottom:8px;">Thank you!</p><p>We received your details.</p></div>';
+        }
+      });
+    });
+  }
+})();
+</script>
+`;
+}
+
+/**
+ * Fetch a variant's HTML and apply all overrides + inject analytics script.
+ * Returns the final HTML string ready to send.
+ */
+export async function fetchAndRenderVariant(projectId, variantId, testId) {
+  const headers = {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+  };
+
+  const variantRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${variantId}&select=generated_html&limit=1`,
+    { headers }
+  );
+  if (!variantRes.ok) return { html: null, error: "Failed to fetch variant" };
+  const variants = await variantRes.json();
+  if (!variants.length || !variants[0].generated_html) {
+    return { html: null, error: "Variant not found" };
+  }
+
+  let html = variants[0].generated_html;
+
+  const overridesRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/lp_editable_content?variant_id=eq.${variantId}&select=key,value`,
+    { headers }
+  );
+  if (overridesRes.ok) {
+    const overrides = await overridesRes.json();
+    html = applyOverrides(html, overrides);
+  }
+
+  const imageRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${variantId}&select=slot,image_url&enabled=eq.true`,
+    { headers }
+  );
+  if (imageRes.ok) {
+    const imageOverrides = await imageRes.json();
+    html = applyImageOverrides(html, imageOverrides);
+  }
+
+  const projRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/projects?id=eq.${projectId}&select=email_enabled&limit=1`,
+    { headers }
+  );
+  let emailEnabled = false;
+  if (projRes.ok) {
+    const projs = await projRes.json();
+    emailEnabled = projs.length > 0 && projs[0].email_enabled === true;
+  }
+
+  const injectedScript = buildInjectedScript(
+    projectId, variantId, testId,
+    SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled
+  );
+
+  if (html.includes("</body>")) {
+    html = html.replace("</body>", injectedScript + "\n</body>");
+  } else {
+    html += injectedScript;
+  }
+
+  return { html, error: null };
+}

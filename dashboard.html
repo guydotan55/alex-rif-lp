@@ -1510,6 +1510,7 @@
         <div class="preview-toolbar" id="test-toolbar">
           <span id="test-name-display" style="font-weight:700;color:var(--white);font-size:15px;"></span>
           <span class="status-badge" id="test-status-badge"></span>
+          <button class="btn-action" id="btn-edit-test" onclick="showEditTestModal()" style="display:none;font-size:12px;">&#9998; ערוך</button>
           <button class="btn-action" id="btn-test-activate" onclick="toggleTestStatus()" style="display:none;"></button>
           <button class="btn-action" id="btn-declare-winner" onclick="showDeclareWinnerModal()" style="display:none;background:rgba(76,175,80,0.15);color:#81c784;border-color:#81c784;">&#127942; הכרז מנצח</button>
           <button class="btn-action" id="btn-delete-test" onclick="deleteTest()" style="font-size:12px;background:rgba(255,80,80,0.1);color:#ff6b6b;border-color:#ff6b6b;">מחק</button>
@@ -2013,11 +2014,15 @@ async function loadTests() {
 
 // ── Test Creation Modal ──────────────────────────────────
 let testModalSelectedLPs = []; // array of { projectId, variantId, projectName }
+let testEditMode = false; // true when editing an existing draft test
 
 function showCreateTestModal() {
+  testEditMode = false;
   testModalSelectedLPs = [];
   document.getElementById('test-name-input').value = '';
   document.getElementById('test-weight-controls').style.display = 'none';
+  document.querySelector('#create-test-modal h3').textContent = 'טסט חדש';
+  document.getElementById('btn-create-test-submit').textContent = 'צור טסט';
 
   // Ensure projects are loaded for LP picker
   (async () => {
@@ -2054,6 +2059,71 @@ function showCreateTestModal() {
 
 function closeCreateTestModal() {
   document.getElementById('create-test-modal').style.display = 'none';
+  testEditMode = false;
+}
+
+async function showEditTestModal() {
+  if (!selectedTest || selectedTest.status !== 'draft') return;
+  testEditMode = true;
+  testModalSelectedLPs = [];
+
+  // Ensure projects are loaded
+  if (!projects.length) {
+    let query = sb.from('projects').select('*, communities(name)').order('created_at', { ascending: false });
+    if (selectedCommunityFilter !== 'all') {
+      query = query.eq('community_id', selectedCommunityFilter);
+    }
+    const { data } = await query;
+    projects = data || [];
+  }
+
+  // Pre-populate name
+  document.getElementById('test-name-input').value = selectedTest.name;
+
+  // Update modal title and button
+  document.querySelector('#create-test-modal h3').textContent = 'עריכת טסט';
+  document.getElementById('btn-create-test-submit').textContent = 'שמור שינויים';
+
+  // Load existing test variants to pre-check LPs
+  const { data: existingTVs } = await sb.from('test_variants')
+    .select('id, project_id, variant_id, weight, label, projects(name)')
+    .eq('test_id', selectedTest.id);
+
+  // Build LP picker with pre-checked items
+  const picker = document.getElementById('test-lp-picker');
+  const publishedProjects = projects.filter(p => p.status === 'published');
+  const existingProjectIds = new Set((existingTVs || []).map(tv => tv.project_id));
+
+  picker.innerHTML = publishedProjects.map(p => {
+    const isChecked = existingProjectIds.has(p.id);
+    return `
+      <label style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--navy); border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; transition:var(--transition);"
+             onmouseover="this.style.borderColor='var(--gold-dim)'" onmouseout="this.style.borderColor='var(--border)'">
+        <input type="checkbox" value="${p.id}" data-name="${esc(p.name || 'ללא שם')}" onchange="toggleTestLP(this)" ${isChecked ? 'checked' : ''} style="accent-color:var(--gold);">
+        <span style="color:var(--white); font-size:14px;">${esc(p.name || 'ללא שם')}</span>
+        <span class="status-badge badge-published" style="font-size:10px;margin-right:auto;">מפורסם</span>
+      </label>
+    `;
+  }).join('');
+  document.getElementById('btn-create-test-submit').style.display = '';
+
+  // Pre-populate testModalSelectedLPs with existing variants
+  for (const tv of (existingTVs || [])) {
+    const { data: variants } = await sb.from('project_variants')
+      .select('id, variant_slug, variant_name, is_default')
+      .eq('project_id', tv.project_id)
+      .eq('status', 'published');
+    testModalSelectedLPs.push({
+      projectId: tv.project_id,
+      variantId: tv.variant_id,
+      projectName: tv.projects?.name || 'Unknown',
+      variants: variants || [],
+      weight: tv.weight
+    });
+  }
+
+  updateWeightControls();
+  document.getElementById('create-test-modal').style.display = 'flex';
 }
 
 async function toggleTestLP(checkbox) {
@@ -2125,6 +2195,10 @@ async function createTest() {
   if (!name) { alert('נא להזין שם לטסט'); return; }
   if (testModalSelectedLPs.length < 2) { alert('נא לבחור לפחות 2 דפי נחיתה'); return; }
 
+  if (testEditMode && selectedTest) {
+    return saveTestEdits(name);
+  }
+
   const slug = generateTestSlug(name);
 
   const firstProject = projects.find(p => p.id === testModalSelectedLPs[0].projectId);
@@ -2165,6 +2239,47 @@ async function createTest() {
   closeCreateTestModal();
   await loadTests();
   selectTest(test.id);
+}
+
+async function saveTestEdits(name) {
+  const testId = selectedTest.id;
+
+  // Update test name
+  const { error: nameErr } = await sb.from('tests')
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq('id', testId);
+  if (nameErr) {
+    console.error('Update test name error:', nameErr);
+    alert('שגיאה בעדכון שם הטסט');
+    return;
+  }
+
+  // Replace test variants: delete old, insert new
+  const { error: delErr } = await sb.from('test_variants').delete().eq('test_id', testId);
+  if (delErr) {
+    console.error('Delete old variants error:', delErr);
+    alert('שגיאה בעדכון וריאנטים');
+    return;
+  }
+
+  const tvRows = testModalSelectedLPs.map((lp, i) => ({
+    test_id: testId,
+    project_id: lp.projectId,
+    variant_id: lp.variantId,
+    weight: lp.weight,
+    label: String.fromCharCode(65 + i)
+  }));
+
+  const { error: insErr } = await sb.from('test_variants').insert(tvRows);
+  if (insErr) {
+    console.error('Insert new variants error:', insErr);
+    alert('שגיאה בעדכון וריאנטים');
+    return;
+  }
+
+  closeCreateTestModal();
+  await loadTests();
+  selectTest(testId);
 }
 
 function generateTestSlug(name) {
@@ -2218,6 +2333,9 @@ async function selectTest(testId) {
     activateBtn.style.display = '';
     activateBtn.innerHTML = test.status === 'running' ? '&#9646;&#9646; השהה' : '&#9654; הפעל';
   }
+
+  // Edit button (draft only)
+  document.getElementById('btn-edit-test').style.display = test.status === 'draft' ? '' : 'none';
 
   // Declare winner button
   document.getElementById('btn-declare-winner').style.display = test.status === 'running' ? '' : 'none';

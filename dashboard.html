@@ -3214,6 +3214,7 @@ async function loadEditableContent() {
     const newItems = [];
 
     // If no content at all, extract all data-editable keys from the HTML
+    console.log('loadEditableContent bootstrap:', { contentLen: projectContent.length, htmlLen: htmlSource.length, hasVariant: !!selectedVariant, variantHtmlLen: selectedVariant?.generated_html?.length });
     if (projectContent.length === 0 && htmlSource) {
       try {
         const doc = new DOMParser().parseFromString(htmlSource, 'text/html');

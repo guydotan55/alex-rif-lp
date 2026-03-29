@@ -2390,6 +2390,108 @@ function copyTestUrl() {
   setTimeout(() => btn.textContent = 'העתק', 1500);
 }
 
+// ── Test Actions ─────────────────────────────────────────
+async function toggleTestStatus() {
+  if (!selectedTest) return;
+
+  const newStatus = selectedTest.status === 'running' ? 'draft' : 'running';
+
+  // If activating, verify all variant projects are published
+  if (newStatus === 'running') {
+    for (const tv of testVariants) {
+      const { data: variant } = await sb.from('project_variants')
+        .select('status')
+        .eq('id', tv.variant_id)
+        .single();
+      if (!variant || variant.status !== 'published') {
+        const pName = tv.projects?.name || 'Unknown';
+        alert(`לא ניתן להפעיל: הוריאנט של "${pName}" אינו מפורסם`);
+        return;
+      }
+    }
+  }
+
+  const { error } = await sb.from('tests')
+    .update({ status: newStatus, updated_at: new Date().toISOString() })
+    .eq('id', selectedTest.id);
+
+  if (error) {
+    console.error('Toggle test status error:', error);
+    alert('שגיאה בעדכון סטטוס הטסט');
+    return;
+  }
+
+  selectedTest.status = newStatus;
+  await loadTests();
+  selectTest(selectedTest.id);
+}
+
+function showDeclareWinnerModal() {
+  if (!selectedTest || selectedTest.status !== 'running') return;
+
+  // Find the leading variant
+  const groups = {};
+  testVariants.forEach(tv => {
+    groups[tv.variant_id] = { label: tv.label, name: tv.projects?.name, tvId: tv.id, events: [] };
+  });
+  testEvents.forEach(e => {
+    if (e.variant_id && groups[e.variant_id]) groups[e.variant_id].events.push(e);
+  });
+
+  const results = Object.entries(groups).map(([vid, g]) => {
+    const pv = g.events.filter(e => e.event_type === 'page_view').length;
+    const lc = g.events.filter(e => e.event_type === 'lead_captured').length;
+    return { tvId: g.tvId, label: g.label, name: g.name, pv, lc, conv: pv > 0 ? (lc / pv * 100).toFixed(1) : '0.0' };
+  }).sort((a, b) => parseFloat(b.conv) - parseFloat(a.conv));
+
+  const leader = results[0];
+
+  const msg = `הכרזת מנצח תעצור את הטסט.\n\nהמוביל: ${leader.label} — ${leader.name} (${leader.conv}% המרה)\n\nכתובת הטסט תמשיך לפעול ותציג תמיד את דף הנחיתה המנצח.\n\nלהמשיך?`;
+
+  if (!confirm(msg)) return;
+  declareWinner(leader.tvId);
+}
+
+async function declareWinner(winnerTestVariantId) {
+  const { error } = await sb.from('tests')
+    .update({
+      status: 'completed',
+      winner_variant_id: winnerTestVariantId,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', selectedTest.id);
+
+  if (error) {
+    console.error('Declare winner error:', error);
+    alert('שגיאה בהכרזת מנצח');
+    return;
+  }
+
+  selectedTest.status = 'completed';
+  selectedTest.winner_variant_id = winnerTestVariantId;
+  await loadTests();
+  selectTest(selectedTest.id);
+}
+
+async function deleteTest() {
+  if (!selectedTest) return;
+  if (!confirm(`למחוק את הטסט "${selectedTest.name}"?\n\nנתוני האנליטיקס של דפי הנחיתה לא יימחקו.`)) return;
+
+  await sb.from('test_variants').delete().eq('test_id', selectedTest.id);
+  const { error } = await sb.from('tests').delete().eq('id', selectedTest.id);
+
+  if (error) {
+    console.error('Delete test error:', error);
+    alert('שגיאה במחיקת הטסט');
+    return;
+  }
+
+  selectedTest = null;
+  document.getElementById('test-detail').style.display = 'none';
+  document.getElementById('main-empty').style.display = '';
+  await loadTests();
+}
+
 function startRename(projectId) {
   const card = document.querySelector(`[data-project-id="${projectId}"]`);
   if (!card) return;

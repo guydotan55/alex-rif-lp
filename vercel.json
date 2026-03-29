@@ -1,6 +1,7 @@
 {
   "cleanUrls": true,
   "rewrites": [
+    { "source": "/test/:slug", "destination": "/api/serve-test" },
     { "source": "/lp/:slug/:variant", "destination": "/api/serve-lp" },
     { "source": "/lp/:slug", "destination": "/api/serve-lp" }
   ]

@@ -1326,8 +1326,8 @@
       <div class="main-empty" id="main-empty">
         <button class="mobile-sidebar-toggle" onclick="toggleSidebar()">&#9776; הפרויקטים שלי</button>
         <div class="main-empty-icon">&#9670;</div>
-        <div>בחר פרויקט מהרשימה</div>
-        <a href="/new" style="font-size:13px; color:var(--text-dim); text-decoration:none; transition:color 0.2s;" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-dim)'">או צור דף נחיתה חדש &larr;</a>
+        <div id="empty-state-text">בחר פרויקט מהרשימה</div>
+        <a href="/new" id="empty-state-link" style="font-size:13px; color:var(--text-dim); text-decoration:none; transition:color 0.2s;" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-dim)'">או צור דף נחיתה חדש &larr;</a>
       </div>
 
       <!-- Project detail view -->
@@ -1951,6 +1951,21 @@ function switchSidebarTab(mode) {
     selectedTest = null;
     if (document.getElementById('test-detail')) document.getElementById('test-detail').style.display = 'none';
     document.getElementById('main-empty').style.display = '';
+  }
+
+  // Update empty state text based on mode
+  const emptyText = document.getElementById('empty-state-text');
+  const emptyLink = document.getElementById('empty-state-link');
+  if (mode === 'tests') {
+    emptyText.textContent = 'בחר טסט מהרשימה';
+    emptyLink.textContent = 'או צור טסט חדש ←';
+    emptyLink.href = '#';
+    emptyLink.onclick = function(e) { e.preventDefault(); showCreateTestModal(); };
+  } else {
+    emptyText.textContent = 'בחר פרויקט מהרשימה';
+    emptyLink.textContent = 'או צור דף נחיתה חדש ←';
+    emptyLink.href = '/new';
+    emptyLink.onclick = null;
   }
 }
 

@@ -800,6 +800,40 @@
   }
   .undo-remix:hover { color: #f0f0f5; }
 
+  /* ── Remix option picker ──────────────────────────────── */
+  .remix-picker {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    animation: stepIn 0.3s ease both;
+  }
+  .remix-option {
+    flex: 1;
+    background: rgba(245, 200, 66, 0.08);
+    border: 1px solid rgba(245, 200, 66, 0.2);
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: right;
+  }
+  .remix-option:hover {
+    background: rgba(245, 200, 66, 0.18);
+    border-color: #f5c842;
+  }
+  .remix-option-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #f5c842;
+    margin-bottom: 6px;
+  }
+  .remix-option-text {
+    font-size: 0.82rem;
+    color: var(--text-main);
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
   /* ── File upload ─────────────────────────────────────── */
   .file-upload-area {
     margin-bottom: 20px;
@@ -2272,12 +2306,39 @@ function showToast(msg, isSuccess) {
 // ═══════════════════════════════════════════════════════════════
 let remixOriginals = {}; // store originals for undo
 
+function gatherQuestionnaireContext() {
+  const ctx = { language: selectedLang || 'he' };
+  const val = id => (document.getElementById(id)?.value || '').trim();
+  ctx.name = val('businessName');
+  ctx.what_you_do = val('whatYouDo');
+  ctx.target_audience = val('targetAudience');
+  ctx.main_benefit = val('mainBenefit');
+  ctx.story = val('story');
+  ctx.social_proof = val('socialProof');
+  ctx.price = val('price');
+  ctx.cta_text = val('ctaText');
+  ctx.tone = selectedTone || '';
+  // Gather features
+  const features = [];
+  document.querySelectorAll('.feature-item, [data-feature]').forEach(item => {
+    const title = item.querySelector('[data-field="feature-title"]')?.value || '';
+    const desc = item.querySelector('[data-field="feature-desc"]')?.value || '';
+    if (title || desc) features.push({ title, desc });
+  });
+  if (features.length) ctx.features = features;
+  return ctx;
+}
+
+function autoExpandTextarea(textarea) {
+  if (!textarea || textarea.tagName !== 'TEXTAREA') return;
+  textarea.style.height = 'auto';
+  textarea.style.height = textarea.scrollHeight + 'px';
+}
+
 async function remixField(btn, fieldName) {
   // Find the input/textarea associated with this field
   let input;
   if (fieldName.startsWith('feature_title_') || fieldName.startsWith('feature_desc_')) {
-    // Dynamic feature fields
-    const idx = fieldName.split('_').pop();
     const suffix = fieldName.startsWith('feature_title_') ? 'feature-title' : 'feature-desc';
     input = btn.closest('.feature-item, [data-feature]')?.querySelector(`[data-field="${suffix}"]`)
       || document.querySelector(`#${fieldName}`);
@@ -2286,7 +2347,6 @@ async function remixField(btn, fieldName) {
   }
 
   if (!input || !input.value.trim()) {
-    // Shake the button or show hint
     btn.style.transform = 'translateX(-3px)';
     setTimeout(() => btn.style.transform = '', 100);
     return;
@@ -2295,12 +2355,8 @@ async function remixField(btn, fieldName) {
   // Store original for undo
   remixOriginals[fieldName] = input.value;
 
-  // Build context from filled fields
-  const context = {
-    name: document.getElementById('businessName')?.value || '',
-    what_you_do: document.getElementById('whatYouDo')?.value || '',
-    language: selectedLang || 'he'
-  };
+  // Build full questionnaire context
+  const context = gatherQuestionnaireContext();
 
   // Map frontend camelCase field names to API snake_case
   const fieldMap = {
@@ -2319,8 +2375,11 @@ async function remixField(btn, fieldName) {
 
   btn.classList.add('loading');
   btn.disabled = true;
-  const originalEmoji = btn.textContent;
   btn.textContent = '\u23F3';
+
+  // Remove any existing picker for this field
+  const existingPicker = btn.closest('.field')?.querySelector('.remix-picker');
+  if (existingPicker) existingPicker.remove();
 
   try {
     const res = await fetch('/api/remix-answer', {
@@ -2330,37 +2389,57 @@ async function remixField(btn, fieldName) {
     });
 
     const data = await res.json();
-    if (data.remixed) {
-      input.value = data.remixed;
-      btn.textContent = '\u2705';
-      btn.classList.remove('loading');
-      btn.classList.add('done');
-
-      // Add undo button
-      let undoBtn = btn.nextElementSibling;
-      if (!undoBtn || !undoBtn.classList.contains('undo-remix')) {
-        undoBtn = document.createElement('button');
-        undoBtn.type = 'button';
-        undoBtn.className = 'undo-remix';
-        undoBtn.textContent = '\u05D1\u05D8\u05DC';
-        undoBtn.onclick = () => {
-          input.value = remixOriginals[fieldName];
-          undoBtn.remove();
-          btn.textContent = '\u2728 \u05E9\u05E4\u05E8';
-          btn.classList.remove('done');
-        };
-        btn.after(undoBtn);
-      }
-
-      // Reset button after 3 seconds
-      setTimeout(() => {
-        btn.textContent = '\u2728 \u05E9\u05E4\u05E8';
-        btn.classList.remove('done');
-        btn.disabled = false;
-      }, 3000);
-    } else {
+    if (!data.keepStyle && !data.remixed) {
       throw new Error(data.error || 'Remix failed');
     }
+
+    const keepStyle = data.keepStyle || data.remixed;
+    const proCopy = data.proCopy || keepStyle;
+
+    btn.textContent = '\u2728 \u05E9\u05E4\u05E8';
+    btn.classList.remove('loading');
+    btn.disabled = false;
+
+    // Build option picker
+    const picker = document.createElement('div');
+    picker.className = 'remix-picker';
+
+    function createOption(label, text) {
+      const opt = document.createElement('div');
+      opt.className = 'remix-option';
+      opt.innerHTML = `<div class="remix-option-label">${label}</div><div class="remix-option-text">${text.replace(/</g, '&lt;')}</div>`;
+      opt.onclick = () => {
+        input.value = text;
+        autoExpandTextarea(input);
+        picker.remove();
+        btn.classList.add('done');
+
+        // Add undo button
+        let undoBtn = btn.nextElementSibling;
+        if (!undoBtn || !undoBtn.classList.contains('undo-remix')) {
+          undoBtn = document.createElement('button');
+          undoBtn.type = 'button';
+          undoBtn.className = 'undo-remix';
+          undoBtn.textContent = '\u05D1\u05D8\u05DC';
+          undoBtn.onclick = () => {
+            input.value = remixOriginals[fieldName];
+            autoExpandTextarea(input);
+            undoBtn.remove();
+            btn.classList.remove('done');
+          };
+          btn.after(undoBtn);
+        }
+      };
+      return opt;
+    }
+
+    picker.appendChild(createOption('\u2728 \u05E9\u05DE\u05E8\u05D5 \u05E2\u05DC \u05D4\u05E1\u05D2\u05E0\u05D5\u05DF', keepStyle));
+    picker.appendChild(createOption('\u270D\uFE0F \u05E7\u05D5\u05E4\u05D9 \u05DE\u05E7\u05E6\u05D5\u05E2\u05D9', proCopy));
+
+    // Insert picker after the input's parent field
+    const fieldContainer = btn.closest('.field') || input.parentElement;
+    fieldContainer.appendChild(picker);
+
   } catch (err) {
     console.error('Remix error:', err);
     btn.textContent = '\u274C';

@@ -2172,6 +2172,224 @@ function generateTestSlug(name) {
   return slug + '-' + suffix;
 }
 
+// ── Test Selection & Analytics ───────────────────────────
+async function selectTest(testId) {
+  const test = tests.find(t => t.id === testId);
+  if (!test) return;
+  selectedTest = test;
+
+  // Update sidebar active state
+  document.querySelectorAll('.test-card').forEach(c => c.classList.remove('active'));
+  const card = document.querySelector(`[data-test-id="${testId}"]`);
+  if (card) card.classList.add('active');
+
+  // Hide project detail, show test detail
+  document.getElementById('main-empty').style.display = 'none';
+  document.getElementById('project-detail').style.display = 'none';
+  document.getElementById('test-detail').style.display = 'flex';
+
+  // Populate top bar
+  document.getElementById('test-name-display').textContent = test.name;
+  const statusLabels = { draft: 'טיוטה', running: 'פעיל', completed: 'הושלם' };
+  const badge = document.getElementById('test-status-badge');
+  badge.className = `status-badge badge-${test.status}`;
+  badge.textContent = statusLabels[test.status] || test.status;
+
+  // Activate/Pause button
+  const activateBtn = document.getElementById('btn-test-activate');
+  if (test.status === 'completed') {
+    activateBtn.style.display = 'none';
+  } else {
+    activateBtn.style.display = '';
+    activateBtn.innerHTML = test.status === 'running' ? '&#9646;&#9646; השהה' : '&#9654; הפעל';
+  }
+
+  // Declare winner button
+  document.getElementById('btn-declare-winner').style.display = test.status === 'running' ? '' : 'none';
+
+  // Test URL
+  const urlBar = document.getElementById('test-url-bar');
+  if (test.status === 'running' || test.status === 'completed') {
+    const testUrl = `${window.location.origin}/test/${test.slug}`;
+    document.getElementById('test-url-link').href = testUrl;
+    document.getElementById('test-url-link').textContent = testUrl;
+    urlBar.style.display = 'flex';
+  } else {
+    urlBar.style.display = 'none';
+  }
+
+  // Load test variants with project info
+  const { data: tvData } = await sb.from('test_variants')
+    .select('id, project_id, variant_id, weight, label, projects(name), project_variants(variant_name, variant_slug)')
+    .eq('test_id', testId);
+  testVariants = tvData || [];
+
+  // Render weight bar
+  renderTestWeightsBar();
+
+  // Load analytics events for this test
+  const { data: evData } = await sb.from('analytics_events')
+    .select('event_type, event_data, created_at, variant_id, test_id')
+    .eq('test_id', testId);
+  testEvents = evData || [];
+
+  // Load leads for this test
+  const { data: ldData } = await sb.from('leads')
+    .select('id, email, created_at, variant_id, test_id')
+    .eq('test_id', testId);
+  testLeads = ldData || [];
+
+  renderTestAnalytics();
+  renderTestLeads();
+}
+
+function renderTestWeightsBar() {
+  const bar = document.getElementById('test-weights-bar');
+  if (!testVariants.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+
+  const totalWeight = testVariants.reduce((sum, tv) => sum + tv.weight, 0);
+
+  bar.innerHTML = `
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">חלוקת תנועה</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      ${testVariants.map(tv => {
+        const pct = Math.round(tv.weight / totalWeight * 100);
+        const pName = tv.projects?.name || 'Unknown';
+        return `<div style="display:flex;align-items:center;gap:6px;">
+          <span style="color:var(--gold);font-weight:600;">${esc(tv.label || '?')}</span>
+          <span style="color:var(--white);font-size:13px;">${esc(pName)}</span>
+          <span style="color:var(--text-dim);font-size:12px;">(${pct}%)</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function renderTestAnalytics() {
+  const container = document.getElementById('test-analytics-content');
+  const range = document.getElementById('test-date-range').value;
+
+  let events = testEvents;
+  if (range !== 'all') {
+    const days = parseInt(range);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    events = events.filter(e => new Date(e.created_at) >= cutoff);
+  }
+
+  if (!testVariants.length) {
+    container.innerHTML = '<div class="no-analytics">אין וריאנטים בטסט</div>';
+    return;
+  }
+
+  // Group events by variant_id (project_variants.id)
+  const groups = {};
+  testVariants.forEach(tv => {
+    groups[tv.variant_id] = {
+      label: tv.label || '?',
+      projectName: tv.projects?.name || 'Unknown',
+      events: []
+    };
+  });
+  events.forEach(e => {
+    if (e.variant_id && groups[e.variant_id]) {
+      groups[e.variant_id].events.push(e);
+    }
+  });
+
+  // Calculate metrics per variant
+  const metrics = Object.entries(groups).map(([vid, g]) => {
+    const pv = g.events.filter(e => e.event_type === 'page_view').length;
+    const lf = g.events.filter(e => e.event_type === 'last_fold_reach').length;
+    const cc = g.events.filter(e => e.event_type === 'button_click').length;
+    const lc = g.events.filter(e => e.event_type === 'lead_captured').length;
+    const convPct = pv > 0 ? (lc / pv * 100) : 0;
+    return { vid, label: g.label, name: g.projectName, pv, lf, cc, lc, convPct };
+  });
+
+  // Find leader
+  const hasEnoughData = metrics.every(m => m.pv >= 30);
+  let leader = null;
+  if (hasEnoughData && metrics.length >= 2) {
+    const sorted = [...metrics].sort((a, b) => b.convPct - a.convPct);
+    if (sorted[0].convPct > sorted[1].convPct) {
+      const delta = sorted[0].convPct - sorted[1].convPct;
+      const deltaPct = sorted[1].convPct > 0 ? ((delta / sorted[1].convPct) * 100).toFixed(0) : '∞';
+      leader = { vid: sorted[0].vid, deltaPct };
+    }
+  }
+
+  function pctClass(v) {
+    return v >= 40 ? 'pct-good' : v >= 15 ? 'pct-mid' : 'pct-low';
+  }
+
+  let html = '<div class="variant-compare-container">';
+  metrics.forEach(m => {
+    const isLeader = leader && leader.vid === m.vid;
+    const leaderBadge = isLeader
+      ? `<div style="color:#81c784;font-size:12px;margin-top:8px;">&#127942; מוביל ב-${leader.deltaPct}%</div>`
+      : '';
+    const noDataMsg = !hasEnoughData && metrics.length >= 2
+      ? `<div style="color:var(--text-dim);font-size:11px;margin-top:6px;">לא מספיק נתונים</div>`
+      : '';
+
+    html += `<div class="variant-compare-column" style="${isLeader ? 'border-color:#81c784;' : ''}">
+      <div style="font-weight:700;color:var(--gold);margin-bottom:4px;text-align:center;">${esc(m.label)}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;text-align:center;">${esc(m.name)}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">צפיות</span><span style="color:var(--white);font-weight:600;">${m.pv}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">סוף דף</span><span style="color:var(--white);font-weight:600;">${m.lf}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">CTA</span><span style="color:var(--white);font-weight:600;">${m.cc}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">לידים</span><span style="color:var(--white);font-weight:600;">${m.lc}</span></div>
+      </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
+        <span class="funnel-arrow-pct ${pctClass(m.convPct)}" style="font-size:16px;">${m.convPct.toFixed(1)}%</span>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת</div>
+        ${leaderBadge}
+        ${noDataMsg}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+function renderTestLeads() {
+  const tbody = document.getElementById('test-leads-tbody');
+  const countLabel = document.getElementById('test-leads-count-label');
+
+  if (!testLeads.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);padding:20px;">אין לידים עדיין</td></tr>';
+    countLabel.textContent = '0 לידים';
+    return;
+  }
+
+  countLabel.textContent = `${testLeads.length} לידים`;
+
+  // Map variant_id to project name
+  const variantToName = {};
+  testVariants.forEach(tv => {
+    variantToName[tv.variant_id] = tv.projects?.name || 'Unknown';
+  });
+
+  tbody.innerHTML = testLeads
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .map(l => `<tr>
+      <td>${esc(l.email)}</td>
+      <td>${esc(variantToName[l.variant_id] || '—')}</td>
+      <td>${formatDate(l.created_at)}</td>
+    </tr>`).join('');
+}
+
+function copyTestUrl() {
+  const link = document.getElementById('test-url-link');
+  navigator.clipboard.writeText(link.href);
+  const btn = event.target;
+  btn.textContent = 'הועתק!';
+  setTimeout(() => btn.textContent = 'העתק', 1500);
+}
+
 function startRename(projectId) {
   const card = document.querySelector(`[data-project-id="${projectId}"]`);
   if (!card) return;

@@ -1548,8 +1548,10 @@ function showError(fieldId, errId) {
 function validateStep(step) {
   clearErrors();
   if (step === 1) {
-    // Community validation for admins
-    if (userRole && userRole.role !== 'manager' && !selectedCommunityId) {
+    // Community validation for admins — only enforce if selector is visible
+    const communitySelect = document.getElementById('communitySelect');
+    if (userRole && userRole.role !== 'manager' && !selectedCommunityId && communitySelect) {
+      showToast('נא לבחור קהילה');
       return showError('communitySelect', 'err-community');
     }
     if (!document.getElementById('businessName').value.trim()) return showError('businessName', 'err-businessName');

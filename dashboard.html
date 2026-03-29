@@ -1176,6 +1176,59 @@
     transition: all var(--transition);
   }
   .sidebar-settings-link:hover { color: var(--gold); background: var(--gold-glow); }
+
+/* Sidebar tabs (projects/tests toggle) */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.sidebar-tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 8px;
+  cursor: pointer;
+  transition: var(--transition);
+  border-bottom: 2px solid transparent;
+}
+.sidebar-tab-btn.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+.sidebar-tab-btn:hover:not(.active) {
+  color: var(--white);
+}
+
+/* Test cards */
+.test-card {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.test-card:hover { background: rgba(245, 200, 66, 0.04); }
+.test-card.active { background: rgba(245, 200, 66, 0.08); border-right: 3px solid var(--gold); }
+.test-card-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--white);
+  font-size: 14px;
+}
+.test-card-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+.badge-running { background: rgba(76,175,80,0.2); color: #81c784; }
+.badge-completed { background: rgba(100,200,255,0.2); color: #7dd3fc; }
+
   .community-badge {
     font-size: 10px;
     color: var(--text-dim);
@@ -1239,15 +1292,31 @@
 
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
-      <div class="sidebar-head">
-        <span class="sidebar-title" id="sidebar-title">הפרויקטים שלי</span>
-        <a href="/new" class="btn-new-project">+ דף נחיתה חדש</a>
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab-btn active" id="sidebar-tab-projects" onclick="switchSidebarTab('projects')">הפרויקטים שלי</button>
+        <button class="sidebar-tab-btn" id="sidebar-tab-tests" onclick="switchSidebarTab('tests')">הטסטים שלי</button>
       </div>
-      <div class="community-filter" id="community-filter" style="display:none;"></div>
-      <div class="project-list" id="project-list">
-        <div class="sidebar-loading"><div class="loading-block"><div class="small-spin"></div> טוען...</div></div>
+      <!-- Projects panel -->
+      <div id="sidebar-projects-panel">
+        <div class="sidebar-head">
+          <span class="sidebar-title" id="sidebar-title">הפרויקטים שלי</span>
+          <a href="/new" class="btn-new-project">+ דף נחיתה חדש</a>
+        </div>
+        <div class="community-filter" id="community-filter" style="display:none;"></div>
+        <div class="project-list" id="project-list">
+          <div class="sidebar-loading"><div class="loading-block"><div class="small-spin"></div> טוען...</div></div>
+        </div>
       </div>
-      <!-- settings link moved to header -->
+      <!-- Tests panel -->
+      <div id="sidebar-tests-panel" style="display:none;">
+        <div class="sidebar-head">
+          <span class="sidebar-title">הטסטים שלי</span>
+          <button class="btn-new-project" onclick="showCreateTestModal()">+ טסט חדש</button>
+        </div>
+        <div class="project-list" id="test-list">
+          <div class="sidebar-loading"><div class="loading-block"><div class="small-spin"></div> טוען...</div></div>
+        </div>
+      </div>
     </aside>
 
     <!-- Main -->
@@ -1548,6 +1617,14 @@ let projectVariants = [];
 let selectedVariant = null;
 let compareMode = false;
 
+// ── Tests State ──────────────────────────────────────────
+let sidebarMode = 'projects'; // 'projects' or 'tests'
+let tests = [];
+let selectedTest = null;
+let testVariants = [];
+let testEvents = [];
+let testLeads = [];
+
 // ── Auth ──────────────────────────────────────────────────
 async function doLogin() {
   const email = document.getElementById('l-email').value.trim();
@@ -1759,6 +1836,70 @@ function renderCommunityFilter() {
 async function filterByCommunity(value) {
   selectedCommunityFilter = value;
   await loadProjects();
+}
+
+// ── Sidebar Tab Switching ────────────────────────────────
+function switchSidebarTab(mode) {
+  sidebarMode = mode;
+  document.getElementById('sidebar-tab-projects').classList.toggle('active', mode === 'projects');
+  document.getElementById('sidebar-tab-tests').classList.toggle('active', mode === 'tests');
+  document.getElementById('sidebar-projects-panel').style.display = mode === 'projects' ? '' : 'none';
+  document.getElementById('sidebar-tests-panel').style.display = mode === 'tests' ? '' : 'none';
+
+  if (mode === 'tests') {
+    loadTests();
+    // Hide project detail, show empty state
+    document.getElementById('project-detail').style.display = 'none';
+    if (document.getElementById('test-detail')) document.getElementById('test-detail').style.display = 'none';
+    document.getElementById('main-empty').style.display = '';
+    selectedProject = null;
+  } else {
+    selectedTest = null;
+    if (document.getElementById('test-detail')) document.getElementById('test-detail').style.display = 'none';
+    document.getElementById('main-empty').style.display = '';
+  }
+}
+
+async function loadTests() {
+  const list = document.getElementById('test-list');
+  list.innerHTML = '<div class="sidebar-loading"><div class="loading-block"><div class="small-spin"></div> טוען טסטים...</div></div>';
+
+  let query = sb.from('tests').select('*, test_variants(id)').order('created_at', { ascending: false });
+  if (selectedCommunityFilter !== 'all') {
+    query = query.eq('community_id', selectedCommunityFilter);
+  }
+  const { data, error } = await query;
+  if (error) {
+    list.innerHTML = '<div class="sidebar-empty">שגיאה בטעינת טסטים</div>';
+    console.error('tests:', error);
+    return;
+  }
+
+  tests = data || [];
+
+  if (tests.length === 0) {
+    list.innerHTML = `
+      <div class="sidebar-empty">
+        <div style="margin-bottom:12px;">אין טסטים עדיין</div>
+        <button class="btn-new-project" onclick="showCreateTestModal()">+ צור טסט ראשון</button>
+      </div>`;
+    return;
+  }
+
+  const statusLabels = { draft: 'טיוטה', running: 'פעיל', completed: 'הושלם' };
+
+  list.innerHTML = tests.map(t => {
+    const variantCount = t.test_variants?.length || 0;
+    return `
+    <div class="test-card ${selectedTest?.id === t.id ? 'active' : ''}"
+         onclick="selectTest('${t.id}')" data-test-id="${t.id}">
+      <div class="test-card-name">
+        <span>${esc(t.name || 'ללא שם')}</span>
+        <span class="status-badge badge-${t.status}">${statusLabels[t.status] || t.status}</span>
+      </div>
+      <div class="test-card-meta">${variantCount} דפי נחיתה &middot; ${formatDate(t.created_at)}</div>
+    </div>`;
+  }).join('');
 }
 
 function startRename(projectId) {

@@ -2840,8 +2840,18 @@ async function loadImageSlots() {
 async function setFold2Shape(shape) {
   const variantId = selectedVariant?.id;
   if (!variantId) return;
+  // If switching to circle and size is full, auto-set to medium
+  const updates = { display_shape: shape };
+  if (shape === 'circle') {
+    const { data } = await sb.from('lp_image_content')
+      .select('display_size')
+      .eq('variant_id', variantId)
+      .eq('slot', 'fold2')
+      .single();
+    if (data?.display_size === 'full') updates.display_size = 'medium';
+  }
   const { error } = await sb.from('lp_image_content')
-    .update({ display_shape: shape })
+    .update(updates)
     .eq('variant_id', variantId)
     .eq('slot', 'fold2');
   if (error) { showToast('שגיאה בעדכון', 'error'); return; }

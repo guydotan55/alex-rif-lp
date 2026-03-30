@@ -81,7 +81,7 @@ export default async function handler(req, res) {
         let html = fallbackProjects[0].generated_html;
         html = applyPageTitle(html, project.name);
         const imageOverridesRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/lp_image_content?project_id=eq.${project.id}&select=slot,image_url,display_size&enabled=eq.true`,
+          `${SUPABASE_URL}/rest/v1/lp_image_content?project_id=eq.${project.id}&select=slot,image_url,display_size,display_shape&enabled=eq.true`,
           { headers }
         );
         if (imageOverridesRes.ok) {

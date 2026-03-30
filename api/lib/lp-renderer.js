@@ -50,7 +50,7 @@ export function applyOverrides(html, overrides) {
 
 export function applyImageOverrides(html, imageOverrides) {
   if (!imageOverrides || imageOverrides.length === 0) return html;
-  for (const { slot, image_url, display_size } of imageOverrides) {
+  for (const { slot, image_url, display_size, display_shape } of imageOverrides) {
     if (!slot || !image_url) continue;
     const slotExists = html.includes(`data-image-slot="${slot}"`);
 
@@ -67,7 +67,10 @@ export function applyImageOverrides(html, imageOverrides) {
       const safeUrl = image_url.replace(/"/g, '&quot;');
       const sizeMap = { small: '50%', medium: '70%', full: '100%' };
       const width = sizeMap[display_size] || '100%';
-      const imgTag = `<div style="margin:32px auto;border-radius:16px;overflow:hidden;max-width:${width};"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
+      const isCircle = display_shape === 'circle';
+      const radius = isCircle ? '50%' : '16px';
+      const aspectRatio = isCircle ? 'aspect-ratio:1/1;' : '';
+      const imgTag = `<div style="margin:32px auto;border-radius:${radius};overflow:hidden;max-width:${width};${aspectRatio}"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;height:100%;display:block;object-fit:cover;border-radius:${radius};"></div>`;
       const storyMatch = html.match(/(<[^>]*data-editable\s*=\s*"story_text"[^>]*>[\s\S]*?<\/[^>]+>)/i);
       if (storyMatch) {
         html = html.replace(storyMatch[0], storyMatch[0] + imgTag);
@@ -247,7 +250,7 @@ export async function fetchAndRenderVariant(projectId, variantId, testId, projec
   }
 
   const imageRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${encodeURIComponent(variantId)}&select=slot,image_url,display_size&enabled=eq.true`,
+    `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${encodeURIComponent(variantId)}&select=slot,image_url,display_size,display_shape&enabled=eq.true`,
     { headers }
   );
   if (imageRes.ok) {

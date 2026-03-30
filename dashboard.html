@@ -2769,7 +2769,7 @@ async function loadImageSlots() {
 
   // Fetch current images for this variant (include enabled field)
   const { data: images } = await sb.from('lp_image_content')
-    .select('slot, image_url, source, enabled, display_size')
+    .select('slot, image_url, source, enabled, display_size, display_shape')
     .eq('variant_id', variantId);
 
   const slots = [
@@ -2785,6 +2785,7 @@ async function loadImageSlots() {
     const isEnabled = img ? img.enabled !== false : false;
     const showToggle = slot.key === 'fold2' && img;
     const currentSize = img?.display_size || 'full';
+    const currentShape = img?.display_shape || 'rectangle';
     return `
       <div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);${showToggle && !isEnabled ? 'opacity:0.5;' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -2811,11 +2812,18 @@ async function loadImageSlots() {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
             <div style="font-size:11px;color:var(--text-dim);">מקור: ${img.source === 'pexels' ? 'Stock Photo' : img.source === 'imagen' ? 'AI Generated' : 'העלאה'}</div>
             ${slot.key === 'fold2' ? `
-              <div style="display:flex;gap:4px;align-items:center;">
-                <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">גודל:</span>
-                <button class="btn-action${currentSize === 'small' ? ' active' : ''}" onclick="setFold2Size('small')" style="font-size:11px;padding:2px 8px;">קטן</button>
-                <button class="btn-action${currentSize === 'medium' ? ' active' : ''}" onclick="setFold2Size('medium')" style="font-size:11px;padding:2px 8px;">בינוני</button>
-                <button class="btn-action${currentSize === 'full' ? ' active' : ''}" onclick="setFold2Size('full')" style="font-size:11px;padding:2px 8px;">מלא</button>
+              <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                <div style="display:flex;gap:4px;align-items:center;">
+                  <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">גודל:</span>
+                  <button class="btn-action${currentSize === 'small' ? ' active' : ''}" onclick="setFold2Size('small')" style="font-size:11px;padding:2px 8px;">קטן</button>
+                  <button class="btn-action${currentSize === 'medium' ? ' active' : ''}" onclick="setFold2Size('medium')" style="font-size:11px;padding:2px 8px;">בינוני</button>
+                  <button class="btn-action${currentSize === 'full' ? ' active' : ''}" onclick="setFold2Size('full')" style="font-size:11px;padding:2px 8px;">מלא</button>
+                </div>
+                <div style="display:flex;gap:4px;align-items:center;">
+                  <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">צורה:</span>
+                  <button class="btn-action${currentShape === 'rectangle' ? ' active' : ''}" onclick="setFold2Shape('rectangle')" style="font-size:11px;padding:2px 8px;">▬ מלבן</button>
+                  <button class="btn-action${currentShape === 'circle' ? ' active' : ''}" onclick="setFold2Shape('circle')" style="font-size:11px;padding:2px 8px;">⬤ עיגול</button>
+                </div>
               </div>
             ` : ''}
           </div>
@@ -2827,6 +2835,19 @@ async function loadImageSlots() {
       </div>
     `;
   }).join('');
+}
+
+async function setFold2Shape(shape) {
+  const variantId = selectedVariant?.id;
+  if (!variantId) return;
+  const { error } = await sb.from('lp_image_content')
+    .update({ display_shape: shape })
+    .eq('variant_id', variantId)
+    .eq('slot', 'fold2');
+  if (error) { showToast('שגיאה בעדכון', 'error'); return; }
+  showToast(shape === 'circle' ? 'צורה: עיגול' : 'צורה: מלבן', 'success');
+  loadImageSlots();
+  loadPreview();
 }
 
 async function setFold2Size(size) {
@@ -2961,11 +2982,11 @@ async function loadPreview() {
 
       // Fetch latest image overrides and apply them to the HTML
       const { data: imgOverrides } = await sb.from('lp_image_content')
-        .select('slot, image_url, display_size')
+        .select('slot, image_url, display_size, display_shape')
         .eq('variant_id', variantId)
         .eq('enabled', true);
       if (imgOverrides && imgOverrides.length) {
-        imgOverrides.forEach(({ slot, image_url, display_size }) => {
+        imgOverrides.forEach(({ slot, image_url, display_size, display_shape }) => {
           const slotExists = previewHtml.includes(`data-image-slot="${slot}"`);
           if (slotExists) {
             // Replace existing image src
@@ -2978,7 +2999,10 @@ async function loadPreview() {
             const safeUrl = image_url.replace(/"/g, '&amp;quot;');
             const sizeMap = { small: '50%', medium: '70%', full: '100%' };
             const width = sizeMap[display_size] || '100%';
-            const imgTag = `<div style="margin:32px auto;border-radius:16px;overflow:hidden;max-width:${width};"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
+            const isCircle = display_shape === 'circle';
+            const radius = isCircle ? '50%' : '16px';
+            const aspectRatio = isCircle ? 'aspect-ratio:1/1;' : '';
+            const imgTag = `<div style="margin:32px auto;border-radius:${radius};overflow:hidden;max-width:${width};${aspectRatio}"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;height:100%;display:block;object-fit:cover;border-radius:${radius};"></div>`;
             const storyMatch = previewHtml.match(/(<[^>]*data-editable\s*=\s*"story_text"[^>]*>[\s\S]*?<\/[^>]+>)/i);
             if (storyMatch) {
               previewHtml = previewHtml.replace(storyMatch[0], storyMatch[0] + imgTag);

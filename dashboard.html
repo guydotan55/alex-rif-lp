@@ -3228,6 +3228,26 @@ async function loadEditableContent() {
       } catch (e) { console.error('HTML extraction failed:', e); }
     }
 
+    // Backfill hero_sub_subtitle from HTML
+    if (!existingKeys.has('hero_sub_subtitle') && htmlSource) {
+      try {
+        const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
+        const heroSubtitle = doc.querySelector('[data-editable="hero_subtitle"]');
+        if (heroSubtitle) {
+          // Look for the next sibling p/span that isn't already editable
+          let el = heroSubtitle.nextElementSibling;
+          while (el) {
+            if ((el.tagName === 'P' || el.tagName === 'SPAN' || el.tagName === 'DIV') &&
+                !el.hasAttribute('data-editable') && el.textContent.trim().length > 3) {
+              newItems.push({ key: 'hero_sub_subtitle', value: el.textContent.trim() });
+              break;
+            }
+            el = el.nextElementSibling;
+          }
+        }
+      } catch (e) { console.error('hero_sub_subtitle backfill failed:', e); }
+    }
+
     // Backfill story_title from HTML
     if (!existingKeys.has('story_title') && htmlSource) {
       try {
@@ -3351,7 +3371,7 @@ async function loadEditableContent() {
 
   // Sort fields in LP page order (top to bottom)
   const fieldOrder = [
-    'hero_title', 'hero_subtitle', 'story_title', 'story_text',
+    'hero_title', 'hero_subtitle', 'hero_sub_subtitle', 'story_title', 'story_text',
     'features_title', 'features_subtitle',
     'feature_1_icon', 'feature_1_title', 'feature_1_text',
     'feature_2_icon', 'feature_2_title', 'feature_2_text',
@@ -3467,6 +3487,7 @@ function renderFeaturesGroup(featureFields) {
 const FIELD_LABELS = {
   hero_title: 'כותרת ראשית',
   hero_subtitle: 'תת כותרת',
+  hero_sub_subtitle: 'תת כותרת משנית',
   story_title: 'כותרת הסיפור',
   story_text: 'טקסט הסיפור',
   features_title: 'כותרת הסקשן',

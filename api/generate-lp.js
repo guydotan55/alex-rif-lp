@@ -89,6 +89,7 @@ CRITICAL RULES:
 8. Add data-editable attributes to these elements so text can be edited later:
    - data-editable="hero_title" on the main hero headline
    - data-editable="hero_subtitle" on the hero subtitle
+   - data-editable="hero_sub_subtitle" on the hero second subtitle/tagline line (if exists)
    - data-editable="story_title" on the story/about section headline (e.g. "הסיפור שלי")
    - data-editable="story_text" on the story/about paragraph
    - data-editable="features_title" on the features/benefits section headline
@@ -142,7 +143,8 @@ ${imageMode === "with_images" && resolvedImages ? `11. IMAGE PLACEMENT RULES:
     These will be injected server-side.
 13. Use semantic HTML5 elements (section, header, nav, main, footer).
 14. Ensure excellent contrast ratios and accessibility basics (alt texts, aria-labels where needed).
-15. Add subtle CSS animations (fade-in, slide-up) for visual polish. Use @keyframes, not JS.`;
+15. Add subtle CSS animations (fade-in, slide-up) for visual polish. Use @keyframes, not JS.
+16. The <title> tag MUST be set to the Business/Project Name from the brief. Do not use generic titles.`;
 }
 
 /**

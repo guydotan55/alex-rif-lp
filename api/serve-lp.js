@@ -2,6 +2,7 @@
 import {
   applyOverrides,
   applyImageOverrides,
+  applyPageTitle,
   buildInjectedScript,
   fetchAndRenderVariant
 } from './lib/lp-renderer.js';
@@ -28,7 +29,7 @@ export default async function handler(req, res) {
 
     // Fetch project by slug
     const projectRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/projects?slug=eq.${encodeURIComponent(slug)}&select=id,email_enabled&limit=1`,
+      `${SUPABASE_URL}/rest/v1/projects?slug=eq.${encodeURIComponent(slug)}&select=id,name,email_enabled&limit=1`,
       { headers }
     );
 
@@ -78,8 +79,9 @@ export default async function handler(req, res) {
       const fallbackProjects = fallbackRes.ok ? await fallbackRes.json() : [];
       if (fallbackProjects.length > 0 && fallbackProjects[0].generated_html) {
         let html = fallbackProjects[0].generated_html;
+        html = applyPageTitle(html, project.name);
         const imageOverridesRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/lp_image_content?project_id=eq.${project.id}&select=slot,image_url&enabled=eq.true`,
+          `${SUPABASE_URL}/rest/v1/lp_image_content?project_id=eq.${project.id}&select=slot,image_url,display_size&enabled=eq.true`,
           { headers }
         );
         if (imageOverridesRes.ok) {
@@ -107,7 +109,7 @@ export default async function handler(req, res) {
     const variant = variants[0];
 
     // Use shared renderer for the main path
-    const { html, error } = await fetchAndRenderVariant(project.id, variant.id, null);
+    const { html, error } = await fetchAndRenderVariant(project.id, variant.id, null, project.name);
     if (error) {
       res.status(500);
       res.setHeader("Content-Type", "text/html; charset=utf-8");

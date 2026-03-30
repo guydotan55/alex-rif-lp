@@ -2769,7 +2769,7 @@ async function loadImageSlots() {
 
   // Fetch current images for this variant (include enabled field)
   const { data: images } = await sb.from('lp_image_content')
-    .select('slot, image_url, source, enabled')
+    .select('slot, image_url, source, enabled, display_size')
     .eq('variant_id', variantId);
 
   const slots = [
@@ -2784,6 +2784,7 @@ async function loadImageSlots() {
     const img = imageMap[slot.key];
     const isEnabled = img ? img.enabled !== false : false;
     const showToggle = slot.key === 'fold2' && img;
+    const currentSize = img?.display_size || 'full';
     return `
       <div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);${showToggle && !isEnabled ? 'opacity:0.5;' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -2807,7 +2808,17 @@ async function loadImageSlots() {
           <div style="border-radius:8px;overflow:hidden;">
             <img src="${img.image_url}" style="display:block;width:100%;" alt="${slot.label}">
           </div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">מקור: ${img.source === 'pexels' ? 'Stock Photo' : img.source === 'imagen' ? 'AI Generated' : 'העלאה'}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <div style="font-size:11px;color:var(--text-dim);">מקור: ${img.source === 'pexels' ? 'Stock Photo' : img.source === 'imagen' ? 'AI Generated' : 'העלאה'}</div>
+            ${slot.key === 'fold2' ? `
+              <div style="display:flex;gap:4px;align-items:center;">
+                <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">גודל:</span>
+                <button class="btn-action${currentSize === 'small' ? ' active' : ''}" onclick="setFold2Size('small')" style="font-size:11px;padding:2px 8px;">קטן</button>
+                <button class="btn-action${currentSize === 'medium' ? ' active' : ''}" onclick="setFold2Size('medium')" style="font-size:11px;padding:2px 8px;">בינוני</button>
+                <button class="btn-action${currentSize === 'full' ? ' active' : ''}" onclick="setFold2Size('full')" style="font-size:11px;padding:2px 8px;">מלא</button>
+              </div>
+            ` : ''}
+          </div>
         ` : `
           <div style="border:2px dashed var(--border);border-radius:8px;padding:40px;text-align:center;color:var(--text-dim);">
             אין תמונה — לחץ "בחר תמונה" להוספה
@@ -2816,6 +2827,20 @@ async function loadImageSlots() {
       </div>
     `;
   }).join('');
+}
+
+async function setFold2Size(size) {
+  const variantId = selectedVariant?.id;
+  if (!variantId) return;
+  const { error } = await sb.from('lp_image_content')
+    .update({ display_size: size })
+    .eq('variant_id', variantId)
+    .eq('slot', 'fold2');
+  if (error) { showToast('שגיאה בעדכון', 'error'); return; }
+  const labels = { small: 'קטן', medium: 'בינוני', full: 'מלא' };
+  showToast(`גודל תמונה: ${labels[size]}`, 'success');
+  loadImageSlots();
+  loadPreview();
 }
 
 async function toggleFold2Image(enabled) {
@@ -2936,11 +2961,11 @@ async function loadPreview() {
 
       // Fetch latest image overrides and apply them to the HTML
       const { data: imgOverrides } = await sb.from('lp_image_content')
-        .select('slot, image_url')
+        .select('slot, image_url, display_size')
         .eq('variant_id', variantId)
         .eq('enabled', true);
       if (imgOverrides && imgOverrides.length) {
-        imgOverrides.forEach(({ slot, image_url }) => {
+        imgOverrides.forEach(({ slot, image_url, display_size }) => {
           const slotExists = previewHtml.includes(`data-image-slot="${slot}"`);
           if (slotExists) {
             // Replace existing image src
@@ -2951,7 +2976,9 @@ async function loadPreview() {
           } else if (slot === 'fold2') {
             // Inject fold2 image if slot doesn't exist in HTML
             const safeUrl = image_url.replace(/"/g, '&amp;quot;');
-            const imgTag = `<div style="margin:32px 0;border-radius:16px;overflow:hidden;"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
+            const sizeMap = { small: '50%', medium: '70%', full: '100%' };
+            const width = sizeMap[display_size] || '100%';
+            const imgTag = `<div style="margin:32px auto;border-radius:16px;overflow:hidden;max-width:${width};"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
             const storyMatch = previewHtml.match(/(<[^>]*data-editable\s*=\s*"story_text"[^>]*>[\s\S]*?<\/[^>]+>)/i);
             if (storyMatch) {
               previewHtml = previewHtml.replace(storyMatch[0], storyMatch[0] + imgTag);

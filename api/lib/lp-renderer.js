@@ -50,7 +50,7 @@ export function applyOverrides(html, overrides) {
 
 export function applyImageOverrides(html, imageOverrides) {
   if (!imageOverrides || imageOverrides.length === 0) return html;
-  for (const { slot, image_url } of imageOverrides) {
+  for (const { slot, image_url, display_size } of imageOverrides) {
     if (!slot || !image_url) continue;
     const slotExists = html.includes(`data-image-slot="${slot}"`);
 
@@ -65,7 +65,9 @@ export function applyImageOverrides(html, imageOverrides) {
       html = html.replace(regex2, `$1${image_url}$3`);
     } else if (slot === "fold2") {
       const safeUrl = image_url.replace(/"/g, '&quot;');
-      const imgTag = `<div style="margin:32px 0;border-radius:16px;overflow:hidden;"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
+      const sizeMap = { small: '50%', medium: '70%', full: '100%' };
+      const width = sizeMap[display_size] || '100%';
+      const imgTag = `<div style="margin:32px auto;border-radius:16px;overflow:hidden;max-width:${width};"><img data-image-slot="fold2" src="${safeUrl}" alt="" style="width:100%;display:block;border-radius:16px;"></div>`;
       const storyMatch = html.match(/(<[^>]*data-editable\s*=\s*"story_text"[^>]*>[\s\S]*?<\/[^>]+>)/i);
       if (storyMatch) {
         html = html.replace(storyMatch[0], storyMatch[0] + imgTag);
@@ -202,7 +204,19 @@ export function buildInjectedScript(projectId, variantId, testId, anonKey, supab
  * Fetch a variant's HTML and apply all overrides + inject analytics script.
  * Returns the final HTML string ready to send.
  */
-export async function fetchAndRenderVariant(projectId, variantId, testId) {
+/**
+ * Replace the <title> tag content with the project name.
+ */
+export function applyPageTitle(html, projectName) {
+  if (!projectName) return html;
+  return html.replace(/<title>[^<]*<\/title>/i, `<title>${escapeHtml(projectName)}</title>`);
+}
+
+/**
+ * Fetch a variant's HTML and apply all overrides + inject analytics script.
+ * Returns the final HTML string ready to send.
+ */
+export async function fetchAndRenderVariant(projectId, variantId, testId, projectName) {
   const headers = {
     apikey: SUPABASE_SERVICE_ROLE_KEY,
     Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
@@ -220,6 +234,9 @@ export async function fetchAndRenderVariant(projectId, variantId, testId) {
 
   let html = variants[0].generated_html;
 
+  // Replace <title> with project name
+  html = applyPageTitle(html, projectName);
+
   const overridesRes = await fetch(
     `${SUPABASE_URL}/rest/v1/lp_editable_content?variant_id=eq.${encodeURIComponent(variantId)}&select=key,value`,
     { headers }
@@ -230,7 +247,7 @@ export async function fetchAndRenderVariant(projectId, variantId, testId) {
   }
 
   const imageRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${encodeURIComponent(variantId)}&select=slot,image_url&enabled=eq.true`,
+    `${SUPABASE_URL}/rest/v1/lp_image_content?variant_id=eq.${encodeURIComponent(variantId)}&select=slot,image_url,display_size&enabled=eq.true`,
     { headers }
   );
   if (imageRes.ok) {

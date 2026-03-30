@@ -3225,7 +3225,6 @@ async function loadEditableContent() {
     const newItems = [];
 
     // If no content at all, extract all data-editable keys from the HTML
-    console.log('loadEditableContent bootstrap:', { contentLen: projectContent.length, htmlLen: htmlSource.length, hasVariant: !!selectedVariant, variantHtmlLen: selectedVariant?.generated_html?.length });
     if (projectContent.length === 0 && htmlSource) {
       try {
         const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
@@ -3239,7 +3238,7 @@ async function loadEditableContent() {
       } catch (e) { console.error('HTML extraction failed:', e); }
     }
 
-    // Backfill hero_sub_subtitle from HTML + patch generated_html with data-editable attribute
+    // Backfill hero_sub_subtitle from HTML
     if (!existingKeys.has('hero_sub_subtitle') && htmlSource) {
       try {
         const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
@@ -3249,18 +3248,7 @@ async function loadEditableContent() {
           while (el) {
             if ((el.tagName === 'P' || el.tagName === 'SPAN' || el.tagName === 'DIV') &&
                 !el.hasAttribute('data-editable') && el.textContent.trim().length > 3) {
-              const originalText = el.textContent.trim();
-              newItems.push({ key: 'hero_sub_subtitle', value: originalText });
-              // Patch the HTML to add data-editable attribute for future overrides
-              const outerHtml = el.outerHTML;
-              const tagEnd = outerHtml.indexOf('>');
-              const patched = outerHtml.slice(0, tagEnd) + ' data-editable="hero_sub_subtitle"' + outerHtml.slice(tagEnd);
-              const patchedHtmlSource = htmlSource.replace(outerHtml, patched);
-              if (patchedHtmlSource !== htmlSource && selectedVariant?.id) {
-                sb.from('project_variants').update({ generated_html: patchedHtmlSource }).eq('id', selectedVariant.id).then(() => {
-                  if (selectedVariant) selectedVariant.generated_html = patchedHtmlSource;
-                });
-              }
+              newItems.push({ key: 'hero_sub_subtitle', value: el.textContent.trim() });
               break;
             }
             el = el.nextElementSibling;
@@ -3280,16 +3268,6 @@ async function loadEditableContent() {
           const heading = section?.querySelector('h2, h3');
           if (heading && !heading.hasAttribute('data-editable')) {
             newItems.push({ key: 'story_title', value: heading.textContent.trim() });
-            // Patch HTML
-            const oh = heading.outerHTML;
-            const te = oh.indexOf('>');
-            const ph = oh.slice(0, te) + ' data-editable="story_title"' + oh.slice(te);
-            const patchedHtml = htmlSource.replace(oh, ph);
-            if (patchedHtml !== htmlSource && selectedVariant?.id) {
-              sb.from('project_variants').update({ generated_html: patchedHtml }).eq('id', selectedVariant.id).then(() => {
-                if (selectedVariant) selectedVariant.generated_html = patchedHtml;
-              });
-            }
           }
         }
       } catch (e) { console.error('story_title backfill failed:', e); }
@@ -3308,16 +3286,6 @@ async function loadEditableContent() {
             const text = el.textContent.trim();
             if (text && text.length > 5 && text.length < 200 && !el.closest('form') && !el.hasAttribute('data-editable')) {
               newItems.push({ key: 'form_subtitle', value: text });
-              // Patch HTML
-              const oh = el.outerHTML;
-              const te = oh.indexOf('>');
-              const ph = oh.slice(0, te) + ' data-editable="form_subtitle"' + oh.slice(te);
-              const patchedHtml = htmlSource.replace(oh, ph);
-              if (patchedHtml !== htmlSource && selectedVariant?.id) {
-                sb.from('project_variants').update({ generated_html: patchedHtml }).eq('id', selectedVariant.id).then(() => {
-                  if (selectedVariant) selectedVariant.generated_html = patchedHtml;
-                });
-              }
               break;
             }
           }

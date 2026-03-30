@@ -2910,13 +2910,24 @@ async function loadPreview() {
                 `(<[^>]*\\bdata-editable\\s*=\\s*"${key}"[^>]*>)([\\s\\S]*?)(<\\/[^>]+>)`, 'gi'
               );
               const before = previewHtml;
-              previewHtml = previewHtml.replace(regex, `$1${escaped}$3`);
+              if (value === '') {
+                // Empty value: hide the element
+                previewHtml = previewHtml.replace(regex, (m, open, content, close) => {
+                  return open.replace(/>$/, ' style="display:none;">') + close;
+                });
+              } else {
+                previewHtml = previewHtml.replace(regex, `$1${escaped}$3`);
+              }
               // Fallback for footer_text on older LPs without data-editable attribute
               if (key === 'footer_text' && previewHtml === before) {
-                previewHtml = previewHtml.replace(
-                  /(<footer[^>]*>)([\s\S]*?)(<\/footer>)/i,
-                  `$1<p>${escaped}</p>$3`
-                );
+                if (value === '') {
+                  previewHtml = previewHtml.replace(/(<footer[^>]*>)([\s\S]*?)(<\/footer>)/i, '$1$3');
+                } else {
+                  previewHtml = previewHtml.replace(
+                    /(<footer[^>]*>)([\s\S]*?)(<\/footer>)/i,
+                    `$1<p>${escaped}</p>$3`
+                  );
+                }
               }
             });
           }

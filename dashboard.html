@@ -2925,11 +2925,12 @@ async function loadPreview() {
       btnPub.className = 'btn-action danger';
       statusEl.textContent = 'מפורסם';
       if (selectedProject.slug) {
+        const lpOrigin = 'https://msg-lab.vercel.app';
         let fullUrl;
         if (selectedVariant && !selectedVariant.is_default) {
-          fullUrl = window.location.origin + '/lp/' + selectedProject.slug + '/' + selectedVariant.variant_slug;
+          fullUrl = lpOrigin + '/lp/' + selectedProject.slug + '/' + selectedVariant.variant_slug;
         } else {
-          fullUrl = window.location.origin + '/lp/' + selectedProject.slug;
+          fullUrl = lpOrigin + '/lp/' + selectedProject.slug;
         }
         urlLink.href = fullUrl;
         urlLink.textContent = fullUrl;

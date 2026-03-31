@@ -43,6 +43,22 @@ export default async function handler(req, res) {
     const projects = await projectRes.json();
 
     if (!projects || projects.length === 0) {
+      // Check for slug redirect
+      const redirectRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/slug_redirects?old_slug=eq.${encodeURIComponent(slug)}&select=new_slug&limit=1`,
+        { headers }
+      );
+      if (redirectRes.ok) {
+        const redirects = await redirectRes.json();
+        if (redirects.length > 0) {
+          const newPath = variantSlug
+            ? `/lp/${redirects[0].new_slug}/${variantSlug}`
+            : `/lp/${redirects[0].new_slug}`;
+          res.writeHead(301, { Location: newPath });
+          return res.end();
+        }
+      }
+
       res.status(404);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send("<h1>404 — Page Not Found</h1>");

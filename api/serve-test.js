@@ -108,9 +108,20 @@ export default async function handler(req, res) {
       }
     }
 
+    // Fetch project name for page title
+    let projectName = null;
+    const projRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(chosen.project_id)}&select=name&limit=1`,
+      { headers }
+    );
+    if (projRes.ok) {
+      const projs = await projRes.json();
+      if (projs.length > 0) projectName = projs[0].name;
+    }
+
     // Render the chosen variant
     const { html, error } = await fetchAndRenderVariant(
-      chosen.project_id, chosen.variant_id, test.id
+      chosen.project_id, chosen.variant_id, test.id, projectName
     );
 
     if (error) {

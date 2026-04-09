@@ -1974,7 +1974,7 @@ async function loadTests() {
   const list = document.getElementById('test-list');
   list.innerHTML = '<div class="sidebar-loading"><div class="loading-block"><div class="small-spin"></div> טוען טסטים...</div></div>';
 
-  let query = sb.from('tests').select('*, test_variants(id)').order('created_at', { ascending: false });
+  let query = sb.from('tests').select('*, test_variants!test_variants_test_id_fkey(id)').order('created_at', { ascending: false });
   if (selectedCommunityFilter !== 'all') {
     query = query.eq('community_id', selectedCommunityFilter);
   }
@@ -3639,8 +3639,6 @@ async function saveContent() {
   setTimeout(() => okEl.style.display = 'none', 3500);
   const savedCount = result.saved_count || 0;
   showToast(`התוכן נשמר בהצלחה! (${savedCount} שדות)`, 'success');
-  console.log('saveContent: API response', result);
-
   // Refresh preview to show updated text
   loadPreview();
 }
@@ -4136,7 +4134,6 @@ async function loadDirections() {
       body: JSON.stringify({ action: 'directions', project_id: selectedProject.id, access_token: token }),
     });
     const data = await res.json();
-    console.log('image-directions response:', res.status, data);
     if (!res.ok) throw new Error(data.error || 'API error ' + res.status);
     pickerDirections = data.directions || [];
     if (pickerDirections.length) {

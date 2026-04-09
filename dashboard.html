@@ -814,6 +814,112 @@
     font-size: 14px;
   }
 
+  /* ── Test Mode Toggle ──────────────────────────────── */
+  .test-mode-btn {
+    background: var(--navy);
+    color: var(--text-dim);
+  }
+  .test-mode-btn:hover {
+    background: var(--navy-mid);
+  }
+  .test-mode-btn.test-mode-active {
+    background: var(--gold-dim);
+    color: var(--gold);
+  }
+  .test-mode-btn.test-mode-active .test-mode-sub {
+    color: var(--gold-soft);
+  }
+
+  /* ── Metric Tooltip ────────────────────────────────── */
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+  }
+  .metric-label {
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .metric-info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(138,130,112,0.15);
+    color: var(--text-dim);
+    font-size: 9px;
+    cursor: help;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .metric-info:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: -6px;
+    right: 20px;
+    background: var(--navy-mid);
+    color: var(--white);
+    font-size: 11px;
+    font-weight: 400;
+    padding: 6px 10px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-strong);
+    white-space: nowrap;
+    z-index: 10;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+
+  /* ── Separate Links Bar ────────────────────────────── */
+  .test-links-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding: 14px 18px;
+    background: var(--navy-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .test-link-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--navy);
+    border-radius: var(--radius-xs);
+    direction: ltr;
+  }
+  .test-link-row a {
+    color: var(--gold-soft);
+    font-size: 12px;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+  .test-link-row a:hover {
+    text-decoration: underline;
+  }
+  .test-link-copy {
+    background: var(--gold-dim);
+    border: 1px solid var(--gold);
+    border-radius: var(--radius-xs);
+    color: var(--gold);
+    cursor: pointer;
+    font-family: 'Heebo', sans-serif;
+    font-size: 11px;
+    padding: 3px 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
   /* ── Leads Table ─────────────────────────────────────── */
   .leads-table-wrap { overflow-x: auto; }
   .leads-table {
@@ -1669,13 +1775,28 @@
       <input type="text" id="test-name-input" placeholder="לדוגמה: מסע אישי vs רוחניות" style="width:100%; padding:10px 14px; background:var(--navy); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box;">
     </div>
 
+    <!-- Test mode toggle -->
+    <div style="margin-bottom:16px;">
+      <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:8px;">סוג הטסט</label>
+      <div id="test-mode-toggle" style="display:flex; gap:0; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">
+        <button type="button" onclick="setTestMode('split')" id="test-mode-split" class="test-mode-btn test-mode-active" style="flex:1; padding:10px 14px; border:none; cursor:pointer; font-family:'Heebo',sans-serif; font-size:13px; font-weight:600; transition:all 0.2s ease;">
+          <span style="display:block; margin-bottom:2px;">🔀 לינק אחד</span>
+          <span class="test-mode-sub" style="display:block; font-size:11px; font-weight:400; opacity:0.7;">חלוקת תנועה אוטומטית</span>
+        </button>
+        <button type="button" onclick="setTestMode('separate')" id="test-mode-separate" class="test-mode-btn" style="flex:1; padding:10px 14px; border:none; border-right:1px solid var(--border); cursor:pointer; font-family:'Heebo',sans-serif; font-size:13px; font-weight:600; transition:all 0.2s ease;">
+          <span style="display:block; margin-bottom:2px;">🔗 לינקים נפרדים</span>
+          <span class="test-mode-sub" style="display:block; font-size:11px; font-weight:400; opacity:0.7;">לינק ייחודי לכל דף</span>
+        </button>
+      </div>
+    </div>
+
     <!-- LP picker -->
     <div style="margin-bottom:16px;">
       <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:6px;">בחר דפי נחיתה לטסט (לפחות 2)</label>
       <div id="test-lp-picker" style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;"></div>
     </div>
 
-    <!-- Weight controls (shown after LPs selected) -->
+    <!-- Weight controls (shown after LPs selected, only in split mode) -->
     <div id="test-weight-controls" style="display:none; margin-bottom:16px;">
       <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:6px;">חלוקת תנועה</label>
       <div id="test-weight-sliders"></div>
@@ -2007,7 +2128,7 @@ async function loadTests() {
         <span>${esc(t.name || 'ללא שם')}</span>
         <span class="status-badge badge-${t.status}">${statusLabels[t.status] || t.status}</span>
       </div>
-      <div class="test-card-meta">${variantCount} דפי נחיתה &middot; ${formatDate(t.created_at)}</div>
+      <div class="test-card-meta">${variantCount} דפי נחיתה &middot; ${(t.mode || 'split') === 'separate' ? '🔗 נפרד' : '🔀 מאוחד'} &middot; ${formatDate(t.created_at)}</div>
     </div>`;
   }).join('');
 }
@@ -2015,14 +2136,24 @@ async function loadTests() {
 // ── Test Creation Modal ──────────────────────────────────
 let testModalSelectedLPs = []; // array of { projectId, variantId, projectName }
 let testEditMode = false; // true when editing an existing draft test
+let testModalMode = 'split'; // 'split' = one link, 'separate' = per-LP links
+
+function setTestMode(mode) {
+  testModalMode = mode;
+  document.getElementById('test-mode-split').className = 'test-mode-btn' + (mode === 'split' ? ' test-mode-active' : '');
+  document.getElementById('test-mode-separate').className = 'test-mode-btn' + (mode === 'separate' ? ' test-mode-active' : '');
+  updateWeightControls();
+}
 
 function showCreateTestModal() {
   testEditMode = false;
   testModalSelectedLPs = [];
+  testModalMode = 'split';
   document.getElementById('test-name-input').value = '';
   document.getElementById('test-weight-controls').style.display = 'none';
   document.querySelector('#create-test-modal h3').textContent = 'טסט חדש';
   document.getElementById('btn-create-test-submit').textContent = 'צור טסט';
+  setTestMode('split');
 
   // Ensure projects are loaded for LP picker
   (async () => {
@@ -2066,6 +2197,7 @@ async function showEditTestModal() {
   if (!selectedTest || selectedTest.status !== 'draft') return;
   testEditMode = true;
   testModalSelectedLPs = [];
+  setTestMode(selectedTest.mode || 'split');
 
   // Ensure projects are loaded
   if (!projects.length) {
@@ -2161,7 +2293,7 @@ function updateWeightControls() {
   const container = document.getElementById('test-weight-controls');
   const sliders = document.getElementById('test-weight-sliders');
 
-  if (testModalSelectedLPs.length < 2) {
+  if (testModalSelectedLPs.length < 2 || testModalMode === 'separate') {
     container.style.display = 'none';
     return;
   }
@@ -2212,7 +2344,8 @@ async function createTest() {
     slug,
     community_id: communityId,
     status: 'draft',
-    created_by: user.id
+    created_by: user.id,
+    mode: testModalMode
   }).select().single();
 
   if (testErr) {
@@ -2244,9 +2377,9 @@ async function createTest() {
 async function saveTestEdits(name) {
   const testId = selectedTest.id;
 
-  // Update test name
+  // Update test name and mode
   const { error: nameErr } = await sb.from('tests')
-    .update({ name, updated_at: new Date().toISOString() })
+    .update({ name, mode: testModalMode, updated_at: new Date().toISOString() })
     .eq('id', testId);
   if (nameErr) {
     console.error('Update test name error:', nameErr);
@@ -2340,9 +2473,10 @@ async function selectTest(testId) {
   // Declare winner button
   document.getElementById('btn-declare-winner').style.display = test.status === 'running' ? '' : 'none';
 
-  // Test URL
+  // Test URL — only show combined link for 'split' mode
   const urlBar = document.getElementById('test-url-bar');
-  if (test.status === 'running' || test.status === 'completed') {
+  const isSplitMode = (test.mode || 'split') === 'split';
+  if (isSplitMode && (test.status === 'running' || test.status === 'completed')) {
     const testUrl = `${window.location.origin}/test/${test.slug}`;
     document.getElementById('test-url-link').href = testUrl;
     document.getElementById('test-url-link').textContent = testUrl;
@@ -2353,7 +2487,7 @@ async function selectTest(testId) {
 
   // Load test variants with project info
   const { data: tvData } = await sb.from('test_variants')
-    .select('id, project_id, variant_id, weight, label, projects(name), project_variants(variant_name, variant_slug)')
+    .select('id, project_id, variant_id, weight, label, projects(name, slug), project_variants(variant_name, variant_slug)')
     .eq('test_id', testId);
   testVariants = tvData || [];
 
@@ -2379,8 +2513,31 @@ async function selectTest(testId) {
 function renderTestWeightsBar() {
   const bar = document.getElementById('test-weights-bar');
   if (!testVariants.length) { bar.style.display = 'none'; return; }
-  bar.style.display = 'block';
 
+  const isSeparate = (selectedTest.mode || 'split') === 'separate';
+
+  if (isSeparate) {
+    // Show individual LP links
+    bar.style.display = 'block';
+    bar.innerHTML = `
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">לינקים לדפי נחיתה</div>
+      <div class="test-links-bar" style="margin-bottom:0;padding:0;border:none;">
+        ${testVariants.map(tv => {
+          const pName = tv.projects?.name || 'Unknown';
+          const projectSlug = tv.projects?.slug || '';
+          const lpUrl = `${window.location.origin}/lp/${projectSlug}`;
+          return `<div class="test-link-row">
+            <span style="color:var(--gold);font-weight:600;font-size:13px;min-width:20px;text-align:center;direction:rtl;">${esc(tv.label || '?')}</span>
+            <a href="${lpUrl}" target="_blank" title="${esc(pName)}">${lpUrl}</a>
+            <button class="test-link-copy" onclick="copyText(this, '${lpUrl}')">העתק</button>
+          </div>`;
+        }).join('')}
+      </div>`;
+    return;
+  }
+
+  // Split mode — show traffic distribution
+  bar.style.display = 'block';
   const totalWeight = testVariants.reduce((sum, tv) => sum + tv.weight, 0);
 
   bar.innerHTML = `
@@ -2470,14 +2627,14 @@ function renderTestAnalytics() {
       <div style="font-weight:700;color:var(--gold);margin-bottom:4px;text-align:center;">${esc(m.label)}</div>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;text-align:center;">${esc(m.name)}</div>
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">צפיות</span><span style="color:var(--white);font-weight:600;">${m.pv}</span></div>
-        <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">סוף דף</span><span style="color:var(--white);font-weight:600;">${m.lf}</span></div>
-        <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">CTA</span><span style="color:var(--white);font-weight:600;">${m.cc}</span></div>
-        <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">לידים</span><span style="color:var(--white);font-weight:600;">${m.lc}</span></div>
+        <div class="metric-row"><span class="metric-label">צפיות <span class="metric-info" data-tip="כמה אנשים נכנסו לדף">?</span></span><span style="color:var(--white);font-weight:600;">${m.pv}</span></div>
+        <div class="metric-row"><span class="metric-label">סוף דף <span class="metric-info" data-tip="כמה גללו עד סוף הדף">?</span></span><span style="color:var(--white);font-weight:600;">${m.lf}</span></div>
+        <div class="metric-row"><span class="metric-label">CTA <span class="metric-info" data-tip="כמה לחצו על כפתור הפעולה">?</span></span><span style="color:var(--white);font-weight:600;">${m.cc}</span></div>
+        <div class="metric-row"><span class="metric-label">לידים <span class="metric-info" data-tip="כמה השאירו פרטים בטופס">?</span></span><span style="color:var(--white);font-weight:600;">${m.lc}</span></div>
       </div>
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
         <span class="funnel-arrow-pct ${pctClass(m.convPct)}" style="font-size:16px;">${m.convPct.toFixed(1)}%</span>
-        <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת <span class="metric-info" data-tip="אחוז המבקרים שהשאירו פרטים">?</span></div>
         ${leaderBadge}
         ${noDataMsg}
       </div>
@@ -2519,6 +2676,12 @@ function copyTestUrl(e) {
   const link = document.getElementById('test-url-link');
   navigator.clipboard.writeText(link.href);
   const btn = e ? e.target : document.querySelector('#test-url-bar button');
+  btn.textContent = 'הועתק!';
+  setTimeout(() => btn.textContent = 'העתק', 1500);
+}
+
+function copyText(btn, text) {
+  navigator.clipboard.writeText(text);
   btn.textContent = 'הועתק!';
   setTimeout(() => btn.textContent = 'העתק', 1500);
 }
@@ -3796,7 +3959,7 @@ function renderAnalytics() {
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
           <span class="funnel-arrow-pct ${parseFloat(convPct) >= 5 ? 'pct-good' : parseFloat(convPct) >= 2 ? 'pct-mid' : 'pct-low'}" style="font-size:16px;">${convPct}%</span>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת <span class="metric-info" data-tip="אחוז המבקרים שהשאירו פרטים">?</span></div>
         </div>
       </div>`;
     });

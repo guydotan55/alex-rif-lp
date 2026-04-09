@@ -814,20 +814,63 @@
     font-size: 14px;
   }
 
-  /* ── Test Mode Toggle ──────────────────────────────── */
-  .test-mode-btn {
+  /* ── Test Mode Selector ─────────────────────────────── */
+  .test-mode-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
     background: var(--navy);
-    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
   }
-  .test-mode-btn:hover {
+  .test-mode-option:hover {
+    border-color: var(--border-strong);
     background: var(--navy-mid);
   }
-  .test-mode-btn.test-mode-active {
+  .test-mode-option.test-mode-active {
+    border-color: var(--gold);
     background: var(--gold-dim);
+  }
+  .test-mode-radio {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--border-strong);
+    flex-shrink: 0;
+    position: relative;
+    transition: all 0.2s ease;
+  }
+  .test-mode-active .test-mode-radio {
+    border-color: var(--gold);
+  }
+  .test-mode-active .test-mode-radio::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+  }
+  .test-mode-title {
+    display: block;
+    color: var(--white);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .test-mode-active .test-mode-title {
     color: var(--gold);
   }
-  .test-mode-btn.test-mode-active .test-mode-sub {
-    color: var(--gold-soft);
+  .test-mode-desc {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.3;
   }
 
   /* ── Metric Tooltip ────────────────────────────────── */
@@ -1775,18 +1818,31 @@
       <input type="text" id="test-name-input" placeholder="לדוגמה: מסע אישי vs רוחניות" style="width:100%; padding:10px 14px; background:var(--navy); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box;">
     </div>
 
-    <!-- Test mode toggle -->
+    <!-- Test mode selector -->
     <div style="margin-bottom:16px;">
-      <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:8px;">סוג הטסט</label>
-      <div id="test-mode-toggle" style="display:flex; gap:0; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">
-        <button type="button" onclick="toggleTestModeOption('split')" id="test-mode-split" class="test-mode-btn test-mode-active" style="flex:1; padding:10px 14px; border:none; cursor:pointer; font-family:'Heebo',sans-serif; font-size:13px; font-weight:600; transition:all 0.2s ease;">
-          <span style="display:block; margin-bottom:2px;">🔀 לינק אחד</span>
-          <span class="test-mode-sub" style="display:block; font-size:11px; font-weight:400; opacity:0.7;">חלוקת תנועה אוטומטית</span>
-        </button>
-        <button type="button" onclick="toggleTestModeOption('separate')" id="test-mode-separate" class="test-mode-btn" style="flex:1; padding:10px 14px; border:none; border-right:1px solid var(--border); cursor:pointer; font-family:'Heebo',sans-serif; font-size:13px; font-weight:600; transition:all 0.2s ease;">
-          <span style="display:block; margin-bottom:2px;">🔗 לינקים נפרדים</span>
-          <span class="test-mode-sub" style="display:block; font-size:11px; font-weight:400; opacity:0.7;">לינק ייחודי לכל דף</span>
-        </button>
+      <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:8px;">איך תרצה לחלק תנועה?</label>
+      <div id="test-mode-toggle" style="display:flex; flex-direction:column; gap:6px;">
+        <label class="test-mode-option test-mode-active" id="test-mode-split" onclick="setTestMode('split')">
+          <span class="test-mode-radio"></span>
+          <div>
+            <span class="test-mode-title">🔀 לינק אחד לכולם</span>
+            <span class="test-mode-desc">לינק משותף שמפזר תנועה אוטומטית בין הדפים</span>
+          </div>
+        </label>
+        <label class="test-mode-option" id="test-mode-separate" onclick="setTestMode('separate')">
+          <span class="test-mode-radio"></span>
+          <div>
+            <span class="test-mode-title">🔗 לינק נפרד לכל דף</span>
+            <span class="test-mode-desc">שליטה מלאה — תפנו כל מודעה ללינק ספציפי</span>
+          </div>
+        </label>
+        <label class="test-mode-option" id="test-mode-both" onclick="setTestMode('both')">
+          <span class="test-mode-radio"></span>
+          <div>
+            <span class="test-mode-title">🔀🔗 שניהם</span>
+            <span class="test-mode-desc">לינק משותף + לינקים נפרדים לכל דף</span>
+          </div>
+        </label>
       </div>
     </div>
 
@@ -2138,34 +2194,10 @@ let testModalSelectedLPs = []; // array of { projectId, variantId, projectName }
 let testEditMode = false; // true when editing an existing draft test
 let testModalMode = 'split'; // 'split', 'separate', or 'both'
 
-function toggleTestModeOption(option) {
-  const splitBtn = document.getElementById('test-mode-split');
-  const sepBtn = document.getElementById('test-mode-separate');
-  const splitOn = splitBtn.classList.contains('test-mode-active');
-  const sepOn = sepBtn.classList.contains('test-mode-active');
-
-  if (option === 'split') {
-    if (splitOn && sepOn) { splitBtn.classList.remove('test-mode-active'); }
-    else if (splitOn && !sepOn) { /* can't deselect last */ }
-    else { splitBtn.classList.add('test-mode-active'); }
-  } else {
-    if (sepOn && splitOn) { sepBtn.classList.remove('test-mode-active'); }
-    else if (sepOn && !splitOn) { /* can't deselect last */ }
-    else { sepBtn.classList.add('test-mode-active'); }
-  }
-
-  const nowSplit = splitBtn.classList.contains('test-mode-active');
-  const nowSep = sepBtn.classList.contains('test-mode-active');
-  testModalMode = (nowSplit && nowSep) ? 'both' : nowSplit ? 'split' : 'separate';
-  updateWeightControls();
-}
-
 function setTestMode(mode) {
   testModalMode = mode;
-  const splitBtn = document.getElementById('test-mode-split');
-  const sepBtn = document.getElementById('test-mode-separate');
-  splitBtn.classList.toggle('test-mode-active', mode === 'split' || mode === 'both');
-  sepBtn.classList.toggle('test-mode-active', mode === 'separate' || mode === 'both');
+  document.querySelectorAll('.test-mode-option').forEach(el => el.classList.remove('test-mode-active'));
+  document.getElementById('test-mode-' + mode).classList.add('test-mode-active');
   updateWeightControls();
 }
 

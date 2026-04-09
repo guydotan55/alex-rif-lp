@@ -1779,11 +1779,11 @@
     <div style="margin-bottom:16px;">
       <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:8px;">סוג הטסט</label>
       <div id="test-mode-toggle" style="display:flex; gap:0; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">
-        <button type="button" onclick="setTestMode('split')" id="test-mode-split" class="test-mode-btn test-mode-active" style="flex:1; padding:10px 14px; border:none; cursor:pointer; font-family:'Heebo',sans-serif; font-size:13px; font-weight:600; transition:all 0.2s ease;">
+        <button type="button" onclick="toggleTestModeOption('split')" id="test-mode-split" class="test-mode-btn test-mode-active" style="flex:1; padding:10px 14px; border:none; cursor:pointer; font-family:'Heebo',sans-serif; font-size:13px; font-weight:600; transition:all 0.2s ease;">
           <span style="display:block; margin-bottom:2px;">🔀 לינק אחד</span>
           <span class="test-mode-sub" style="display:block; font-size:11px; font-weight:400; opacity:0.7;">חלוקת תנועה אוטומטית</span>
         </button>
-        <button type="button" onclick="setTestMode('separate')" id="test-mode-separate" class="test-mode-btn" style="flex:1; padding:10px 14px; border:none; border-right:1px solid var(--border); cursor:pointer; font-family:'Heebo',sans-serif; font-size:13px; font-weight:600; transition:all 0.2s ease;">
+        <button type="button" onclick="toggleTestModeOption('separate')" id="test-mode-separate" class="test-mode-btn" style="flex:1; padding:10px 14px; border:none; border-right:1px solid var(--border); cursor:pointer; font-family:'Heebo',sans-serif; font-size:13px; font-weight:600; transition:all 0.2s ease;">
           <span style="display:block; margin-bottom:2px;">🔗 לינקים נפרדים</span>
           <span class="test-mode-sub" style="display:block; font-size:11px; font-weight:400; opacity:0.7;">לינק ייחודי לכל דף</span>
         </button>
@@ -2136,12 +2136,36 @@ async function loadTests() {
 // ── Test Creation Modal ──────────────────────────────────
 let testModalSelectedLPs = []; // array of { projectId, variantId, projectName }
 let testEditMode = false; // true when editing an existing draft test
-let testModalMode = 'split'; // 'split' = one link, 'separate' = per-LP links
+let testModalMode = 'split'; // 'split', 'separate', or 'both'
+
+function toggleTestModeOption(option) {
+  const splitBtn = document.getElementById('test-mode-split');
+  const sepBtn = document.getElementById('test-mode-separate');
+  const splitOn = splitBtn.classList.contains('test-mode-active');
+  const sepOn = sepBtn.classList.contains('test-mode-active');
+
+  if (option === 'split') {
+    if (splitOn && sepOn) { splitBtn.classList.remove('test-mode-active'); }
+    else if (splitOn && !sepOn) { /* can't deselect last */ }
+    else { splitBtn.classList.add('test-mode-active'); }
+  } else {
+    if (sepOn && splitOn) { sepBtn.classList.remove('test-mode-active'); }
+    else if (sepOn && !splitOn) { /* can't deselect last */ }
+    else { sepBtn.classList.add('test-mode-active'); }
+  }
+
+  const nowSplit = splitBtn.classList.contains('test-mode-active');
+  const nowSep = sepBtn.classList.contains('test-mode-active');
+  testModalMode = (nowSplit && nowSep) ? 'both' : nowSplit ? 'split' : 'separate';
+  updateWeightControls();
+}
 
 function setTestMode(mode) {
   testModalMode = mode;
-  document.getElementById('test-mode-split').className = 'test-mode-btn' + (mode === 'split' ? ' test-mode-active' : '');
-  document.getElementById('test-mode-separate').className = 'test-mode-btn' + (mode === 'separate' ? ' test-mode-active' : '');
+  const splitBtn = document.getElementById('test-mode-split');
+  const sepBtn = document.getElementById('test-mode-separate');
+  splitBtn.classList.toggle('test-mode-active', mode === 'split' || mode === 'both');
+  sepBtn.classList.toggle('test-mode-active', mode === 'separate' || mode === 'both');
   updateWeightControls();
 }
 
@@ -2293,7 +2317,7 @@ function updateWeightControls() {
   const container = document.getElementById('test-weight-controls');
   const sliders = document.getElementById('test-weight-sliders');
 
-  if (testModalSelectedLPs.length < 2 || testModalMode === 'separate') {
+  if (testModalSelectedLPs.length < 2 || (testModalMode !== 'split' && testModalMode !== 'both')) {
     container.style.display = 'none';
     return;
   }
@@ -2473,10 +2497,11 @@ async function selectTest(testId) {
   // Declare winner button
   document.getElementById('btn-declare-winner').style.display = test.status === 'running' ? '' : 'none';
 
-  // Test URL — only show combined link for 'split' mode
+  // Test URL — show combined link for 'split' or 'both' mode
   const urlBar = document.getElementById('test-url-bar');
-  const isSplitMode = (test.mode || 'split') === 'split';
-  if (isSplitMode && (test.status === 'running' || test.status === 'completed')) {
+  const testMode = test.mode || 'split';
+  const showCombinedUrl = (testMode === 'split' || testMode === 'both');
+  if (showCombinedUrl && (test.status === 'running' || test.status === 'completed')) {
     const testUrl = `${window.location.origin}/test/${test.slug}`;
     document.getElementById('test-url-link').href = testUrl;
     document.getElementById('test-url-link').textContent = testUrl;
@@ -2514,12 +2539,32 @@ function renderTestWeightsBar() {
   const bar = document.getElementById('test-weights-bar');
   if (!testVariants.length) { bar.style.display = 'none'; return; }
 
-  const isSeparate = (selectedTest.mode || 'split') === 'separate';
+  const testMode = (selectedTest.mode || 'split');
+  const showSplit = testMode === 'split' || testMode === 'both';
+  const showSeparate = testMode === 'separate' || testMode === 'both';
 
-  if (isSeparate) {
-    // Show individual LP links
-    bar.style.display = 'block';
-    bar.innerHTML = `
+  bar.style.display = 'block';
+  let html = '';
+
+  if (showSplit) {
+    const totalWeight = testVariants.reduce((sum, tv) => sum + tv.weight, 0);
+    html += `
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">חלוקת תנועה</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;${showSeparate ? 'margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);' : ''}">
+        ${testVariants.map(tv => {
+          const pct = Math.round(tv.weight / totalWeight * 100);
+          const pName = tv.projects?.name || 'Unknown';
+          return `<div style="display:flex;align-items:center;gap:6px;">
+            <span style="color:var(--gold);font-weight:600;">${esc(tv.label || '?')}</span>
+            <span style="color:var(--white);font-size:13px;">${esc(pName)}</span>
+            <span style="color:var(--text-dim);font-size:12px;">(${pct}%)</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  if (showSeparate) {
+    html += `
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">לינקים לדפי נחיתה</div>
       <div class="test-links-bar" style="margin-bottom:0;padding:0;border:none;">
         ${testVariants.map(tv => {
@@ -2533,26 +2578,9 @@ function renderTestWeightsBar() {
           </div>`;
         }).join('')}
       </div>`;
-    return;
   }
 
-  // Split mode — show traffic distribution
-  bar.style.display = 'block';
-  const totalWeight = testVariants.reduce((sum, tv) => sum + tv.weight, 0);
-
-  bar.innerHTML = `
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">חלוקת תנועה</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-      ${testVariants.map(tv => {
-        const pct = Math.round(tv.weight / totalWeight * 100);
-        const pName = tv.projects?.name || 'Unknown';
-        return `<div style="display:flex;align-items:center;gap:6px;">
-          <span style="color:var(--gold);font-weight:600;">${esc(tv.label || '?')}</span>
-          <span style="color:var(--white);font-size:13px;">${esc(pName)}</span>
-          <span style="color:var(--text-dim);font-size:12px;">(${pct}%)</span>
-        </div>`;
-      }).join('')}
-    </div>`;
+  bar.innerHTML = html;
 }
 
 function renderTestAnalytics() {

@@ -1662,6 +1662,7 @@
           <button class="btn-action" id="btn-edit-test" onclick="showEditTestModal()" style="display:none;font-size:12px;">&#9998; ערוך</button>
           <button class="btn-action" id="btn-test-activate" onclick="toggleTestStatus()" style="display:none;"></button>
           <button class="btn-action" id="btn-declare-winner" onclick="showDeclareWinnerModal()" style="display:none;background:rgba(76,175,80,0.15);color:#81c784;border-color:#81c784;">&#127942; הכרז מנצח</button>
+          <button class="btn-action" id="btn-reset-data" onclick="resetTestData()" style="display:none;font-size:12px;background:rgba(100,180,255,0.1);color:#7dd3fc;border-color:#7dd3fc;" title="מסתיר את כל הנתונים שנאספו עד עכשיו (לא מוחק — אפשר לשחזר)">&#8634; איפוס נתונים</button>
           <button class="btn-action" id="btn-delete-test" onclick="deleteTest()" style="font-size:12px;background:rgba(255,80,80,0.1);color:#ff6b6b;border-color:#ff6b6b;">מחק</button>
           <span style="margin-right:auto;"></span>
           <div id="test-url-bar" style="display:none; direction:ltr; background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:4px 6px 4px 12px; align-items:center; gap:8px; overflow:hidden;">
@@ -2529,6 +2530,17 @@ async function selectTest(testId) {
   // Declare winner button
   document.getElementById('btn-declare-winner').style.display = test.status === 'running' ? '' : 'none';
 
+  // Reset data button — admin+ only, hidden on completed tests
+  const resetBtn = document.getElementById('btn-reset-data');
+  const isAdmin = userRole && (userRole.role === 'admin' || userRole.role === 'super_admin');
+  const canReset = isAdmin && test.status !== 'completed';
+  resetBtn.style.display = canReset ? '' : 'none';
+  if (canReset) {
+    resetBtn.innerHTML = test.reset_at
+      ? '&#8634; בטל איפוס'
+      : '&#8634; איפוס נתונים';
+  }
+
   // Test URL — show combined link for 'split' or 'both' mode
   const urlBar = document.getElementById('test-url-bar');
   const testMode = test.mode || 'split';
@@ -2553,9 +2565,10 @@ async function selectTest(testId) {
 
   // Match events for this test. For "split" mode traffic (/test/:slug), events have test_id set.
   // For "separate" mode traffic (/lp/:slug), events have NO test_id — match by variant_id
-  // from the test's variants, filtered to events created at/after the test was created.
+  // from the test's variants, filtered to events created at/after the test was created
+  // (or reset_at if the user has soft-reset the data).
   const testVariantIds = testVariants.map(tv => tv.variant_id);
-  const testStartedAt = selectedTest?.created_at;
+  const testStartedAt = selectedTest?.reset_at || selectedTest?.created_at;
 
   let testEventsData = [];
   let testLeadsData = [];
@@ -2660,14 +2673,14 @@ function renderTestAnalytics() {
     }
   });
 
-  // Calculate metrics per variant
+  // Calculate metrics per variant — conversion rates use unique visitors as denominator
   const metrics = Object.entries(groups).map(([vid, g]) => {
     const pv = g.events.filter(e => e.event_type === 'page_view').length;
     const uv = new Set(g.events.filter(e => e.event_type === 'page_view' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
     const lf = g.events.filter(e => e.event_type === 'last_fold_reach').length;
     const cc = g.events.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta').length;
     const lc = g.events.filter(e => e.event_type === 'lead_captured').length;
-    const convPct = pv > 0 ? (lc / pv * 100) : 0;
+    const convPct = uv > 0 ? (lc / uv * 100) : 0;
     return { vid, label: g.label, name: g.projectName, pv, uv, lf, cc, lc, convPct };
   });
 
@@ -2709,7 +2722,7 @@ function renderTestAnalytics() {
       </div>
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
         <span class="funnel-arrow-pct ${pctClass(m.convPct)}" style="font-size:16px;">${m.convPct.toFixed(1)}%</span>
-        <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת <span class="metric-info" data-tip="אחוז המבקרים שהשאירו פרטים">?</span></div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת <span class="metric-info" data-tip="אחוז המבקרים הייחודיים שהשאירו פרטים (לידים ÷ מבקרים ייחודיים)">?</span></div>
         ${leaderBadge}
         ${noDataMsg}
       </div>
@@ -2811,8 +2824,9 @@ function showDeclareWinnerModal() {
 
   const results = Object.entries(groups).map(([vid, g]) => {
     const pv = g.events.filter(e => e.event_type === 'page_view').length;
+    const uv = new Set(g.events.filter(e => e.event_type === 'page_view' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
     const lc = g.events.filter(e => e.event_type === 'lead_captured').length;
-    return { tvId: g.tvId, label: g.label, name: g.name, pv, lc, conv: pv > 0 ? (lc / pv * 100).toFixed(1) : '0.0' };
+    return { tvId: g.tvId, label: g.label, name: g.name, pv, uv, lc, conv: uv > 0 ? (lc / uv * 100).toFixed(1) : '0.0' };
   }).sort((a, b) => parseFloat(b.conv) - parseFloat(a.conv));
 
   const leader = results[0];
@@ -2842,6 +2856,33 @@ async function declareWinner(winnerTestVariantId) {
   selectedTest.winner_variant_id = winnerTestVariantId;
   await loadTests();
   selectTest(selectedTest.id);
+}
+
+async function resetTestData() {
+  if (!selectedTest) return;
+
+  // Toggle: if already reset, un-reset. Otherwise, reset to now.
+  const isResetting = !selectedTest.reset_at;
+  const confirmMsg = isResetting
+    ? `לאפס את נתוני הטסט "${selectedTest.name}"?\n\nכל הצפיות, הלידים והאירועים שנאספו עד עכשיו יוסתרו מהדשבורד — מהרגע הזה והלאה יוצגו רק נתונים חדשים.\n\nהנתונים לא נמחקים — ניתן לבטל איפוס בכל זמן.`
+    : `לבטל את איפוס הטסט "${selectedTest.name}"?\n\nכל הנתונים ההיסטוריים יוצגו שוב בדשבורד.`;
+
+  if (!confirm(confirmMsg)) return;
+
+  const { error } = await sb.from('tests')
+    .update({ reset_at: isResetting ? new Date().toISOString() : null })
+    .eq('id', selectedTest.id);
+
+  if (error) {
+    console.error('Reset test data error:', error);
+    alert('שגיאה: ' + error.message);
+    return;
+  }
+
+  // Refresh in place
+  selectedTest.reset_at = isResetting ? new Date().toISOString() : null;
+  await selectTest(selectedTest.id);
+  showToast(isResetting ? 'נתוני הטסט אופסו' : 'איפוס בוטל — הנתונים חזרו', 'success');
 }
 
 async function deleteTest() {
@@ -4023,7 +4064,7 @@ function renderAnalytics() {
       const lf = evts.filter(e => e.event_type === 'last_fold_reach').length;
       const cc = evts.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta').length;
       const lc = evts.filter(e => e.event_type === 'lead_captured').length;
-      const convPct = pv > 0 ? (lc / pv * 100).toFixed(1) : '0.0';
+      const convPct = uv > 0 ? (lc / uv * 100).toFixed(1) : '0.0';
 
       html += `<div class="variant-compare-column">
         <div style="font-weight:700;color:var(--gold);margin-bottom:12px;text-align:center;">${esc(group.name)}</div>
@@ -4036,7 +4077,7 @@ function renderAnalytics() {
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
           <span class="funnel-arrow-pct ${parseFloat(convPct) >= 5 ? 'pct-good' : parseFloat(convPct) >= 2 ? 'pct-mid' : 'pct-low'}" style="font-size:16px;">${convPct}%</span>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת <span class="metric-info" data-tip="אחוז המבקרים שהשאירו פרטים">?</span></div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת <span class="metric-info" data-tip="אחוז המבקרים הייחודיים שהשאירו פרטים (לידים ÷ מבקרים ייחודיים)">?</span></div>
         </div>
       </div>`;
     });
@@ -4093,11 +4134,11 @@ function renderAnalytics() {
   });
   html += '</div>';
 
-  // Overall conversion
-  const overallPct = pct(leadsCaptured, pageViews);
+  // Overall conversion — based on unique visitors (not page loads)
+  const overallPct = pct(leadsCaptured, uniqueVisitors);
   if (overallPct !== null) {
     html += `<div style="margin-top:24px;padding:16px 20px;background:var(--navy-card);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;align-items:center;gap:12px;">
-      <span style="font-size:13px;color:var(--text-dim);">המרה כוללת (צפיות &#8592; לידים):</span>
+      <span style="font-size:13px;color:var(--text-dim);">המרה כוללת (מבקרים ייחודיים &#8592; לידים):</span>
       <span class="funnel-arrow-pct ${pctClass(overallPct)}" style="font-size:14px;">${overallPct}%</span>
     </div>`;
   }

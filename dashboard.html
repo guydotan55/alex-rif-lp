@@ -806,6 +806,7 @@
   .pct-good { color: var(--success); background: rgba(76, 175, 80, 0.12); }
   .pct-mid { color: var(--gold); background: var(--gold-dim); }
   .pct-low { color: var(--error); background: rgba(255, 82, 82, 0.1); }
+  .pct-neutral { color: var(--gold); background: var(--gold-dim); }
 
   .no-analytics {
     text-align: center;
@@ -2674,29 +2675,37 @@ function renderTestAnalytics() {
   });
 
   // Calculate metrics per variant — conversion rates use unique visitors as denominator
+  // CTA counts unique visitors who clicked (not total clicks) — one person clicking 3 times = 1
   const metrics = Object.entries(groups).map(([vid, g]) => {
     const pv = g.events.filter(e => e.event_type === 'page_view').length;
     const uv = new Set(g.events.filter(e => e.event_type === 'page_view' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
     const lf = g.events.filter(e => e.event_type === 'last_fold_reach').length;
-    const cc = g.events.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta').length;
+    const cc = new Set(g.events.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
     const lc = g.events.filter(e => e.event_type === 'lead_captured').length;
     const convPct = uv > 0 ? (lc / uv * 100) : 0;
     return { vid, label: g.label, name: g.projectName, pv, uv, lf, cc, lc, convPct };
   });
 
-  // Find leader
-  const hasEnoughData = metrics.every(m => m.pv >= 30);
+  // Find leader — only call a winner when sample is meaningful AND lift is material
+  const MIN_UV_PER_VARIANT = 30;
+  const MIN_LEADS_PER_VARIANT = 5;
+  const MIN_RELATIVE_LIFT_PCT = 30; // 30%+ lift over runner-up
+  const hasEnoughData = metrics.every(m => m.uv >= MIN_UV_PER_VARIANT && m.lc >= MIN_LEADS_PER_VARIANT);
   let leader = null;
   if (hasEnoughData && metrics.length >= 2) {
     const sorted = [...metrics].sort((a, b) => b.convPct - a.convPct);
-    if (sorted[0].convPct > sorted[1].convPct) {
-      const delta = sorted[0].convPct - sorted[1].convPct;
-      const deltaPct = sorted[1].convPct > 0 ? ((delta / sorted[1].convPct) * 100).toFixed(0) : '∞';
+    const delta = sorted[0].convPct - sorted[1].convPct;
+    const lift = sorted[1].convPct > 0 ? (delta / sorted[1].convPct) * 100 : Infinity;
+    if (lift >= MIN_RELATIVE_LIFT_PCT) {
+      const deltaPct = Number.isFinite(lift) ? lift.toFixed(0) : '∞';
       leader = { vid: sorted[0].vid, deltaPct };
     }
   }
 
-  function pctClass(v) {
+  // Only color numbers green/red when we have a real winner — otherwise stay neutral (gold)
+  function pctClass(v, hasWinner, isWinner) {
+    if (!hasWinner) return 'pct-neutral';
+    if (isWinner) return 'pct-good';
     return v >= 40 ? 'pct-good' : v >= 15 ? 'pct-mid' : 'pct-low';
   }
 
@@ -2717,11 +2726,11 @@ function renderTestAnalytics() {
         <div class="metric-row"><span class="metric-label">צפיות <span class="metric-info" data-tip="סך טעינות הדף (רענון = צפייה נוספת)">?</span></span><span style="color:var(--white);font-weight:600;">${m.pv}</span></div>
         <div class="metric-row"><span class="metric-label">מבקרים ייחודיים <span class="metric-info" data-tip="אנשים שונים שביקרו (נספרים פעם אחת גם אם חזרו)">?</span></span><span style="color:var(--white);font-weight:600;">${m.uv}</span></div>
         <div class="metric-row"><span class="metric-label">סוף דף <span class="metric-info" data-tip="כמה גללו עד סוף הדף">?</span></span><span style="color:var(--white);font-weight:600;">${m.lf}</span></div>
-        <div class="metric-row"><span class="metric-label">CTA <span class="metric-info" data-tip="כמה לחצו על כפתור הפעולה">?</span></span><span style="color:var(--white);font-weight:600;">${m.cc}</span></div>
+        <div class="metric-row"><span class="metric-label">CTA <span class="metric-info" data-tip="כמה אנשים שונים לחצו על כפתור הפעולה (אדם אחד שלחץ 3 פעמים נספר פעם אחת)">?</span></span><span style="color:var(--white);font-weight:600;">${m.cc}</span></div>
         <div class="metric-row"><span class="metric-label">לידים <span class="metric-info" data-tip="כמה השאירו פרטים בטופס">?</span></span><span style="color:var(--white);font-weight:600;">${m.lc}</span></div>
       </div>
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
-        <span class="funnel-arrow-pct ${pctClass(m.convPct)}" style="font-size:16px;">${m.convPct.toFixed(1)}%</span>
+        <span class="funnel-arrow-pct ${pctClass(m.convPct, !!leader, isLeader)}" style="font-size:16px;">${m.convPct.toFixed(1)}%</span>
         <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת <span class="metric-info" data-tip="אחוז המבקרים הייחודיים שהשאירו פרטים (לידים ÷ מבקרים ייחודיים)">?</span></div>
         ${leaderBadge}
         ${noDataMsg}
@@ -4062,7 +4071,7 @@ function renderAnalytics() {
       const pv = evts.filter(e => e.event_type === 'page_view').length;
       const uv = new Set(evts.filter(e => e.event_type === 'page_view' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
       const lf = evts.filter(e => e.event_type === 'last_fold_reach').length;
-      const cc = evts.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta').length;
+      const cc = new Set(evts.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
       const lc = evts.filter(e => e.event_type === 'lead_captured').length;
       const convPct = uv > 0 ? (lc / uv * 100).toFixed(1) : '0.0';
 
@@ -4076,7 +4085,7 @@ function renderAnalytics() {
           <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">לידים</span><span style="color:var(--white);font-weight:600;">${lc}</span></div>
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
-          <span class="funnel-arrow-pct ${parseFloat(convPct) >= 5 ? 'pct-good' : parseFloat(convPct) >= 2 ? 'pct-mid' : 'pct-low'}" style="font-size:16px;">${convPct}%</span>
+          <span class="funnel-arrow-pct pct-neutral" style="font-size:16px;">${convPct}%</span>
           <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">המרה כוללת <span class="metric-info" data-tip="אחוז המבקרים הייחודיים שהשאירו פרטים (לידים ÷ מבקרים ייחודיים)">?</span></div>
         </div>
       </div>`;
@@ -4086,11 +4095,11 @@ function renderAnalytics() {
     return;
   }
 
-  // Standard funnel view
+  // Standard funnel view — CTA counts unique clickers, not total clicks
   const pageViews = events.filter(e => e.event_type === 'page_view').length;
   const uniqueVisitors = new Set(events.filter(e => e.event_type === 'page_view' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
   const lastFold = events.filter(e => e.event_type === 'last_fold_reach').length;
-  const ctaClicks = events.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta').length;
+  const ctaClicks = new Set(events.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
   const leadsCaptured = events.filter(e => e.event_type === 'lead_captured').length;
 
   if (pageViews === 0 && lastFold === 0 && ctaClicks === 0 && leadsCaptured === 0) {

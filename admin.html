@@ -665,7 +665,10 @@
         .map(e => e.event_data.visitor_id)
     ).size;
     const lastFold     = ev.filter(e => e.event_type === 'last_fold_reach').length;
-    const ctaClicks    = ev.filter(e => e.event_type === 'button_click' && (e.event_data?.button === 'cta' || e.event_data?.button === 'hero_cta')).length;
+    const ctaClicks    = new Set(
+      ev.filter(e => e.event_type === 'button_click' && (e.event_data?.button === 'cta' || e.event_data?.button === 'hero_cta') && e.event_data?.visitor_id)
+        .map(e => e.event_data.visitor_id)
+    ).size;
     const leads        = allLeads.filter(l => l.source === src).length;
 
     // Legacy time_on_page — only fired by demos/ pages, not current LPs

@@ -660,10 +660,15 @@
   function funnelStats(src) {
     const ev = allEvents.filter(e => e.source === src);
     const pageViews    = ev.filter(e => e.event_type === 'page_view').length;
+    const uniqueVisitors = new Set(
+      ev.filter(e => e.event_type === 'page_view' && e.event_data?.visitor_id)
+        .map(e => e.event_data.visitor_id)
+    ).size;
     const lastFold     = ev.filter(e => e.event_type === 'last_fold_reach').length;
-    const ctaClicks    = ev.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'hero_cta').length;
+    const ctaClicks    = ev.filter(e => e.event_type === 'button_click' && (e.event_data?.button === 'cta' || e.event_data?.button === 'hero_cta')).length;
     const leads        = allLeads.filter(l => l.source === src).length;
 
+    // Legacy time_on_page — only fired by demos/ pages, not current LPs
     const timeSecs = ev
       .filter(e => e.event_type === 'time_on_page')
       .map(e => { try { return parseInt(e.event_data?.seconds ?? e.event_data, 10); } catch { return NaN; } })
@@ -676,7 +681,7 @@
       stdTime = Math.sqrt(variance);
     }
 
-    return { pageViews, lastFold, ctaClicks, leads, avgTime, stdTime };
+    return { pageViews, uniqueVisitors, lastFold, ctaClicks, leads, avgTime, stdTime };
   }
 
   function convPct(num, denom) {
@@ -698,8 +703,9 @@
   }
 
   function renderFunnelCard(cls, label, stats) {
-    const { pageViews, lastFold, ctaClicks, leads, avgTime, stdTime } = stats;
-    const c1 = convPct(lastFold, pageViews);
+    const { pageViews, uniqueVisitors, lastFold, ctaClicks, leads, avgTime, stdTime } = stats;
+    const c0 = convPct(uniqueVisitors, pageViews);
+    const c1 = convPct(lastFold, uniqueVisitors);
     const c2 = convPct(ctaClicks, lastFold);
     const c3 = convPct(leads, ctaClicks);
 
@@ -714,6 +720,11 @@
           <div class="funnel-step">
             <div class="fs-label">צפיות בדף</div>
             <div class="fs-value">${pageViews.toLocaleString()}</div>
+          </div>
+          ${convHtml(c0)}
+          <div class="funnel-step">
+            <div class="fs-label">מבקרים ייחודיים</div>
+            <div class="fs-value">${uniqueVisitors.toLocaleString()}</div>
           </div>
           ${convHtml(c1)}
           <div class="funnel-step">

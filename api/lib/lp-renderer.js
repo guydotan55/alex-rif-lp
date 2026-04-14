@@ -146,10 +146,25 @@ export function buildInjectedScript(projectId, variantId, testId, anonKey, supab
   var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   var sessionId = crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36));
 
+  // Persistent visitor_id — survives refreshes, so dashboard can count unique visitors
+  var visitorId;
+  try {
+    visitorId = localStorage.getItem('mlp_visitor_id');
+    if (!visitorId) {
+      visitorId = crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36));
+      localStorage.setItem('mlp_visitor_id', visitorId);
+    }
+  } catch (e) {
+    // Fallback if localStorage is blocked (private browsing, iframe, etc.)
+    visitorId = sessionId;
+  }
+
   function trackEvent(eventType, eventData) {
+    var data = eventData || {};
+    data.visitor_id = visitorId;
     var row = {
       event_type: eventType,
-      event_data: eventData || {},
+      event_data: data,
       source: "lp-builder",
       session_id: sessionId,
       project_id: PROJECT_ID
@@ -181,7 +196,10 @@ export function buildInjectedScript(projectId, variantId, testId, anonKey, supab
   document.addEventListener("click", function(e) {
     var el = e.target.closest('[data-cta], button[type="submit"], .cta-button, a.cta');
     if (el) {
+      var btnType = el.matches('button[type="submit"]') ? 'submit'
+                  : (el.matches('[data-cta], .cta-button, a.cta') ? 'cta' : 'other');
       trackEvent("button_click", {
+        button: btnType,
         text: (el.textContent || "").trim().slice(0, 100),
         tag: el.tagName,
         href: el.href || null

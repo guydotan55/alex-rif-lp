@@ -2650,11 +2650,12 @@ function renderTestAnalytics() {
   // Calculate metrics per variant
   const metrics = Object.entries(groups).map(([vid, g]) => {
     const pv = g.events.filter(e => e.event_type === 'page_view').length;
+    const uv = new Set(g.events.filter(e => e.event_type === 'page_view' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
     const lf = g.events.filter(e => e.event_type === 'last_fold_reach').length;
-    const cc = g.events.filter(e => e.event_type === 'button_click').length;
+    const cc = g.events.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta').length;
     const lc = g.events.filter(e => e.event_type === 'lead_captured').length;
     const convPct = pv > 0 ? (lc / pv * 100) : 0;
-    return { vid, label: g.label, name: g.projectName, pv, lf, cc, lc, convPct };
+    return { vid, label: g.label, name: g.projectName, pv, uv, lf, cc, lc, convPct };
   });
 
   // Find leader
@@ -2687,7 +2688,8 @@ function renderTestAnalytics() {
       <div style="font-weight:700;color:var(--gold);margin-bottom:4px;text-align:center;">${esc(m.label)}</div>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;text-align:center;">${esc(m.name)}</div>
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <div class="metric-row"><span class="metric-label">צפיות <span class="metric-info" data-tip="כמה אנשים נכנסו לדף">?</span></span><span style="color:var(--white);font-weight:600;">${m.pv}</span></div>
+        <div class="metric-row"><span class="metric-label">צפיות <span class="metric-info" data-tip="סך טעינות הדף (רענון = צפייה נוספת)">?</span></span><span style="color:var(--white);font-weight:600;">${m.pv}</span></div>
+        <div class="metric-row"><span class="metric-label">מבקרים ייחודיים <span class="metric-info" data-tip="אנשים שונים שביקרו (נספרים פעם אחת גם אם חזרו)">?</span></span><span style="color:var(--white);font-weight:600;">${m.uv}</span></div>
         <div class="metric-row"><span class="metric-label">סוף דף <span class="metric-info" data-tip="כמה גללו עד סוף הדף">?</span></span><span style="color:var(--white);font-weight:600;">${m.lf}</span></div>
         <div class="metric-row"><span class="metric-label">CTA <span class="metric-info" data-tip="כמה לחצו על כפתור הפעולה">?</span></span><span style="color:var(--white);font-weight:600;">${m.cc}</span></div>
         <div class="metric-row"><span class="metric-label">לידים <span class="metric-info" data-tip="כמה השאירו פרטים בטופס">?</span></span><span style="color:var(--white);font-weight:600;">${m.lc}</span></div>
@@ -4004,8 +4006,9 @@ function renderAnalytics() {
     Object.entries(variantGroups).forEach(([vid, group]) => {
       const evts = group.events;
       const pv = evts.filter(e => e.event_type === 'page_view').length;
+      const uv = new Set(evts.filter(e => e.event_type === 'page_view' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
       const lf = evts.filter(e => e.event_type === 'last_fold_reach').length;
-      const cc = evts.filter(e => e.event_type === 'button_click').length;
+      const cc = evts.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta').length;
       const lc = evts.filter(e => e.event_type === 'lead_captured').length;
       const convPct = pv > 0 ? (lc / pv * 100).toFixed(1) : '0.0';
 
@@ -4013,6 +4016,7 @@ function renderAnalytics() {
         <div style="font-weight:700;color:var(--gold);margin-bottom:12px;text-align:center;">${esc(group.name)}</div>
         <div style="display:flex;flex-direction:column;gap:8px;">
           <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">צפיות</span><span style="color:var(--white);font-weight:600;">${pv}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">מבקרים ייחודיים</span><span style="color:var(--white);font-weight:600;">${uv}</span></div>
           <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">סוף דף</span><span style="color:var(--white);font-weight:600;">${lf}</span></div>
           <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">CTA</span><span style="color:var(--white);font-weight:600;">${cc}</span></div>
           <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-dim);">לידים</span><span style="color:var(--white);font-weight:600;">${lc}</span></div>
@@ -4030,8 +4034,9 @@ function renderAnalytics() {
 
   // Standard funnel view
   const pageViews = events.filter(e => e.event_type === 'page_view').length;
+  const uniqueVisitors = new Set(events.filter(e => e.event_type === 'page_view' && e.event_data?.visitor_id).map(e => e.event_data.visitor_id)).size;
   const lastFold = events.filter(e => e.event_type === 'last_fold_reach').length;
-  const ctaClicks = events.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'hero_cta').length;
+  const ctaClicks = events.filter(e => e.event_type === 'button_click' && e.event_data?.button === 'cta').length;
   const leadsCaptured = events.filter(e => e.event_type === 'lead_captured').length;
 
   if (pageViews === 0 && lastFold === 0 && ctaClicks === 0 && leadsCaptured === 0) {
@@ -4043,13 +4048,15 @@ function renderAnalytics() {
 
   const steps = [
     { label: 'צפיות בדף', count: pageViews, color: 'rgba(245, 200, 66, 0.25)', textColor: 'var(--gold)' },
+    { label: 'מבקרים ייחודיים', count: uniqueVisitors, color: 'rgba(245, 200, 66, 0.15)', textColor: 'var(--gold)' },
     { label: 'הגיע לסוף הדף', count: lastFold, color: 'rgba(100, 200, 255, 0.2)', textColor: '#7dd3fc' },
     { label: 'לחיצה על CTA', count: ctaClicks, color: 'rgba(160, 120, 255, 0.2)', textColor: '#c4b5fd' },
     { label: 'ליד נלכד', count: leadsCaptured, color: 'rgba(76, 175, 80, 0.2)', textColor: '#81c784' }
   ];
 
   const pcts = [
-    pct(lastFold, pageViews),
+    pct(uniqueVisitors, pageViews),
+    pct(lastFold, uniqueVisitors),
     pct(ctaClicks, lastFold),
     pct(leadsCaptured, ctaClicks)
   ];

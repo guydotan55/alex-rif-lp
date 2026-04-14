@@ -2551,17 +2551,30 @@ async function selectTest(testId) {
   // Render weight bar
   renderTestWeightsBar();
 
-  // Load analytics events for this test
-  const { data: evData } = await sb.from('analytics_events')
-    .select('event_type, event_data, created_at, variant_id, test_id')
-    .eq('test_id', testId);
-  testEvents = evData || [];
+  // Match events for this test. For "split" mode traffic (/test/:slug), events have test_id set.
+  // For "separate" mode traffic (/lp/:slug), events have NO test_id — match by variant_id
+  // from the test's variants, filtered to events created at/after the test was created.
+  const testVariantIds = testVariants.map(tv => tv.variant_id);
+  const testStartedAt = selectedTest?.created_at;
 
-  // Load leads for this test
-  const { data: ldData } = await sb.from('leads')
-    .select('id, email, created_at, variant_id, test_id')
-    .eq('test_id', testId);
-  testLeads = ldData || [];
+  let testEventsData = [];
+  let testLeadsData = [];
+  if (testVariantIds.length > 0 && testStartedAt) {
+    const [evRes, ldRes] = await Promise.all([
+      sb.from('analytics_events')
+        .select('event_type, event_data, created_at, variant_id, test_id')
+        .in('variant_id', testVariantIds)
+        .gte('created_at', testStartedAt),
+      sb.from('leads')
+        .select('id, email, created_at, variant_id, test_id')
+        .in('variant_id', testVariantIds)
+        .gte('created_at', testStartedAt),
+    ]);
+    testEventsData = evRes.data || [];
+    testLeadsData = ldRes.data || [];
+  }
+  testEvents = testEventsData;
+  testLeads = testLeadsData;
 
   renderTestAnalytics();
   renderTestLeads();

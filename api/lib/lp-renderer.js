@@ -116,10 +116,11 @@ export function buildInjectedScript(projectId, variantId, testId, anonKey, supab
         // Server-side CAPI event (deduped via eventId)
         var fbcCookie = (document.cookie.match(/(?:^|;\\s*)_fbc=([^;]*)/) || [])[1] || "";
         var fbpCookie = (document.cookie.match(/(?:^|;\\s*)_fbp=([^;]*)/) || [])[1] || "";
-        fetch("/api/meta-capi", {
+        fetch("/api/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            action: "meta_capi",
             event_name: "CompleteRegistration",
             event_id: eventId,
             email: email,

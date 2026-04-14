@@ -3,6 +3,7 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const META_PIXEL_ID = process.env.META_PIXEL_ID || "";
 
 export function escapeHtml(str) {
   if (!str) return "";
@@ -89,7 +90,45 @@ export function applyImageOverrides(html, imageOverrides) {
  * Build the client-side analytics + form script.
  * testId is nullable — only set when served via test URL.
  */
-export function buildInjectedScript(projectId, variantId, testId, anonKey, supabaseUrl, emailEnabled) {
+export function buildInjectedScript(projectId, variantId, testId, anonKey, supabaseUrl, emailEnabled, metaPixelId) {
+  // Build Meta Pixel snippet (only if pixel ID is configured)
+  const metaPixelSnippet = metaPixelId ? `
+  <!-- Meta Pixel -->
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+  document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '${metaPixelId}');
+  fbq('track', 'PageView');` : "";
+
+  // Build Meta CAPI + Pixel event firing code
+  const metaEventCode = metaPixelId ? `
+        // --- Meta: CompleteRegistration (Pixel + CAPI) ---
+        var eventId = sessionId + "_" + Date.now();
+        // Browser-side Pixel event
+        if (typeof fbq === "function") {
+          fbq('track', 'CompleteRegistration', {
+            content_name: PROJECT_ID,
+            status: 'complete'
+          }, { eventID: eventId });
+        }
+        // Server-side CAPI event (deduped via eventId)
+        var fbcCookie = (document.cookie.match(/(?:^|;\\s*)_fbc=([^;]*)/) || [])[1] || "";
+        var fbpCookie = (document.cookie.match(/(?:^|;\\s*)_fbp=([^;]*)/) || [])[1] || "";
+        fetch("/api/meta-capi", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event_name: "CompleteRegistration",
+            event_id: eventId,
+            email: email,
+            source_url: window.location.href,
+            fbc: fbcCookie,
+            fbp: fbpCookie
+          })
+        }).catch(function() {});` : "";
+
   return `
 <!-- LP Builder: Analytics & Form Handling -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -101,6 +140,7 @@ export function buildInjectedScript(projectId, variantId, testId, anonKey, supab
   var VARIANT_ID = ${variantId ? `"${variantId}"` : "null"};
   var TEST_ID = ${testId ? `"${testId}"` : "null"};
   var EMAIL_ENABLED = ${emailEnabled ? "true" : "false"};
+  ${metaPixelSnippet}
 
   var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   var sessionId = crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36));
@@ -179,6 +219,7 @@ export function buildInjectedScript(projectId, variantId, testId, anonKey, supab
         }
 
         trackEvent("lead_captured", { email: email });
+        ${metaEventCode}
 
         if (EMAIL_ENABLED) {
           fetch("/api/send-email", {
@@ -270,7 +311,7 @@ export async function fetchAndRenderVariant(projectId, variantId, testId, projec
 
   const injectedScript = buildInjectedScript(
     projectId, variantId, testId,
-    SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled
+    SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled, META_PIXEL_ID
   );
 
   if (html.includes("</body>")) {

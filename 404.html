@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 - הדף לא נמצא</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0a1628;
+      color: #e0e0e0;
+      font-family: 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .container {
+      text-align: center;
+      padding: 40px 24px;
+    }
+    .code {
+      font-size: 96px;
+      font-weight: 900;
+      color: #f5c842;
+      line-height: 1;
+    }
+    .message {
+      font-size: 20px;
+      margin: 16px 0 32px;
+      opacity: 0.8;
+    }
+    .back-link {
+      display: inline-block;
+      padding: 12px 32px;
+      background: #f5c842;
+      color: #0a1628;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .back-link:hover { opacity: 0.9; }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <div class="code">404</div>
+    <div class="message">הדף שחיפשתם לא נמצא</div>
+    <a href="/dashboard" class="back-link">חזרה לדשבורד</a>
+  </div>
+</body>
+</html>

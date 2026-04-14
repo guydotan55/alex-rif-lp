@@ -1,6 +1,7 @@
 # Project-specific exclusions
 .claude/
 docs/plans/
+.DS_Store
 
 # Logs
 logs

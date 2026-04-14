@@ -5,6 +5,8 @@ import { verifyUser, canAccessProject } from "./lib/auth-helper.js";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "guydotan55@gmail.com";
+const APP_ORIGIN = process.env.APP_URL || "https://messaginglab-guydotan55s-projects.vercel.app";
 // ANTHROPIC_API_KEY is auto-read by the SDK
 
 /**
@@ -185,7 +187,7 @@ function stripMarkdownFences(text) {
  * Send admin notification email via Brevo (non-blocking, fire-and-forget).
  */
 function sendAdminNotification(project, userEmail) {
-  const adminEmail = "guydotan55@gmail.com";
+  const adminEmail = ADMIN_EMAIL;
 
   const slug = project.slug || "no-slug";
   const language = project.language || "unknown";
@@ -220,7 +222,7 @@ function sendAdminNotification(project, userEmail) {
 
 export default async function handler(req, res) {
   // CORS headers
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin", APP_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 

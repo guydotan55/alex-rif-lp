@@ -3,6 +3,23 @@ import { verifyUser, canAccessProject } from "./lib/auth-helper.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const APP_ORIGIN = process.env.APP_URL || "https://messaginglab-guydotan55s-projects.vercel.app";
+
+const ALLOWED_IMAGE_HOSTS = [
+  "images.pexels.com",
+  "generativelanguage.googleapis.com",
+  "storage.googleapis.com",
+];
+
+function isAllowedImageUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith(".supabase.co")) return true;
+    return ALLOWED_IMAGE_HOSTS.includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Cache an external image to Supabase Storage if not already cached.
@@ -11,6 +28,11 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 async function ensureCached(imageUrl, source, sourceMeta) {
   // Already in our storage — no caching needed
   if (imageUrl.includes(SUPABASE_URL)) return imageUrl;
+
+  // Only fetch from known image hosts (prevent SSRF)
+  if (!isAllowedImageUrl(imageUrl)) {
+    throw new Error("Image URL not from an allowed source");
+  }
 
   // Fetch and cache
   const res = await fetch(imageUrl);
@@ -50,7 +72,7 @@ async function ensureCached(imageUrl, source, sourceMeta) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin", APP_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(204).end();

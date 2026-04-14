@@ -2404,10 +2404,11 @@ async function remixField(btn, fieldName) {
   if (existingPicker) existingPicker.remove();
 
   try {
+    const { data: { session: remixSession } } = await sb.auth.getSession();
     const res = await fetch('/api/remix-answer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ field: apiField, answer: input.value, context })
+      body: JSON.stringify({ field: apiField, answer: input.value, context, access_token: remixSession?.access_token })
     });
 
     const data = await res.json();

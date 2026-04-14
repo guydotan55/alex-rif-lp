@@ -88,7 +88,6 @@ export default async function handler(req, res) {
       { headers: SB_HEADERS }
     );
     const saved = verifyRes.ok ? await verifyRes.json() : [];
-    console.log(`save-content: saved ${rows.length} items for variant ${variant_id}, verified ${saved.length} in DB`);
 
     return res.status(200).json({ ok: true, saved_count: saved.length });
   }

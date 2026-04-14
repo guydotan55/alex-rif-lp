@@ -1,6 +1,9 @@
 // Vercel Serverless Function — rewrites questionnaire answers via Claude API
 // Returns 2 variations: "keep style" (sharpened original voice) + "pro copy" (marketing copywriter)
 import Anthropic from "@anthropic-ai/sdk";
+import { verifyUser } from "./lib/auth-helper.js";
+
+const APP_ORIGIN = process.env.APP_URL || "https://messaginglab-guydotan55s-projects.vercel.app";
 
 const FIELD_PROMPTS = {
   what_you_do: {
@@ -79,7 +82,7 @@ const FIELD_PROMPTS = {
 
 export default async function handler(req, res) {
   // CORS headers
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin", APP_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -87,7 +90,11 @@ export default async function handler(req, res) {
   if (req.method !== "POST")
     return res.status(405).json({ error: "Method not allowed" });
 
-  const { field, answer, context } = req.body || {};
+  const { field, answer, context, access_token } = req.body || {};
+
+  // Verify authenticated user
+  const user = await verifyUser(access_token);
+  if (!user) return res.status(401).json({ error: "Invalid or missing access token" });
 
   if (!field || !answer) {
     return res

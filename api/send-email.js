@@ -2,9 +2,11 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const SENDER_EMAIL = process.env.SENDER_EMAIL || "libby.negev.ai@gmail.com";
+const APP_ORIGIN = process.env.APP_URL || "https://messaginglab-guydotan55s-projects.vercel.app";
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin", APP_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -61,7 +63,7 @@ export default async function handler(req, res) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          sender: { name: senderName, email: "libby.negev.ai@gmail.com" },
+          sender: { name: senderName, email: SENDER_EMAIL },
           to: [{ email }],
           subject,
           htmlContent: bodyHtml,
@@ -127,7 +129,7 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        sender: { name: "צ׳יבורשקה בישראל", email: "libby.negev.ai@gmail.com" },
+        sender: { name: "צ׳יבורשקה בישראל", email: SENDER_EMAIL },
         to: [{ email }],
         subject,
         htmlContent: bodyHtml,

@@ -1879,6 +1879,26 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Pagination helper: PostgREST caps responses at 1,000 rows by default.
+// Pass a factory that returns a fresh builder each call (Supabase builders mutate,
+// so re-using one across .range() calls breaks). Adds a stable .order() for paging.
+async function fetchAllRows(builderFactory, pageSize = 1000) {
+  const all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await builderFactory()
+      .order('created_at', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    all.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+    if (from >= 50000) break; // safety cap
+  }
+  return all;
+}
+
 // ── State ─────────────────────────────────────────────────
 let projects = [];
 let selectedProject = null;
@@ -2574,18 +2594,16 @@ async function selectTest(testId) {
   let testEventsData = [];
   let testLeadsData = [];
   if (testVariantIds.length > 0 && testStartedAt) {
-    const [evRes, ldRes] = await Promise.all([
-      sb.from('analytics_events')
+    [testEventsData, testLeadsData] = await Promise.all([
+      fetchAllRows(() => sb.from('analytics_events')
         .select('event_type, event_data, created_at, variant_id, test_id')
         .in('variant_id', testVariantIds)
-        .gte('created_at', testStartedAt),
-      sb.from('leads')
+        .gte('created_at', testStartedAt)),
+      fetchAllRows(() => sb.from('leads')
         .select('id, email, created_at, variant_id, test_id')
         .in('variant_id', testVariantIds)
-        .gte('created_at', testStartedAt),
+        .gte('created_at', testStartedAt)),
     ]);
-    testEventsData = evRes.data || [];
-    testLeadsData = ldRes.data || [];
   }
   testEvents = testEventsData;
   testLeads = testLeadsData;
@@ -3995,9 +4013,14 @@ async function loadAnalytics() {
   const container = document.getElementById('analytics-content');
   container.innerHTML = '<div class="loading-block"><div class="small-spin"></div> טוען אנליטיקס...</div>';
 
-  const { data, error } = await sb.from('analytics_events')
-    .select('event_type,event_data,created_at,variant_id')
-    .eq('project_id', selectedProject.id);
+  let data, error;
+  try {
+    data = await fetchAllRows(() => sb.from('analytics_events')
+      .select('event_type,event_data,created_at,variant_id')
+      .eq('project_id', selectedProject.id));
+  } catch (e) {
+    error = e;
+  }
 
   if (error) {
     container.innerHTML = '<div class="no-analytics">שגיאה בטעינת הנתונים</div>';

@@ -3010,8 +3010,12 @@ async function toggleTestStatus() {
 
   const newStatus = selectedTest.status === 'running' ? 'draft' : 'running';
 
-  // If activating, verify all variant projects are published
+  // If activating, verify all variant projects are published AND planner inputs are set
   if (newStatus === 'running') {
+    if (!selectedTest.target_sample_size) {
+      alert('הטסט הזה נוצר לפני הוספת תכנון התקציב. ערוך אותו והוסף את ערכי התכנון לפני ההפעלה.');
+      return;
+    }
     for (const tv of testVariants) {
       const { data: variant } = await sb.from('project_variants')
         .select('status')
@@ -3025,14 +3029,40 @@ async function toggleTestStatus() {
     }
   }
 
+  const updates = { status: newStatus, updated_at: new Date().toISOString() };
+  if (newStatus === 'running' && !selectedTest.started_at) {
+    updates.started_at = new Date().toISOString();
+  }
+
   const { error } = await sb.from('tests')
-    .update({ status: newStatus, updated_at: new Date().toISOString() })
+    .update(updates)
     .eq('id', selectedTest.id);
 
   if (error) {
     console.error('Toggle test status error:', error);
     alert('שגיאה בעדכון סטטוס הטסט');
     return;
+  }
+
+  // Fire kickoff email on first activation (idempotent: only if kickoff_sent_at IS NULL)
+  if (newStatus === 'running' && !selectedTest.kickoff_sent_at) {
+    try {
+      const resp = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'test_kickoff', test_id: selectedTest.id }),
+      });
+      if (resp.ok) {
+        await sb.from('tests').update({ kickoff_sent_at: new Date().toISOString() }).eq('id', selectedTest.id);
+      } else {
+        const errBody = await resp.json().catch(() => ({}));
+        console.error('Kickoff email failed:', resp.status, errBody);
+        // Non-blocking: test is running, user already has dashboard. Show toast.
+        alert('הטסט פעיל. שליחת מייל פתיחה נכשלה — בדוק לוגים.');
+      }
+    } catch (err) {
+      console.error('Kickoff email exception:', err);
+    }
   }
 
   selectedTest.status = newStatus;

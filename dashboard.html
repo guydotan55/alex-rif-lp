@@ -2594,7 +2594,11 @@ function _updateActivateGating() {
 
 // Reset cache when modal opens / closes — must be called from the existing
 // modal open + close functions in the next task.
-function _plannerResetCache() { _plannerVelocityCache = null; }
+function _plannerResetCache() {
+  _plannerVelocityCache = null;
+  // Refresh button-gating state on modal lifecycle (M-2 fix from final review)
+  if (typeof _updateActivateGating === 'function') _updateActivateGating();
+}
 
 async function createTest() {
   const name = document.getElementById('test-name-input').value.trim();

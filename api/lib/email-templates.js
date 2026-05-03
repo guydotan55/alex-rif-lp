@@ -45,8 +45,7 @@ function btn(text, href) {
 export function renderKickoffEmail(test, numVariants, daysEstimate) {
   const totalVisitors = test.target_sample_size * numVariants;
   const budget = totalVisitors * Number(test.expected_cpc);
-  const testKey = test.slug || test.id || '';
-  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard${testKey ? `?test=${encodeURIComponent(testKey)}` : ''}`;
+  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard`;
 
   const subject = `הטסט עלה לאוויר — הנה התוכנית | ${test.name}`;
   const html = SHELL_OPEN + `
@@ -89,8 +88,7 @@ export function renderMilestoneEmail(test, milestone, variantCounts) {
   const copy = MILESTONE_COPY[milestone];
   if (!copy) throw new Error(`Unknown milestone: ${milestone}`);
   const totalVisitors = variantCounts.reduce((s, v) => s + v.visitors, 0);
-  const testKey = test.slug || test.id;
-  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard${testKey ? `?test=${encodeURIComponent(testKey)}` : ''}`;
+  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard`;
 
   // Build standings rows
   const sorted = [...variantCounts].sort((a, b) => (b.conversions / Math.max(1, b.visitors)) - (a.conversions / Math.max(1, a.visitors)));
@@ -133,9 +131,8 @@ export function renderMilestoneEmail(test, milestone, variantCounts) {
 }
 
 export function renderSummaryEmail(test, decision, variantCounts) {
-  const testKey = test.slug || test.id;
-  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard${testKey ? `?test=${encodeURIComponent(testKey)}` : ''}`;
-  const newTestUrl  = `${process.env.APP_URL || ''}/dashboard`;
+  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard`;
+  const newTestUrl   = `${process.env.APP_URL || ''}/dashboard`;
 
   const sorted = [...variantCounts].sort((a, b) => (b.conversions / Math.max(1, b.visitors)) - (a.conversions / Math.max(1, a.visitors)));
   const standingsRows = sorted.map(v => {
@@ -161,14 +158,15 @@ export function renderSummaryEmail(test, decision, variantCounts) {
   let subject, headline, body, cta;
 
   if (decision.verdict === 'WINNER_FOUND') {
-    const winnerName = escapeHtml(decision.winnerName || decision.winnerLabel || '');
+    const winnerNameRaw  = decision.winnerName || decision.winnerLabel || '';
+    const winnerNameHtml = escapeHtml(winnerNameRaw);
     const liftDisplay = Math.floor(decision.liftPct);
-    subject = `יש מנצח: ${winnerName} (+${liftDisplay}% שיפור) | ${test.name}`;
+    subject = `יש מנצח: ${winnerNameRaw} (+${liftDisplay}% שיפור) | ${test.name}`;
     headline = `<div style="background:#e8f5e9;border-right:4px solid #43a047;padding:14px;border-radius:8px;margin:0 0 14px;">
-      <div style="color:#2e7d32;font-size:18px;font-weight:700;margin-bottom:4px;">🏆 ${winnerName} מנצחת</div>
+      <div style="color:#2e7d32;font-size:18px;font-weight:700;margin-bottom:4px;">🏆 ${winnerNameHtml} מנצחת</div>
       <div style="color:#388e3c;font-size:14px;">שיפור של <span dir="ltr">+${liftDisplay}%</span> מעל הוורסיה השנייה.</div>
     </div>`;
-    body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">המלצה: החלף את ה-LP במטא ל-${winnerName} ועצור את הטסט.</p>`;
+    body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">המלצה: החלף את ה-LP במטא ל-${winnerNameHtml} ועצור את הטסט.</p>`;
     cta = btn('הכרז מנצח ועצור את הטסט', dashboardUrl);
   } else if (decision.verdict === 'PRACTICAL_TIE') {
     subject = `הטסט הסתיים — אין הבדל מובהק בין הוורסיות | ${test.name}`;
@@ -180,16 +178,17 @@ export function renderSummaryEmail(test, decision, variantCounts) {
     cta = btn('צור טסט חדש', newTestUrl);
   } else {
     // TRENDING_UNDERPOWERED
-    const winnerName = escapeHtml(decision.winnerName || decision.winnerLabel || '');
-    subject = `${winnerName} מוביל אך לא מובהק — להאריך או להחליט? | ${test.name}`;
+    const winnerNameRaw  = decision.winnerName || decision.winnerLabel || '';
+    const winnerNameHtml = escapeHtml(winnerNameRaw);
+    subject = `${winnerNameRaw} מוביל אך לא מובהק — להאריך או להחליט? | ${test.name}`;
     headline = `<div style="background:#fff8e1;border-right:4px solid #ffa000;padding:14px;border-radius:8px;margin:0 0 14px;">
-      <div style="color:#e65100;font-size:18px;font-weight:700;margin-bottom:4px;">${winnerName} מוביל — אך לא מובהק</div>
+      <div style="color:#e65100;font-size:18px;font-weight:700;margin-bottom:4px;">${winnerNameHtml} מוביל — אך לא מובהק</div>
       <div style="color:#ef6c00;font-size:14px;">המגמה ברורה אבל אין מספיק נתונים לקבוע סופית.</div>
     </div>`;
     body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">אפשרויות:</p>
       <ul style="margin:0 0 14px;padding-right:18px;color:#444;font-size:13px;line-height:1.7;">
         <li>להאריך את הטסט ב-50% נוספים מהדגימה — סביר שתגיע למובהקות.</li>
-        <li>להחליט לפי המגמה ולעלות עם ${winnerName} עכשיו.</li>
+        <li>להחליט לפי המגמה ולעלות עם ${winnerNameHtml} עכשיו.</li>
         <li>לעצור ולנסות וריאציה חדשה לגמרי.</li>
       </ul>`;
     cta = btn('פתח את לוח הבקרה', dashboardUrl);
@@ -201,8 +200,7 @@ export function renderSummaryEmail(test, decision, variantCounts) {
 }
 
 export function renderStallAlertEmail(test) {
-  const testKey = test.slug || test.id;
-  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard${testKey ? `?test=${encodeURIComponent(testKey)}` : ''}`;
+  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard`;
   const subject = `עצירה: 0 מבקרים ב-48 השעות האחרונות | ${test.name}`;
   const html = SHELL_OPEN + `
     <div style="background:#fff3e0;border-right:4px solid #ff9800;padding:14px;border-radius:8px;margin:0 0 14px;">

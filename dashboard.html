@@ -2293,6 +2293,7 @@ function setTestMode(mode) {
 }
 
 function showCreateTestModal() {
+  _plannerResetCache();
   testEditMode = false;
   testModalSelectedLPs = [];
   testModalMode = 'split';
@@ -2336,11 +2337,13 @@ function showCreateTestModal() {
 }
 
 function closeCreateTestModal() {
+  _plannerResetCache();
   document.getElementById('create-test-modal').style.display = 'none';
   testEditMode = false;
 }
 
 async function showEditTestModal() {
+  _plannerResetCache();
   if (!selectedTest || selectedTest.status !== 'draft') return;
   testEditMode = true;
   testModalSelectedLPs = [];
@@ -2468,6 +2471,119 @@ function updateWeightControls() {
     </div>`;
   }).join('');
 }
+
+// ── Test Planner / Budget Calculator ─────────────────────
+// Mirror of api/lib/bayes.js sampleSizePerVariant — pure JS, runs in browser.
+// Keep these two implementations in sync if you change the formula.
+function _quantileNormalForPlanner(p) {
+  const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  const b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+  const c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  const d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  const pLow=0.02425, pHigh=1-pLow;
+  let q,r;
+  if (p<pLow){q=Math.sqrt(-2*Math.log(p));return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  if (p<=pHigh){q=p-0.5;r=q*q;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
+  q=Math.sqrt(-2*Math.log(1-p));return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+}
+function plannerSampleSize(baselineCr, mde, numVariants) {
+  const k = numVariants - 1;
+  const alpha = k > 1 ? 0.05 / k : 0.05;
+  const z_a = _quantileNormalForPlanner(1 - alpha / 2);
+  const z_b = 0.841621;
+  const p1 = baselineCr;
+  const p2 = baselineCr * (1 + mde);
+  if (p2 >= 1) return null;
+  const pBar = (p1 + p2) / 2;
+  const num = Math.pow(z_a*Math.sqrt(2*pBar*(1-pBar)) + z_b*Math.sqrt(p1*(1-p1)+p2*(1-p2)), 2);
+  return Math.ceil(num / Math.pow(p2 - p1, 2));
+}
+
+// Compute the community's recent visitor-velocity (visitors/day) for the
+// days-estimate. Returns {velocity, isFallback}. Fallback = 100/day.
+async function plannerCommunityVelocity(communityId) {
+  if (!communityId) return { velocity: 100, isFallback: true };
+  const since = new Date(Date.now() - 14 * 86400 * 1000).toISOString();
+  const { data, error } = await sb
+    .from('analytics_events')
+    .select('event_data,created_at,projects!inner(community_id)', { count: 'exact', head: false })
+    .eq('event_type', 'pageview')
+    .eq('projects.community_id', communityId)
+    .gte('created_at', since)
+    .limit(10000);
+  if (error || !data || data.length === 0) return { velocity: 100, isFallback: true };
+  const visitors = new Set(data.map(r => r.event_data?.visitor_id).filter(Boolean));
+  return { velocity: Math.max(1, Math.round(visitors.size / 14)), isFallback: false };
+}
+
+// Cached velocity per modal-open so we don't re-query on every keystroke.
+let _plannerVelocityCache = null;
+
+async function _ensurePlannerVelocity() {
+  if (_plannerVelocityCache) return _plannerVelocityCache;
+  const firstProject = projects.find(p => p.id === testModalSelectedLPs[0]?.projectId);
+  _plannerVelocityCache = await plannerCommunityVelocity(firstProject?.community_id);
+  return _plannerVelocityCache;
+}
+
+async function updatePlannerResults() {
+  const cvrEl = document.getElementById('planner-baseline-cvr');
+  const mdeEl = document.getElementById('planner-mde');
+  const cpcEl = document.getElementById('planner-cpc');
+  const resultsEl = document.getElementById('planner-results');
+  const errorEl = document.getElementById('planner-error');
+  const numVariants = Math.max(2, testModalSelectedLPs.length || 2);
+
+  const baselineCr = parseFloat(cvrEl.value) / 100;
+  const mde = parseFloat(mdeEl.value) / 100;
+  const cpc = parseFloat(cpcEl.value);
+
+  errorEl.style.display = 'none';
+  if (!(baselineCr > 0 && baselineCr < 1) || !(mde > 0) || !(cpc > 0)) {
+    resultsEl.style.display = 'none';
+    _updateActivateGating();
+    return;
+  }
+  const n = plannerSampleSize(baselineCr, mde, numVariants);
+  if (n === null) {
+    errorEl.textContent = 'השיפור גדול מדי עבור אחוז ההמרה הצפוי. הקטן את ה-MDE או הגדל את הבסיס.';
+    errorEl.style.display = '';
+    resultsEl.style.display = 'none';
+    _updateActivateGating();
+    return;
+  }
+  const totalVisitors = n * numVariants;
+  const budget = Math.round(totalVisitors * cpc);
+  const { velocity, isFallback } = await _ensurePlannerVelocity();
+  const days = Math.max(1, Math.ceil(totalVisitors / velocity));
+
+  document.getElementById('planner-required-n').textContent = n.toLocaleString('he-IL');
+  document.getElementById('planner-budget').textContent = budget.toLocaleString('he-IL');
+  document.getElementById('planner-days').textContent = days.toLocaleString('he-IL');
+  document.getElementById('planner-velocity-note').textContent =
+    isFallback
+      ? 'מבוסס על הערכה (100 מבקרים/יום). עדכן בהתאם לקצב התנועה הצפוי.'
+      : `מבוסס על ${velocity.toLocaleString('he-IL')} מבקרים/יום בקהילה הזו ב-14 הימים האחרונים.`;
+  resultsEl.style.display = '';
+  _updateActivateGating();
+}
+
+function _updateActivateGating() {
+  const btn = document.getElementById('btn-create-test-submit');
+  if (!btn) return;
+  const cvr = parseFloat(document.getElementById('planner-baseline-cvr').value) / 100;
+  const mde = parseFloat(document.getElementById('planner-mde').value) / 100;
+  const cpc = parseFloat(document.getElementById('planner-cpc').value);
+  const numVariants = testModalSelectedLPs.length;
+  const ok = cvr > 0 && cvr < 1 && mde > 0 && cpc > 0 && numVariants >= 2;
+  btn.disabled = !ok;
+  btn.style.opacity = ok ? '1' : '0.5';
+  btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+}
+
+// Reset cache when modal opens / closes — must be called from the existing
+// modal open + close functions in the next task.
+function _plannerResetCache() { _plannerVelocityCache = null; }
 
 async function createTest() {
   const name = document.getElementById('test-name-input').value.trim();

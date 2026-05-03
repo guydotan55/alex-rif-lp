@@ -47,3 +47,42 @@ test('sampleBeta(10, 90) mean ≈ 0.10', () => {
   const mean = draws.reduce((s, x) => s + x, 0) / draws.length;
   assert.ok(Math.abs(mean - 0.10) < 0.02, `mean ${mean} not near 0.10`);
 });
+
+import { computeWinnerProbabilities, computeExpectedLoss } from './bayes.js';
+
+test('computeWinnerProbabilities: identical inputs → roughly equal probabilities', () => {
+  const draws = [
+    sampleBeta(50, 950, 5000),  // ~5%
+    sampleBeta(50, 950, 5000),  // ~5%
+  ];
+  const p = computeWinnerProbabilities(draws);
+  assert.equal(p.length, 2);
+  assert.ok(Math.abs(p[0] - 0.5) < 0.06, `p[0]=${p[0]} not near 0.5`);
+  assert.ok(Math.abs(p[0] + p[1] - 1) < 1e-9, 'probs should sum to 1');
+});
+
+test('computeWinnerProbabilities: clear winner → P(winner) > 0.95', () => {
+  const draws = [
+    sampleBeta(30, 970, 5000),   // ~3%
+    sampleBeta(80, 920, 5000),   // ~8% — clear winner
+  ];
+  const p = computeWinnerProbabilities(draws);
+  assert.ok(p[1] > 0.95, `expected p[1] > 0.95, got ${p[1]}`);
+});
+
+test('computeExpectedLoss: clear winner → loss for winner near 0', () => {
+  const draws = [
+    sampleBeta(30, 970, 5000),
+    sampleBeta(80, 920, 5000),
+  ];
+  const loss = computeExpectedLoss(draws);
+  assert.equal(loss.length, 2);
+  assert.ok(loss[1] < 0.005, `winner's expected loss should be near 0, got ${loss[1]}`);
+  assert.ok(loss[0] > 0.02, `loser's expected loss should be material, got ${loss[0]}`);
+});
+
+test('computeExpectedLoss: identical arms → losses similar and small', () => {
+  const draws = [sampleBeta(50, 950, 5000), sampleBeta(50, 950, 5000)];
+  const loss = computeExpectedLoss(draws);
+  for (const l of loss) assert.ok(l < 0.01, `loss ${l} unexpectedly large`);
+});

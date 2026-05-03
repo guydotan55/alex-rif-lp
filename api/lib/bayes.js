@@ -106,3 +106,45 @@ function sampleNormal() {
   while (u2 === 0) u2 = Math.random();
   return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
+
+/**
+ * Given an array of draw arrays (one per variant), return the probability
+ * that each variant is the best — i.e., P(variant_i has highest CR).
+ * Computed as the fraction of Monte Carlo trials where variant_i's draw
+ * is the maximum across all variants. Sums to 1.
+ */
+export function computeWinnerProbabilities(draws) {
+  const numVariants = draws.length;
+  const numDraws = draws[0].length;
+  const wins = new Array(numVariants).fill(0);
+  for (let t = 0; t < numDraws; t++) {
+    let bestIdx = 0;
+    let bestVal = draws[0][t];
+    for (let v = 1; v < numVariants; v++) {
+      if (draws[v][t] > bestVal) { bestVal = draws[v][t]; bestIdx = v; }
+    }
+    wins[bestIdx]++;
+  }
+  return wins.map(w => w / numDraws);
+}
+
+/**
+ * Expected loss for choosing each variant — the average regret if we
+ * declared variant_i the winner. Loss[i] = E[max(p_other) - p_i]+ averaged
+ * across draws where p_i is NOT the max. The chosen winner's expected loss
+ * should be near 0 (we'd rarely regret picking the actual best).
+ */
+export function computeExpectedLoss(draws) {
+  const numVariants = draws.length;
+  const numDraws = draws[0].length;
+  const loss = new Array(numVariants).fill(0);
+  for (let t = 0; t < numDraws; t++) {
+    let bestVal = draws[0][t];
+    for (let v = 1; v < numVariants; v++) if (draws[v][t] > bestVal) bestVal = draws[v][t];
+    for (let v = 0; v < numVariants; v++) {
+      const regret = Math.max(0, bestVal - draws[v][t]);
+      loss[v] += regret;
+    }
+  }
+  return loss.map(l => l / numDraws);
+}

@@ -1,5 +1,11 @@
 // Vercel Serverless Function — sends welcome email via Brevo + Meta CAPI events
 import crypto from "crypto";
+import {
+  renderKickoffEmail,
+  renderMilestoneEmail,
+  renderSummaryEmail,
+  renderStallAlertEmail,
+} from "./lib/email-templates.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -62,6 +68,111 @@ async function handleMetaCapi(req, res) {
   }
 }
 
+// ── Test-planner email helpers ─────────────────────────────
+
+async function fetchTestWithCreatorAndVariants(testId) {
+  const testRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/tests?id=eq.${testId}&select=*&limit=1`,
+    { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+  );
+  const testRows = await testRes.json();
+  const test = testRows && testRows[0];
+  if (!test) return { error: 'Test not found' };
+
+  const creatorRes = await fetch(
+    `${SUPABASE_URL}/auth/v1/admin/users/${test.created_by}`,
+    { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+  );
+  const creator = await creatorRes.json();
+  if (!creator?.email) return { error: 'Test creator has no email' };
+
+  const tvRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${testId}&select=id,variant_id,label,projects(name)`,
+    { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+  );
+  const testVariants = await tvRes.json();
+
+  return { test, creatorEmail: creator.email, testVariants };
+}
+
+async function fetchVariantCounts(testId) {
+  // Fetch all events for this test, then aggregate per variant in JS.
+  // Uses pagination to bypass PostgREST's 1000-row cap.
+  let allRows = [];
+  let from = 0;
+  const PAGE = 1000;
+  while (true) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/analytics_events?test_id=eq.${testId}&select=variant_id,event_type,event_data&limit=${PAGE}&offset=${from}`,
+      { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+    );
+    const rows = await res.json();
+    if (!rows || !rows.length) break;
+    allRows = allRows.concat(rows);
+    if (rows.length < PAGE) break;
+    from += PAGE;
+  }
+  const byVariant = new Map();
+  for (const row of allRows) {
+    if (!row.variant_id) continue;
+    const v = byVariant.get(row.variant_id) || { variant_id: row.variant_id, visitors: new Set(), conversions: 0 };
+    if (row.event_type === 'pageview' && row.event_data?.visitor_id) v.visitors.add(row.event_data.visitor_id);
+    if (row.event_type === 'lead_captured') v.conversions += 1;
+    byVariant.set(row.variant_id, v);
+  }
+  return Array.from(byVariant.values()).map(v => ({
+    variant_id: v.variant_id,
+    visitors: v.visitors.size,
+    conversions: v.conversions,
+  }));
+}
+
+async function sendBrevo(to, subject, html, text, senderName = 'Messaging Lab') {
+  const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': BREVO_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: { name: senderName, email: SENDER_EMAIL },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    }),
+  });
+  const data = await brevoRes.json();
+  if (!brevoRes.ok) {
+    console.error('Brevo error:', data);
+    throw new Error(`Brevo ${brevoRes.status}: ${JSON.stringify(data)}`);
+  }
+  return data;
+}
+
+async function handleTestKickoff(req, res) {
+  const { test_id } = req.body || {};
+  if (!test_id) return res.status(400).json({ error: 'test_id required' });
+  try {
+    const { test, creatorEmail, testVariants, error } = await fetchTestWithCreatorAndVariants(test_id);
+    if (error) return res.status(404).json({ error });
+    if (!test.target_sample_size) return res.status(400).json({ error: 'target_sample_size missing' });
+
+    // Days estimate: total visitors / 100 (we don't have community velocity server-side cheaply)
+    const totalVisitors = test.target_sample_size * Math.max(2, testVariants.length);
+    const daysEstimate = Math.max(1, Math.ceil(totalVisitors / 100));
+
+    const { subject, html, text } = renderKickoffEmail(test, Math.max(2, testVariants.length), daysEstimate);
+    const data = await sendBrevo(creatorEmail, subject, html, text);
+    return res.status(200).json({ success: true, messageId: data.messageId });
+  } catch (err) {
+    console.error('handleTestKickoff error:', err);
+    return res.status(500).json({ error: String(err.message || err) });
+  }
+}
+
+// Placeholder stubs — implemented in Tasks 14 and 15.
+async function handleTestMilestone(req, res) { return res.status(501).json({ error: 'not yet implemented' }); }
+async function handleTestSummary(req, res)   { return res.status(501).json({ error: 'not yet implemented' }); }
+async function handleTestStallAlert(req, res){ return res.status(501).json({ error: 'not yet implemented' }); }
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", APP_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -73,6 +184,19 @@ export default async function handler(req, res) {
   // Route: Meta CAPI event
   if (req.body?.action === "meta_capi") {
     return handleMetaCapi(req, res);
+  }
+
+  if (req.body?.action === 'test_kickoff') {
+    return handleTestKickoff(req, res);
+  }
+  if (req.body?.action === 'test_milestone') {
+    return handleTestMilestone(req, res);
+  }
+  if (req.body?.action === 'test_summary') {
+    return handleTestSummary(req, res);
+  }
+  if (req.body?.action === 'test_stall_alert') {
+    return handleTestStallAlert(req, res);
   }
 
   const { email, project_id } = req.body || {};

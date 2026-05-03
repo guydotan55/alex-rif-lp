@@ -193,13 +193,14 @@ async function handleTestMilestone(req, res) {
   }
 }
 async function handleTestSummary(req, res) {
-  const { test_id, verdict, winnerLabel, winnerName, liftPct } = req.body || {};
-  if (!test_id || !['WINNER_FOUND', 'PRACTICAL_TIE', 'TRENDING_UNDERPOWERED'].includes(verdict)) {
-    return res.status(400).json({ error: 'test_id + valid verdict required' });
-  }
+  const { test_id } = req.body || {};
+  if (!test_id) return res.status(400).json({ error: 'test_id required' });
   try {
     const { test, creatorEmail, testVariants, error } = await fetchTestWithCreatorAndVariants(test_id);
     if (error) return res.status(404).json({ error });
+    if (!test.summary_verdict || !['WINNER_FOUND', 'PRACTICAL_TIE', 'TRENDING_UNDERPOWERED'].includes(test.summary_verdict)) {
+      return res.status(400).json({ error: 'tests.summary_verdict not set or invalid; cron must persist verdict before send' });
+    }
 
     const counts = await fetchVariantCounts(test_id);
     const variantCountsWithName = testVariants.map(tv => {
@@ -207,7 +208,22 @@ async function handleTestSummary(req, res) {
       return { label: tv.label, name: tv.projects?.name || tv.label, visitors: c.visitors, conversions: c.conversions };
     });
 
-    const decision = { verdict, winnerLabel, winnerName, liftPct };
+    // Derive winner display name from persisted FK rather than trusting client
+    let winnerName = null, winnerLabel = null;
+    if (test.summary_winner_variant_id) {
+      const tv = testVariants.find(t => t.variant_id === test.summary_winner_variant_id);
+      if (tv) {
+        winnerLabel = tv.label;
+        winnerName = tv.projects?.name || tv.label;
+      }
+    }
+
+    const decision = {
+      verdict: test.summary_verdict,
+      winnerLabel,
+      winnerName,
+      liftPct: test.summary_lift_pct != null ? Number(test.summary_lift_pct) : 0,
+    };
     const { subject, html, text } = renderSummaryEmail(test, decision, variantCountsWithName);
     const data = await sendBrevo(creatorEmail, subject, html, text);
     return res.status(200).json({ success: true, messageId: data.messageId });

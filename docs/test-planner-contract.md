@@ -19,6 +19,9 @@ and email renderers in `api/lib/email-templates.js`).
 | `last_milestone_sent` | INT (default 0) | cron worker | one of {0, 25, 50, 75, 100} |
 | `stall_alert_sent_at` | TIMESTAMPTZ | cron worker | dedupe lock |
 | `summary_sent_at` | TIMESTAMPTZ | cron worker | dedupe lock; can fire pre-100% if WINNER_FOUND |
+| `summary_verdict` | TEXT (CHECK) | cron worker | `WINNER_FOUND` / `PRACTICAL_TIE` / `TRENDING_UNDERPOWERED` |
+| `summary_winner_variant_id` | UUID FK→project_variants | cron worker | NULL for PRACTICAL_TIE |
+| `summary_lift_pct` | NUMERIC(8,2) | cron worker | NULL for PRACTICAL_TIE |
 
 ## `/api/send-email` — new action discriminators
 

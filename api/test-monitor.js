@@ -87,9 +87,10 @@ export function pickEmailAction(test, decision) {
     if (test.summary_sent_at) return null;
     const payload = { verdict: decision.state };
     if (decision.leader) {
-      payload.winnerLabel = decision.leader.label || null;
-      payload.winnerName  = decision.leader.name  || null;
-      payload.liftPct     = decision.liftPct ?? 0;
+      payload.winnerLabel     = decision.leader.label      || null;
+      payload.winnerName      = decision.leader.name       || null;
+      payload.liftPct         = decision.liftPct           ?? 0;
+      payload.winnerVariantId = decision.leader.variant_id || null;
     }
     return { name: 'test_summary', payload };
   }
@@ -162,7 +163,12 @@ async function fetchTestVariantsAndCounts(testId) {
 async function markEmailSent(test, actionName, payload) {
   const updates = { updated_at: new Date().toISOString() };
   if (actionName === 'test_milestone') updates.last_milestone_sent = payload.milestone;
-  if (actionName === 'test_summary')   updates.summary_sent_at = new Date().toISOString();
+  if (actionName === 'test_summary') {
+    updates.summary_sent_at = new Date().toISOString();
+    updates.summary_verdict = payload.verdict;
+    if (payload.winnerVariantId) updates.summary_winner_variant_id = payload.winnerVariantId;
+    if (typeof payload.liftPct === 'number') updates.summary_lift_pct = payload.liftPct;
+  }
   if (actionName === 'test_stall_alert') updates.stall_alert_sent_at = new Date().toISOString();
 
   const res = await fetch(

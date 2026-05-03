@@ -169,7 +169,29 @@ async function handleTestKickoff(req, res) {
 }
 
 // Placeholder stubs — implemented in Tasks 14 and 15.
-async function handleTestMilestone(req, res) { return res.status(501).json({ error: 'not yet implemented' }); }
+async function handleTestMilestone(req, res) {
+  const { test_id, milestone } = req.body || {};
+  if (!test_id || ![25, 50, 75].includes(milestone)) {
+    return res.status(400).json({ error: 'test_id + milestone in {25,50,75} required' });
+  }
+  try {
+    const { test, creatorEmail, testVariants, error } = await fetchTestWithCreatorAndVariants(test_id);
+    if (error) return res.status(404).json({ error });
+
+    const counts = await fetchVariantCounts(test_id);
+    const variantCountsWithName = testVariants.map(tv => {
+      const c = counts.find(x => x.variant_id === tv.variant_id) || { visitors: 0, conversions: 0 };
+      return { label: tv.label, name: tv.projects?.name || tv.label, visitors: c.visitors, conversions: c.conversions };
+    });
+
+    const { subject, html, text } = renderMilestoneEmail(test, milestone, variantCountsWithName);
+    const data = await sendBrevo(creatorEmail, subject, html, text);
+    return res.status(200).json({ success: true, messageId: data.messageId });
+  } catch (err) {
+    console.error('handleTestMilestone error:', err);
+    return res.status(500).json({ error: String(err.message || err) });
+  }
+}
 async function handleTestSummary(req, res)   { return res.status(501).json({ error: 'not yet implemented' }); }
 async function handleTestStallAlert(req, res){ return res.status(501).json({ error: 'not yet implemented' }); }
 

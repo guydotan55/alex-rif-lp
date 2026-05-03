@@ -2919,19 +2919,32 @@ function renderTestAnalytics() {
     return { vid, label: g.label, name: g.projectName, pv, uv, lf, cc, lc, convPct };
   });
 
-  // Find leader — only call a winner when sample is meaningful AND lift is material
+  // Find leader — call a winner if (a) backend already sent the summary email,
+  // OR (b) the legacy heuristic is satisfied. (a) is the authoritative signal.
   const MIN_UV_PER_VARIANT = 30;
   const MIN_LEADS_PER_VARIANT = 5;
-  const MIN_RELATIVE_LIFT_PCT = 30; // 30%+ lift over runner-up
-  const hasEnoughData = metrics.every(m => m.uv >= MIN_UV_PER_VARIANT && m.lc >= MIN_LEADS_PER_VARIANT);
+  const MIN_RELATIVE_LIFT_PCT = 30;
   let leader = null;
-  if (hasEnoughData && metrics.length >= 2) {
-    const sorted = [...metrics].sort((a, b) => b.convPct - a.convPct);
-    const delta = sorted[0].convPct - sorted[1].convPct;
-    const lift = sorted[1].convPct > 0 ? (delta / sorted[1].convPct) * 100 : Infinity;
-    if (lift >= MIN_RELATIVE_LIFT_PCT) {
+
+  if (selectedTest?.summary_sent_at) {
+    // Backend has decided — show the empirical leader regardless of heuristic
+    if (metrics.length >= 2) {
+      const sorted = [...metrics].sort((a, b) => b.convPct - a.convPct);
+      const delta = sorted[0].convPct - sorted[1].convPct;
+      const lift = sorted[1].convPct > 0 ? (delta / sorted[1].convPct) * 100 : Infinity;
       const deltaPct = Number.isFinite(lift) ? lift.toFixed(0) : '∞';
       leader = { vid: sorted[0].vid, deltaPct };
+    }
+  } else {
+    const hasEnoughData = metrics.every(m => m.uv >= MIN_UV_PER_VARIANT && m.lc >= MIN_LEADS_PER_VARIANT);
+    if (hasEnoughData && metrics.length >= 2) {
+      const sorted = [...metrics].sort((a, b) => b.convPct - a.convPct);
+      const delta = sorted[0].convPct - sorted[1].convPct;
+      const lift = sorted[1].convPct > 0 ? (delta / sorted[1].convPct) * 100 : Infinity;
+      if (lift >= MIN_RELATIVE_LIFT_PCT) {
+        const deltaPct = Number.isFinite(lift) ? lift.toFixed(0) : '∞';
+        leader = { vid: sorted[0].vid, deltaPct };
+      }
     }
   }
 

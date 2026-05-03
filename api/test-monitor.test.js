@@ -75,3 +75,59 @@ test('decideState PRACTICAL_TIE at 100% with similar arms', () => {
   const d = decideState(baseTest, counts);
   assert.ok(['PRACTICAL_TIE', 'TRENDING_UNDERPOWERED'].includes(d.state));
 });
+
+// ── pickEmailAction: precedence + idempotency ──────────────────────────────
+
+test('pickEmailAction: STALL precedence', () => {
+  const action = pickEmailAction(baseTest, { state: 'STALL', currentPct: 50 });
+  assert.deepEqual(action, { name: 'test_stall_alert', payload: {} });
+});
+
+test('pickEmailAction: skip stall if already sent', () => {
+  const t = { ...baseTest, stall_alert_sent_at: new Date().toISOString() };
+  const action = pickEmailAction(t, { state: 'STALL', currentPct: 50 });
+  assert.equal(action, null);
+});
+
+test('pickEmailAction: WINNER_FOUND → test_summary with payload', () => {
+  const decision = {
+    state: 'WINNER_FOUND', currentPct: 60,
+    leader: { label: 'B', name: 'Variant B' },
+    liftPct: 45.0,
+  };
+  const action = pickEmailAction(baseTest, decision);
+  assert.equal(action.name, 'test_summary');
+  assert.equal(action.payload.verdict, 'WINNER_FOUND');
+  assert.equal(action.payload.winnerName, 'Variant B');
+  assert.equal(action.payload.liftPct, 45);
+});
+
+test('pickEmailAction: PRACTICAL_TIE → test_summary, no winner fields needed', () => {
+  const action = pickEmailAction(baseTest, { state: 'PRACTICAL_TIE', currentPct: 100 });
+  assert.equal(action.name, 'test_summary');
+  assert.equal(action.payload.verdict, 'PRACTICAL_TIE');
+});
+
+test('pickEmailAction: skip summary if already sent', () => {
+  const t = { ...baseTest, summary_sent_at: new Date().toISOString() };
+  const action = pickEmailAction(t, { state: 'WINNER_FOUND', currentPct: 60, leader: { label: 'A' } });
+  assert.equal(action, null);
+});
+
+test('pickEmailAction: 60% pct → 50 milestone (highest unsent)', () => {
+  const action = pickEmailAction(baseTest, { state: 'NORMAL', currentPct: 60 });
+  assert.equal(action.name, 'test_milestone');
+  assert.equal(action.payload.milestone, 50);
+});
+
+test('pickEmailAction: 80% pct with 50 already sent → 75 milestone', () => {
+  const t = { ...baseTest, last_milestone_sent: 50 };
+  const action = pickEmailAction(t, { state: 'NORMAL', currentPct: 80 });
+  assert.equal(action.payload.milestone, 75);
+});
+
+test('pickEmailAction: 80% pct with 75 already sent → null (waiting for 100% summary)', () => {
+  const t = { ...baseTest, last_milestone_sent: 75 };
+  const action = pickEmailAction(t, { state: 'NORMAL', currentPct: 80 });
+  assert.equal(action, null);
+});

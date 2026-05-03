@@ -78,13 +78,13 @@ function computeLiftPct(variantCounts, leaderIdx) {
 
 export function pickEmailAction(test, decision) {
   // Precedence: STALL > SUMMARY > MILESTONE
-  if (decision.state === 'STALL' && !test.stall_alert_sent_at) {
-    return { name: 'test_stall_alert', payload: {} };
+  // STALL: send once; if already sent, suppress everything else for this decision
+  if (decision.state === 'STALL') {
+    return test.stall_alert_sent_at ? null : { name: 'test_stall_alert', payload: {} };
   }
-  if (
-    ['WINNER_FOUND', 'PRACTICAL_TIE', 'TRENDING_UNDERPOWERED'].includes(decision.state) &&
-    !test.summary_sent_at
-  ) {
+  // Terminal states: send summary once; if already sent, nothing more to do
+  if (['WINNER_FOUND', 'PRACTICAL_TIE', 'TRENDING_UNDERPOWERED'].includes(decision.state)) {
+    if (test.summary_sent_at) return null;
     const payload = { verdict: decision.state };
     if (decision.leader) {
       payload.winnerLabel = decision.leader.label || null;

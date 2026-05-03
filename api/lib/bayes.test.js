@@ -23,3 +23,27 @@ test('sampleSizePerVariant: 4 variants gets larger n than 2 (Bonferroni)', () =>
   const n4 = sampleSizePerVariant(0.05, 0.20, 4);
   assert.ok(n4 > n2 * 1.2, `4-arm ${n4} should be >20% larger than 2-arm ${n2}`);
 });
+
+import { sampleBeta } from './bayes.js';
+
+test('sampleBeta(1,1) is uniform on [0,1] — mean ≈ 0.5, draws in range', () => {
+  const draws = sampleBeta(1, 1, 5000);
+  assert.equal(draws.length, 5000);
+  for (const x of draws) assert.ok(x >= 0 && x <= 1, `draw out of range: ${x}`);
+  const mean = draws.reduce((s, x) => s + x, 0) / draws.length;
+  assert.ok(Math.abs(mean - 0.5) < 0.03, `mean ${mean} not near 0.5`);
+});
+
+test('sampleBeta(50, 50) clusters near 0.5 (low variance)', () => {
+  const draws = sampleBeta(50, 50, 5000);
+  const mean = draws.reduce((s, x) => s + x, 0) / draws.length;
+  const variance = draws.reduce((s, x) => s + (x - mean) ** 2, 0) / draws.length;
+  assert.ok(Math.abs(mean - 0.5) < 0.02, `mean ${mean}`);
+  assert.ok(variance < 0.005, `variance ${variance} too high`);
+});
+
+test('sampleBeta(10, 90) mean ≈ 0.10', () => {
+  const draws = sampleBeta(10, 90, 5000);
+  const mean = draws.reduce((s, x) => s + x, 0) / draws.length;
+  assert.ok(Math.abs(mean - 0.10) < 0.02, `mean ${mean} not near 0.10`);
+});

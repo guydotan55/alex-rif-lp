@@ -60,3 +60,49 @@ export function sampleSizePerVariant(baselineCr, mde, numVariants = 2) {
   );
   return Math.ceil(num / Math.pow(p2 - p1, 2));
 }
+
+/**
+ * Sample n draws from a Beta(alpha, beta) distribution using the
+ * gamma-ratio identity: X ~ Gamma(alpha,1), Y ~ Gamma(beta,1) → X/(X+Y) ~ Beta(alpha,beta).
+ * Uses Marsaglia-Tsang rejection sampling for Gamma; works for shape >= 1
+ * (boost via shape+1, scale by U^(1/shape) when shape < 1).
+ */
+export function sampleBeta(alpha, beta, n) {
+  if (alpha <= 0 || beta <= 0) throw new Error('alpha and beta must be > 0');
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = sampleGamma(alpha);
+    const y = sampleGamma(beta);
+    out[i] = x / (x + y);
+  }
+  return out;
+}
+
+function sampleGamma(shape) {
+  // Marsaglia & Tsang (2000), with shape-boost for shape < 1.
+  if (shape < 1) {
+    const u = Math.random();
+    return sampleGamma(shape + 1) * Math.pow(u, 1 / shape);
+  }
+  const d = shape - 1 / 3;
+  const c = 1 / Math.sqrt(9 * d);
+  while (true) {
+    let x, v;
+    do {
+      x = sampleNormal();
+      v = 1 + c * x;
+    } while (v <= 0);
+    v = v * v * v;
+    const u = Math.random();
+    if (u < 1 - 0.0331 * x * x * x * x) return d * v;
+    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+  }
+}
+
+function sampleNormal() {
+  // Box-Muller
+  let u1 = 0, u2 = 0;
+  while (u1 === 0) u1 = Math.random();
+  while (u2 === 0) u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}

@@ -1679,6 +1679,17 @@
           </div>
         </div>
 
+        <!-- Recommend-stop banner (shown after summary email fires while test is still running) -->
+        <div id="test-recommend-banner" style="display:none; margin:12px 28px; padding:14px; border-radius:10px; border-right:4px solid #43a047; background:rgba(67,160,71,0.12);">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:14px;">
+            <div>
+              <div id="test-recommend-headline" style="color:#81c784; font-weight:700; font-size:15px; margin-bottom:4px;"></div>
+              <div id="test-recommend-body" style="color:var(--text-dim); font-size:13px;"></div>
+            </div>
+            <button id="test-recommend-cta" class="btn-action" onclick="showDeclareWinnerModal()" style="background:rgba(76,175,80,0.2);color:#81c784;border-color:#81c784;white-space:nowrap;">הכרז מנצח ועצור</button>
+          </div>
+        </div>
+
         <!-- Test analytics -->
         <div class="pane-inner" style="padding:24px 28px;">
           <div class="analytics-header">
@@ -2813,6 +2824,7 @@ async function selectTest(testId) {
 
   renderTestAnalytics();
   renderTestLeads();
+  _updateRecommendBanner();
 }
 
 function renderTestWeightsBar() {
@@ -3002,6 +3014,33 @@ function copyText(btn, text) {
   navigator.clipboard.writeText(text);
   btn.textContent = 'הועתק!';
   setTimeout(() => btn.textContent = 'העתק', 1500);
+}
+
+function _updateRecommendBanner() {
+  const banner = document.getElementById('test-recommend-banner');
+  if (!banner || !selectedTest) return;
+
+  const fired = selectedTest.summary_sent_at && selectedTest.status === 'running';
+  if (!fired) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  const headlineEl = document.getElementById('test-recommend-headline');
+  const bodyEl = document.getElementById('test-recommend-body');
+  const ctaEl = document.getElementById('test-recommend-cta');
+
+  // We only know summary_sent_at fired — to know which verdict, we'd need
+  // to re-run the math in browser or store the verdict on tests. Simplest
+  // for v1: show a neutral "system has a recommendation" banner; the email
+  // already has the verdict text.
+  banner.style.display = '';
+  banner.style.borderRightColor = '#43a047';
+  banner.style.background = 'rgba(67,160,71,0.12)';
+  headlineEl.style.color = '#81c784';
+  headlineEl.textContent = '🟢 יש לנו המלצה עבורך';
+  bodyEl.textContent = 'שלחנו לך מייל עם פירוט. בדוק את התיבה ולחץ "הכרז מנצח" כשאתה מוכן.';
+  ctaEl.style.display = '';
 }
 
 // ── Test Actions ─────────────────────────────────────────

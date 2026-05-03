@@ -102,3 +102,12 @@ test('renderSummaryEmail TRENDING_UNDERPOWERED — extend-or-decide subject', ()
   );
   assert.match(out.subject, /להאריך|לא מובהק/);
 });
+
+import { renderStallAlertEmail } from './email-templates.js';
+
+test('renderStallAlertEmail — 0-visitors subject + diagnostic checklist', () => {
+  const out = renderStallAlertEmail({ name: 'Test C', slug: 'test-c' });
+  assert.match(out.subject, /0 מבקרים|עצירה/);
+  assert.match(out.html, /dir="rtl"/);
+  assert.match(out.html, /פיקסל|מטא|URL/);
+});

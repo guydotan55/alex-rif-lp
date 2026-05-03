@@ -199,3 +199,25 @@ export function renderSummaryEmail(test, decision, variantCounts) {
   const text = `${subject}\n\n${dashboardUrl}`;
   return { subject, html, text };
 }
+
+export function renderStallAlertEmail(test) {
+  const testKey = test.slug || test.id;
+  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard${testKey ? `?test=${encodeURIComponent(testKey)}` : ''}`;
+  const subject = `עצירה: 0 מבקרים ב-48 השעות האחרונות | ${test.name}`;
+  const html = SHELL_OPEN + `
+    <div style="background:#fff3e0;border-right:4px solid #ff9800;padding:14px;border-radius:8px;margin:0 0 14px;">
+      <div style="color:#e65100;font-size:18px;font-weight:700;margin-bottom:4px;">לא ראינו תנועה ב-48 שעות</div>
+      <div style="color:#ef6c00;font-size:14px;">הטסט שלך פעיל, אבל לא הגיעו מבקרים.</div>
+    </div>
+    <p style="margin:0 0 6px;color:#444;font-size:14px;font-weight:600;">3 בדיקות מהירות:</p>
+    <ol style="margin:0 0 14px;padding-right:18px;color:#444;font-size:13px;line-height:1.7;">
+      <li>הקמפיין במטא — האם הוא פעיל ולא הושהה?</li>
+      <li>פיקסל — האם הוא יורה? (בדוק ב-Meta Events Manager)</li>
+      <li>URL — האם הקישור בקריאייטיב מצביע לדף הנכון?</li>
+    </ol>
+    <p style="margin:0 0 14px;color:#666;font-size:13px;">הטסט נשמר. ימשיך אוטומטית כשתחזור תנועה.</p>
+    ${btn('בדוק את הטסט', dashboardUrl)}
+  ` + SHELL_CLOSE;
+  const text = `${test.name}: 0 מבקרים ב-48 שעות. בדוק קמפיין/פיקסל/URL.\n\n${dashboardUrl}`;
+  return { subject, html, text };
+}

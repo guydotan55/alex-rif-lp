@@ -1385,6 +1385,13 @@
     opacity: 0.7;
     margin-top: 2px;
   }
+
+.planner-help {
+  display:inline-block; width:14px; height:14px; line-height:14px;
+  text-align:center; border-radius:50%; background:var(--border);
+  color:var(--text-dim); font-size:10px; cursor:help; margin-right:4px;
+}
+.planner-help:hover { background:var(--gold-dim); color:var(--gold); }
 </style>
 </head>
 <body>
@@ -1858,6 +1865,68 @@
     <div id="test-weight-controls" style="display:none; margin-bottom:16px;">
       <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:6px;">חלוקת תנועה</label>
       <div id="test-weight-sliders"></div>
+    </div>
+
+    <!-- Planner / budget calculator -->
+    <div style="margin-bottom:16px; padding:14px; background:var(--navy); border:1px solid var(--border); border-radius:var(--radius-sm);">
+      <div style="color:var(--gold); font-size:13px; font-weight:600; margin-bottom:10px;">תכנון תקציב</div>
+
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <div style="flex:1;">
+          <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:4px;">
+            אחוז המרה צפוי
+            <span class="planner-help" title="כמה אחוז מהמבקרים מתחזים בדרך כלל ללידים בקהילה הזו. אם אינך יודע — נסה 3%.">?</span>
+          </label>
+          <div style="position:relative;">
+            <input type="number" id="planner-baseline-cvr" min="0.1" max="50" step="0.1" placeholder="3.0" dir="ltr"
+              style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
+              oninput="updatePlannerResults()">
+            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">%</span>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:4px;">
+            שיפור שאתה רוצה לזהות
+            <span class="planner-help" title="כמה שיפור יחסי תרצה לזהות בין הוורסיות. 20% פירושו: למשל מ-3% ל-3.6%.">?</span>
+          </label>
+          <div style="position:relative;">
+            <input type="number" id="planner-mde" min="5" max="200" step="1" placeholder="20" dir="ltr"
+              style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
+              oninput="updatePlannerResults()">
+            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">%</span>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:4px;">
+            מחיר לקליק במטא
+            <span class="planner-help" title="המחיר הממוצע שאתה משלם על קליק לדף נחיתה במטא.">?</span>
+          </label>
+          <div style="position:relative;">
+            <input type="number" id="planner-cpc" min="0.1" max="100" step="0.1" placeholder="3.5" dir="ltr"
+              style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
+              oninput="updatePlannerResults()">
+            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">₪</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="planner-results" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+          <span style="color:var(--text-dim); font-size:13px;">נדרשים לכל וריאציה:</span>
+          <span style="color:var(--white); font-size:14px; font-weight:600;"><span id="planner-required-n">—</span> מבקרים</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+          <span style="color:var(--text-dim); font-size:13px;">תקציב משוער:</span>
+          <span style="color:var(--white); font-size:14px; font-weight:600;"><span dir="ltr">₪<span id="planner-budget">—</span></span></span>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-dim); font-size:13px;" id="planner-days-label">זמן צפוי:</span>
+          <span style="color:var(--white); font-size:14px; font-weight:600;">~<span id="planner-days">—</span> ימים</span>
+        </div>
+        <div id="planner-velocity-note" style="color:var(--text-dim); font-size:11px; margin-top:6px; text-align:right;"></div>
+      </div>
+
+      <div id="planner-error" style="display:none; color:#e57373; font-size:12px; margin-top:8px;"></div>
     </div>
 
     <!-- Create button -->

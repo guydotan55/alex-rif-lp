@@ -2602,13 +2602,31 @@ async function createTest() {
 
   const { data: { user } } = await sb.auth.getUser();
 
+  const baselineCrPct = parseFloat(document.getElementById('planner-baseline-cvr').value);
+  const mdePct        = parseFloat(document.getElementById('planner-mde').value);
+  const cpc           = parseFloat(document.getElementById('planner-cpc').value);
+  if (!(baselineCrPct > 0 && mdePct > 0 && cpc > 0)) {
+    alert('נא למלא את כל שדות תכנון התקציב');
+    return;
+  }
+  const numVariants = testModalSelectedLPs.length;
+  const targetN = plannerSampleSize(baselineCrPct / 100, mdePct / 100, numVariants);
+  if (targetN === null) {
+    alert('השיפור גדול מדי עבור אחוז ההמרה הצפוי. הקטן את ה-MDE.');
+    return;
+  }
+
   const { data: test, error: testErr } = await sb.from('tests').insert({
     name,
     slug,
     community_id: communityId,
     status: 'draft',
     created_by: user.id,
-    mode: testModalMode
+    mode: testModalMode,
+    baseline_cvr: baselineCrPct / 100,
+    mde: mdePct / 100,
+    expected_cpc: cpc,
+    target_sample_size: targetN
   }).select().single();
 
   if (testErr) {

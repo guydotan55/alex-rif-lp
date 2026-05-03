@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderKickoffEmail, renderMilestoneEmail } from './email-templates.js';
+import { renderKickoffEmail, renderMilestoneEmail, renderSummaryEmail } from './email-templates.js';
 
 test('renderKickoffEmail returns subject + html + text with Hebrew RTL markers and merged values', () => {
   const out = renderKickoffEmail({
@@ -55,4 +55,50 @@ test('renderMilestoneEmail (75%) — three-quarters subject', () => {
     ]
   );
   assert.match(out.subject, /שלושת רבעי/);
+});
+
+test('renderSummaryEmail WINNER_FOUND — winner subject + lift number', () => {
+  const out = renderSummaryEmail(
+    { name: 'Test', target_sample_size: 800 },
+    {
+      verdict: 'WINNER_FOUND',
+      winnerLabel: 'B',
+      winnerName: 'Variant B',
+      liftPct: 45.6,
+      winnerCvr: 0.058,
+      runnerUpCvr: 0.040,
+    },
+    [
+      { label: 'A', name: 'Variant A', visitors: 800, conversions: 32 },
+      { label: 'B', name: 'Variant B', visitors: 800, conversions: 46 },
+    ]
+  );
+  assert.match(out.subject, /יש מנצח/);
+  assert.match(out.subject, /Variant B|B/);
+  assert.match(out.html, /45/);
+  assert.match(out.html, /הכרז מנצח/);
+});
+
+test('renderSummaryEmail PRACTICAL_TIE — no-difference subject', () => {
+  const out = renderSummaryEmail(
+    { name: 'Test', target_sample_size: 500 },
+    { verdict: 'PRACTICAL_TIE' },
+    [
+      { label: 'A', name: 'A', visitors: 500, conversions: 15 },
+      { label: 'B', name: 'B', visitors: 500, conversions: 16 },
+    ]
+  );
+  assert.match(out.subject, /אין הבדל/);
+});
+
+test('renderSummaryEmail TRENDING_UNDERPOWERED — extend-or-decide subject', () => {
+  const out = renderSummaryEmail(
+    { name: 'Test', target_sample_size: 500 },
+    { verdict: 'TRENDING_UNDERPOWERED', winnerLabel: 'B', winnerName: 'B', liftPct: 18 },
+    [
+      { label: 'A', name: 'A', visitors: 500, conversions: 18 },
+      { label: 'B', name: 'B', visitors: 500, conversions: 22 },
+    ]
+  );
+  assert.match(out.subject, /להאריך|לא מובהק/);
 });

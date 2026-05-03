@@ -131,3 +131,71 @@ export function renderMilestoneEmail(test, milestone, variantCounts) {
   const text = `${copy.headline} — ${fmtN(totalVisitors)}/${fmtN(totalTarget)} מבקרים (${pct}%)\n\n${copy.tone}\n\n${dashboardUrl}`;
   return { subject, html, text };
 }
+
+export function renderSummaryEmail(test, decision, variantCounts) {
+  const testKey = test.slug || test.id;
+  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard${testKey ? `?test=${encodeURIComponent(testKey)}` : ''}`;
+  const newTestUrl  = `${process.env.APP_URL || ''}/dashboard`;
+
+  const sorted = [...variantCounts].sort((a, b) => (b.conversions / Math.max(1, b.visitors)) - (a.conversions / Math.max(1, a.visitors)));
+  const standingsRows = sorted.map(v => {
+    const cvr = v.visitors ? (v.conversions / v.visitors * 100).toFixed(1) : '0.0';
+    return `<tr>
+      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#1a1a1a;font-size:13px;">${escapeHtml(v.name || v.label)}</td>
+      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#666;font-size:13px;text-align:left;"><span dir="ltr">${fmtN(v.visitors)}</span></td>
+      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#666;font-size:13px;text-align:left;"><span dir="ltr">${v.conversions}</span></td>
+      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#0d2240;font-size:13px;font-weight:600;text-align:left;"><span dir="ltr">${cvr}%</span></td>
+    </tr>`;
+  }).join('');
+
+  const standingsTable = `<table dir="rtl" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0;">
+    <thead><tr>
+      <th dir="rtl" style="padding:8px;text-align:right;color:#666;font-size:12px;font-weight:500;border-bottom:2px solid #ddd;">וריאציה</th>
+      <th dir="rtl" style="padding:8px;text-align:left;color:#666;font-size:12px;font-weight:500;border-bottom:2px solid #ddd;">מבקרים</th>
+      <th dir="rtl" style="padding:8px;text-align:left;color:#666;font-size:12px;font-weight:500;border-bottom:2px solid #ddd;">לידים</th>
+      <th dir="rtl" style="padding:8px;text-align:left;color:#666;font-size:12px;font-weight:500;border-bottom:2px solid #ddd;">המרה</th>
+    </tr></thead>
+    <tbody>${standingsRows}</tbody>
+  </table>`;
+
+  let subject, headline, body, cta;
+
+  if (decision.verdict === 'WINNER_FOUND') {
+    const winnerName = escapeHtml(decision.winnerName || decision.winnerLabel || '');
+    const liftDisplay = Math.floor(decision.liftPct);
+    subject = `יש מנצח: ${winnerName} (+${liftDisplay}% שיפור) | ${test.name}`;
+    headline = `<div style="background:#e8f5e9;border-right:4px solid #43a047;padding:14px;border-radius:8px;margin:0 0 14px;">
+      <div style="color:#2e7d32;font-size:18px;font-weight:700;margin-bottom:4px;">🏆 ${winnerName} מנצחת</div>
+      <div style="color:#388e3c;font-size:14px;">שיפור של <span dir="ltr">+${liftDisplay}%</span> מעל הוורסיה השנייה.</div>
+    </div>`;
+    body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">המלצה: החלף את ה-LP במטא ל-${winnerName} ועצור את הטסט.</p>`;
+    cta = btn('הכרז מנצח ועצור את הטסט', dashboardUrl);
+  } else if (decision.verdict === 'PRACTICAL_TIE') {
+    subject = `הטסט הסתיים — אין הבדל מובהק בין הוורסיות | ${test.name}`;
+    headline = `<div style="background:#fafafa;border-right:4px solid #9e9e9e;padding:14px;border-radius:8px;margin:0 0 14px;">
+      <div style="color:#424242;font-size:18px;font-weight:700;margin-bottom:4px;">אין מנצח ברור</div>
+      <div style="color:#616161;font-size:14px;">הוורסיות הניבו ביצועים דומים בטווח השונות הסטטיסטית.</div>
+    </div>`;
+    body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">מה זה כן אומר: ה-LP הקיים שלך עומד בפני וריאציות גסות. בטסט הבא, נסה שינוי גדול יותר (לדוגמה: הצעת ערך אחרת לחלוטין, לא רק שינוי כותרת).</p>`;
+    cta = btn('צור טסט חדש', newTestUrl);
+  } else {
+    // TRENDING_UNDERPOWERED
+    const winnerName = escapeHtml(decision.winnerName || decision.winnerLabel || '');
+    subject = `${winnerName} מוביל אך לא מובהק — להאריך או להחליט? | ${test.name}`;
+    headline = `<div style="background:#fff8e1;border-right:4px solid #ffa000;padding:14px;border-radius:8px;margin:0 0 14px;">
+      <div style="color:#e65100;font-size:18px;font-weight:700;margin-bottom:4px;">${winnerName} מוביל — אך לא מובהק</div>
+      <div style="color:#ef6c00;font-size:14px;">המגמה ברורה אבל אין מספיק נתונים לקבוע סופית.</div>
+    </div>`;
+    body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">אפשרויות:</p>
+      <ul style="margin:0 0 14px;padding-right:18px;color:#444;font-size:13px;line-height:1.7;">
+        <li>להאריך את הטסט ב-50% נוספים מהדגימה — סביר שתגיע למובהקות.</li>
+        <li>להחליט לפי המגמה ולעלות עם ${winnerName} עכשיו.</li>
+        <li>לעצור ולנסות וריאציה חדשה לגמרי.</li>
+      </ul>`;
+    cta = btn('פתח את לוח הבקרה', dashboardUrl);
+  }
+
+  const html = SHELL_OPEN + headline + body + standingsTable + cta + SHELL_CLOSE;
+  const text = `${subject}\n\n${dashboardUrl}`;
+  return { subject, html, text };
+}

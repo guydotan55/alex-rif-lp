@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderKickoffEmail } from './email-templates.js';
+import { renderKickoffEmail, renderMilestoneEmail } from './email-templates.js';
 
 test('renderKickoffEmail returns subject + html + text with Hebrew RTL markers and merged values', () => {
   const out = renderKickoffEmail({
@@ -26,4 +26,33 @@ test('renderKickoffEmail returns subject + html + text with Hebrew RTL markers a
 
   assert.doesNotMatch(out.html, /undefined/);
   assert.doesNotMatch(out.html, /\{\{/);             // no unrendered tokens
+});
+
+test('renderMilestoneEmail (25%) — quarter-of-the-way subject and standings', () => {
+  const out = renderMilestoneEmail(
+    { name: 'Test A', target_sample_size: 800 },
+    25,
+    [
+      { label: 'A', name: 'Variant A', visitors: 200, conversions: 6 },
+      { label: 'B', name: 'Variant B', visitors: 200, conversions: 9 },
+    ]
+  );
+  assert.match(out.subject, /רבע/);
+  assert.match(out.html, /dir="rtl"/);
+  assert.match(out.html, /200/);
+  assert.match(out.html, /Variant A/);
+  assert.match(out.html, /Variant B/);
+  assert.doesNotMatch(out.html, /undefined/);
+});
+
+test('renderMilestoneEmail (75%) — three-quarters subject', () => {
+  const out = renderMilestoneEmail(
+    { name: 'Test B', target_sample_size: 1000 },
+    75,
+    [
+      { label: 'A', name: 'Variant A', visitors: 750, conversions: 22 },
+      { label: 'B', name: 'Variant B', visitors: 750, conversions: 30 },
+    ]
+  );
+  assert.match(out.subject, /שלושת רבעי/);
 });

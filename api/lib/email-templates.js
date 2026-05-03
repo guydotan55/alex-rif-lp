@@ -78,3 +78,56 @@ function escapeHtml(s) {
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[c]));
 }
+
+const MILESTONE_COPY = {
+  25: { subject: 'רבע מהדרך', headline: 'עברנו את רבע מהדרך', tone: 'מוקדם להכריז על מנצח. הנה תמונת המצב.' },
+  50: { subject: 'חצי דרך — הפער מתחיל להתייצב', headline: 'חצי דרך', tone: 'הפער מתחיל להתבהר. עוד לא סטטיסטית מובהק.' },
+  75: { subject: 'שלושת רבעי הדרך — מתחילים להתכונן להחלטה', headline: 'שלושת רבעי הדרך', tone: 'הכן את הוורסיה המנצחת לעלייה.' },
+};
+
+export function renderMilestoneEmail(test, milestone, variantCounts) {
+  const copy = MILESTONE_COPY[milestone];
+  if (!copy) throw new Error(`Unknown milestone: ${milestone}`);
+  const totalVisitors = variantCounts.reduce((s, v) => s + v.visitors, 0);
+  const testKey = test.slug || test.id;
+  const dashboardUrl = `${process.env.APP_URL || ''}/dashboard${testKey ? `?test=${encodeURIComponent(testKey)}` : ''}`;
+
+  // Build standings rows
+  const sorted = [...variantCounts].sort((a, b) => (b.conversions / Math.max(1, b.visitors)) - (a.conversions / Math.max(1, a.visitors)));
+  const rows = sorted.map(v => {
+    const cvr = v.visitors ? (v.conversions / v.visitors * 100).toFixed(1) : '0.0';
+    return `<tr>
+      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#1a1a1a;font-size:13px;">${escapeHtml(v.name || v.label)}</td>
+      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#666;font-size:13px;text-align:left;"><span dir="ltr">${fmtN(v.visitors)}</span> מבקרים</td>
+      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#0d2240;font-size:13px;font-weight:600;text-align:left;"><span dir="ltr">${cvr}%</span></td>
+    </tr>`;
+  }).join('');
+
+  const subject = `${copy.subject} | ${test.name}`;
+  const pct = milestone;
+  const totalTarget = test.target_sample_size * variantCounts.length;
+
+  const html = SHELL_OPEN + `
+    <p style="margin:0 0 12px;font-size:16px;"><strong>${escapeHtml(copy.headline)}</strong></p>
+    <p style="margin:0 0 16px;color:#555;font-size:14px;">${copy.tone}</p>
+
+    <div style="background:#f8f8fa;border-radius:10px;padding:14px;margin:0 0 14px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+        <span style="color:#666;font-size:13px;">${fmtN(totalVisitors)} / ${fmtN(totalTarget)} מבקרים</span>
+        <span style="color:#0d2240;font-size:18px;font-weight:700;"><span dir="ltr">${pct}%</span></span>
+      </div>
+      <table dir="rtl" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eee;border-radius:6px;height:8px;">
+        <tr><td dir="rtl" style="background:#f5c842;width:${pct}%;border-radius:6px;height:8px;line-height:8px;font-size:0;">&nbsp;</td></tr>
+      </table>
+    </div>
+
+    <table dir="rtl" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+      ${rows}
+    </table>
+
+    ${btn('צפה בפירוט מלא', dashboardUrl)}
+  ` + SHELL_CLOSE;
+
+  const text = `${copy.headline} — ${fmtN(totalVisitors)}/${fmtN(totalTarget)} מבקרים (${pct}%)\n\n${copy.tone}\n\n${dashboardUrl}`;
+  return { subject, html, text };
+}

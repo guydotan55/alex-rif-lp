@@ -5,6 +5,9 @@
     { "source": "/lp/:slug/:variant", "destination": "/api/serve-lp" },
     { "source": "/lp/:slug", "destination": "/api/serve-lp" }
   ],
+  "crons": [
+    { "path": "/api/test-monitor", "schedule": "0 6 * * *" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

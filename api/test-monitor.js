@@ -102,3 +102,137 @@ export function pickEmailAction(test, decision) {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// I/O helpers
+// ---------------------------------------------------------------------------
+
+async function fetchRunningTests() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/tests?status=eq.running&select=*`,
+    { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+  );
+  if (!res.ok) throw new Error(`fetchRunningTests: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+async function fetchTestVariantsAndCounts(testId) {
+  // Get test_variants for label + project name
+  const tvRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${testId}&select=variant_id,label,projects(name)`,
+    { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+  );
+  const testVariants = await tvRes.json();
+
+  // Pull all events for this test (paginated to bypass PostgREST 1000-row cap)
+  let allRows = [];
+  let from = 0;
+  const PAGE = 1000;
+  while (true) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/analytics_events?test_id=eq.${testId}&select=variant_id,event_type,event_data&limit=${PAGE}&offset=${from}`,
+      { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+    );
+    const rows = await res.json();
+    if (!rows || !rows.length) break;
+    allRows = allRows.concat(rows);
+    if (rows.length < PAGE) break;
+    from += PAGE;
+  }
+
+  // Aggregate per variant
+  return testVariants.map(tv => {
+    const events = allRows.filter(r => r.variant_id === tv.variant_id);
+    const visitors = new Set();
+    let conversions = 0;
+    for (const e of events) {
+      if (e.event_type === 'pageview' && e.event_data?.visitor_id) visitors.add(e.event_data.visitor_id);
+      if (e.event_type === 'lead_captured') conversions += 1;
+    }
+    return {
+      variant_id: tv.variant_id,
+      label: tv.label,
+      name: tv.projects?.name || tv.label,
+      visitors: visitors.size,
+      conversions,
+    };
+  });
+}
+
+async function markEmailSent(test, actionName, payload) {
+  const updates = { updated_at: new Date().toISOString() };
+  if (actionName === 'test_milestone') updates.last_milestone_sent = payload.milestone;
+  if (actionName === 'test_summary')   updates.summary_sent_at = new Date().toISOString();
+  if (actionName === 'test_stall_alert') updates.stall_alert_sent_at = new Date().toISOString();
+
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/tests?id=eq.${test.id}`,
+    {
+      method: 'PATCH',
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(updates),
+    }
+  );
+  if (!res.ok) throw new Error(`markEmailSent: ${res.status} ${await res.text()}`);
+}
+
+async function postEmailAction(test, action) {
+  const res = await fetch(`${APP_ORIGIN}/api/send-email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: action.name, test_id: test.id, ...action.payload }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`send-email ${action.name} → ${res.status}: ${JSON.stringify(body)}`);
+  return body;
+}
+
+// ---------------------------------------------------------------------------
+// Cron handler
+// ---------------------------------------------------------------------------
+
+export default async function handler(req, res) {
+  // Vercel cron sends GET with Authorization: Bearer <CRON_SECRET>
+  const auth = req.headers.authorization || req.headers.Authorization;
+  if (!CRON_SECRET || auth !== `Bearer ${CRON_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const results = [];
+  const errors = [];
+  let tests = [];
+  try {
+    tests = await fetchRunningTests();
+  } catch (err) {
+    console.error('fetchRunningTests failed:', err);
+    return res.status(500).json({ error: String(err.message || err) });
+  }
+
+  for (const test of tests) {
+    try {
+      if (!test.target_sample_size || !test.started_at) {
+        results.push({ test_id: test.id, skipped: 'no target_sample_size or started_at' });
+        continue;
+      }
+      const variantCounts = await fetchTestVariantsAndCounts(test.id);
+      const decision = decideState(test, variantCounts);
+      const action = pickEmailAction(test, decision);
+      if (!action) {
+        results.push({ test_id: test.id, state: decision.state, action: null });
+        continue;
+      }
+      await postEmailAction(test, action);
+      await markEmailSent(test, action.name, action.payload);
+      results.push({ test_id: test.id, state: decision.state, action: action.name, milestone: action.payload.milestone });
+    } catch (err) {
+      console.error(`test-monitor error on test ${test.id}:`, err);
+      errors.push({ test_id: test.id, error: String(err.message || err) });
+    }
+  }
+  return res.status(200).json({ processed: results.length, results, errors });
+}

@@ -15,7 +15,7 @@ const MC_DRAWS      = 10000;
 // will recommend a winner earlier and on smaller samples — accepting ~10-15%
 // chance of calling a wrong winner on borderline tests, which is fine when
 // the cost is "slightly worse CR" not money loss.
-const STOP_P_BEST   = 0.85;
+const STOP_P_BEST   = 0.80;
 const STOP_MAX_LOSS = 0.0075;
 const STOP_MIN_CONV = 20;
 const STOP_MIN_VIS  = 100;
@@ -63,7 +63,9 @@ export function decideState(test, variantCounts) {
   }
   if (atOrPastTarget) {
     const sortedProb = [...winnerProb].sort((a, b) => b - a);
-    if (sortedProb[0] >= 0.85) {
+    // 3-tier scale at 100% sample: WINNER_FOUND (caught above at P > STOP_P_BEST=0.80),
+    // TRENDING_UNDERPOWERED (0.65 ≤ P ≤ 0.80), PRACTICAL_TIE (P < 0.65).
+    if (sortedProb[0] >= 0.65) {
       return { state: 'TRENDING_UNDERPOWERED', currentPct, leader, leaderIdx, winnerProb, liftPct: computeLiftPct(variantCounts, leaderIdx) };
     }
     return { state: 'PRACTICAL_TIE', currentPct, winnerProb };

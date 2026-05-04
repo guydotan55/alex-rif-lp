@@ -1889,7 +1889,7 @@
             <span class="planner-help" title="כמה אחוז מהמבקרים מתחזים בדרך כלל ללידים בקהילה הזו. אם אינך יודע — נסה 3%.">?</span>
           </label>
           <div style="position:relative;">
-            <input type="number" id="planner-baseline-cvr" min="0.1" max="50" step="0.1" placeholder="3.0" dir="ltr"
+            <input type="number" id="planner-baseline-cvr" min="0.1" max="50" step="0.1" placeholder="3.0" value="3.0" dir="ltr"
               style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
               oninput="updatePlannerResults()">
             <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">%</span>
@@ -1901,7 +1901,7 @@
             <span class="planner-help" title="כמה שיפור יחסי תרצה לזהות בין הוורסיות. 20% פירושו: למשל מ-3% ל-3.6%.">?</span>
           </label>
           <div style="position:relative;">
-            <input type="number" id="planner-mde" min="5" max="200" step="1" placeholder="20" dir="ltr"
+            <input type="number" id="planner-mde" min="5" max="200" step="1" placeholder="20" value="100" dir="ltr"
               style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
               oninput="updatePlannerResults()">
             <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">%</span>
@@ -1913,7 +1913,7 @@
             <span class="planner-help" title="המחיר הממוצע שאתה משלם על קליק לדף נחיתה במטא.">?</span>
           </label>
           <div style="position:relative;">
-            <input type="number" id="planner-cpc" min="0.1" max="100" step="0.1" placeholder="3.5" dir="ltr"
+            <input type="number" id="planner-cpc" min="0.1" max="100" step="0.1" placeholder="3.5" value="3" dir="ltr"
               style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
               oninput="updatePlannerResults()">
             <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">₪</span>
@@ -1938,6 +1938,10 @@
       </div>
 
       <div id="planner-error" style="display:none; color:#e57373; font-size:12px; margin-top:8px;"></div>
+    </div>
+
+    <div style="margin-bottom:12px; padding:8px 10px; color:var(--text-dim); font-size:11px; line-height:1.5; text-align:right;">
+      💡 אם הרצת קמפיינים בעבר ויש לך נתונים אמיתיים, החלף את הערכים. אם לא — שאל את האדם שמנהל לך את הקמפיין במטא, או השאר את ברירות המחדל.
     </div>
 
     <!-- Create button -->
@@ -2609,8 +2613,9 @@ function _updateActivateGating() {
 // modal open + close functions in the next task.
 function _plannerResetCache() {
   _plannerVelocityCache = null;
-  // Refresh button-gating state on modal lifecycle (M-2 fix from final review)
+  // Refresh button-gating + results panel on modal lifecycle (defaults populate live)
   if (typeof _updateActivateGating === 'function') _updateActivateGating();
+  if (typeof updatePlannerResults === 'function') updatePlannerResults();
 }
 
 async function createTest() {

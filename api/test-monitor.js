@@ -11,10 +11,14 @@ const CRON_SECRET = process.env.CRON_SECRET;
 const ALPHA_PRIOR   = 1;
 const BETA_PRIOR    = 1;
 const MC_DRAWS      = 10000;
-const STOP_P_BEST   = 0.95;
+// Tuned for NGO scale (~₪5K budget tests). Lower thresholds mean the engine
+// will recommend a winner earlier and on smaller samples — accepting ~10-15%
+// chance of calling a wrong winner on borderline tests, which is fine when
+// the cost is "slightly worse CR" not money loss.
+const STOP_P_BEST   = 0.85;
 const STOP_MAX_LOSS = 0.0075;
-const STOP_MIN_CONV = 25;
-const STOP_MIN_VIS  = 200;
+const STOP_MIN_CONV = 20;
+const STOP_MIN_VIS  = 100;
 const STALL_HOURS   = 48;
 
 export function decideState(test, variantCounts) {

@@ -23,7 +23,8 @@ export function decideState(test, variantCounts) {
   const sampleVsTarget = totalVisitors / totalTarget;
   const currentPct = Math.floor(sampleVsTarget * 100);
 
-  const hoursSinceStart = (Date.now() - new Date(test.started_at).getTime()) / 3.6e6;
+  const startedAt = test.started_at || test.reset_at || test.created_at;
+  const hoursSinceStart = (Date.now() - new Date(startedAt).getTime()) / 3.6e6;
   const hasZeroTraffic48h = totalVisitors === 0 && hoursSinceStart >= STALL_HOURS;
   if (hasZeroTraffic48h && !test.stall_alert_sent_at) {
     return { state: 'STALL', currentPct };
@@ -117,21 +118,28 @@ async function fetchRunningTests() {
   return res.json();
 }
 
-async function fetchTestVariantsAndCounts(testId) {
+async function fetchTestVariantsAndCounts(test) {
   // Get test_variants for label + project name
   const tvRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${testId}&select=variant_id,label,projects(name)`,
+    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${test.id}&select=variant_id,label,projects(name)`,
     { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   const testVariants = await tvRes.json();
+  if (!testVariants?.length) return [];
 
-  // Pull all events for this test (paginated to bypass PostgREST 1000-row cap)
+  const variantIds = testVariants.map(tv => tv.variant_id);
+  // Use the same start-time fallback chain the dashboard uses (line 2810):
+  // started_at OR reset_at OR created_at
+  const startedAt = test.started_at || test.reset_at || test.created_at;
+  const variantInList = variantIds.map(id => `"${id}"`).join(',');
+
+  // Pull events for these variants since started_at, paginated.
   let allRows = [];
   let from = 0;
   const PAGE = 1000;
   while (true) {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/analytics_events?test_id=eq.${testId}&select=variant_id,event_type,event_data&limit=${PAGE}&offset=${from}`,
+      `${SUPABASE_URL}/rest/v1/analytics_events?variant_id=in.(${variantInList})&created_at=gte.${encodeURIComponent(startedAt)}&select=variant_id,event_type,event_data&limit=${PAGE}&offset=${from}`,
       { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
     );
     const rows = await res.json();
@@ -147,7 +155,7 @@ async function fetchTestVariantsAndCounts(testId) {
     const visitors = new Set();
     let conversions = 0;
     for (const e of events) {
-      if (e.event_type === 'pageview' && e.event_data?.visitor_id) visitors.add(e.event_data.visitor_id);
+      if (e.event_type === 'page_view' && e.event_data?.visitor_id) visitors.add(e.event_data.visitor_id);
       if (e.event_type === 'lead_captured') conversions += 1;
     }
     return {
@@ -221,11 +229,11 @@ export default async function handler(req, res) {
 
   for (const test of tests) {
     try {
-      if (!test.target_sample_size || !test.started_at) {
-        results.push({ test_id: test.id, skipped: 'no target_sample_size or started_at' });
+      if (!test.target_sample_size) {
+        results.push({ test_id: test.id, skipped: 'no target_sample_size — backfill via edit modal' });
         continue;
       }
-      const variantCounts = await fetchTestVariantsAndCounts(test.id);
+      const variantCounts = await fetchTestVariantsAndCounts(test);
       const decision = decideState(test, variantCounts);
       const action = pickEmailAction(test, decision);
       if (!action) {

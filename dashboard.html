@@ -2416,6 +2416,19 @@ async function showEditTestModal() {
   }
 
   updateWeightControls();
+
+  // Pre-populate planner inputs from the existing test (M-4 backfill UX)
+  const cvrEl = document.getElementById('planner-baseline-cvr');
+  const mdeEl = document.getElementById('planner-mde');
+  const cpcEl = document.getElementById('planner-cpc');
+  if (cvrEl && mdeEl && cpcEl) {
+    cvrEl.value = selectedTest.baseline_cvr != null ? (selectedTest.baseline_cvr * 100).toFixed(1) : '';
+    mdeEl.value = selectedTest.mde != null ? (selectedTest.mde * 100).toFixed(0) : '';
+    cpcEl.value = selectedTest.expected_cpc != null ? selectedTest.expected_cpc : '';
+    // Trigger update if any value is filled
+    if (cvrEl.value || mdeEl.value || cpcEl.value) updatePlannerResults();
+  }
+
   document.getElementById('create-test-modal').style.display = 'flex';
 }
 
@@ -2518,7 +2531,7 @@ async function plannerCommunityVelocity(communityId) {
   const { data, error } = await sb
     .from('analytics_events')
     .select('event_data,created_at,projects!inner(community_id)', { count: 'exact', head: false })
-    .eq('event_type', 'pageview')
+    .eq('event_type', 'page_view')
     .eq('projects.community_id', communityId)
     .gte('created_at', since)
     .limit(10000);
@@ -2673,9 +2686,26 @@ async function createTest() {
 async function saveTestEdits(name) {
   const testId = selectedTest.id;
 
-  // Update test name and mode
+  // Update test name and mode (plus planner fields if supplied)
+  const baselineCrPct = parseFloat(document.getElementById('planner-baseline-cvr').value);
+  const mdePct        = parseFloat(document.getElementById('planner-mde').value);
+  const cpc           = parseFloat(document.getElementById('planner-cpc').value);
+  const numVariantsForEdit = testModalSelectedLPs.length;
+
+  const updatePayload = { name, mode: testModalMode, updated_at: new Date().toISOString() };
+
+  if (baselineCrPct > 0 && mdePct > 0 && cpc > 0 && numVariantsForEdit >= 2) {
+    const targetN = plannerSampleSize(baselineCrPct / 100, mdePct / 100, numVariantsForEdit);
+    if (targetN !== null) {
+      updatePayload.baseline_cvr = baselineCrPct / 100;
+      updatePayload.mde = mdePct / 100;
+      updatePayload.expected_cpc = cpc;
+      updatePayload.target_sample_size = targetN;
+    }
+  }
+
   const { error: nameErr } = await sb.from('tests')
-    .update({ name, mode: testModalMode, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq('id', testId);
   if (nameErr) {
     console.error('Update test name error:', nameErr);

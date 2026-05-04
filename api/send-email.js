@@ -95,15 +95,18 @@ async function fetchTestWithCreatorAndVariants(testId) {
   return { test, creatorEmail: creator.email, testVariants };
 }
 
-async function fetchVariantCounts(testId) {
-  // Fetch all events for this test, then aggregate per variant in JS.
-  // Uses pagination to bypass PostgREST's 1000-row cap.
+async function fetchVariantCounts(test, testVariants) {
+  const variantIds = testVariants.map(tv => tv.variant_id);
+  if (!variantIds.length) return [];
+  const startedAt = test.started_at || test.reset_at || test.created_at;
+  const variantInList = variantIds.map(id => `"${id}"`).join(',');
+
   let allRows = [];
   let from = 0;
   const PAGE = 1000;
   while (true) {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/analytics_events?test_id=eq.${testId}&select=variant_id,event_type,event_data&limit=${PAGE}&offset=${from}`,
+      `${SUPABASE_URL}/rest/v1/analytics_events?variant_id=in.(${variantInList})&created_at=gte.${encodeURIComponent(startedAt)}&select=variant_id,event_type,event_data&limit=${PAGE}&offset=${from}`,
       { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
     );
     const rows = await res.json();
@@ -116,7 +119,7 @@ async function fetchVariantCounts(testId) {
   for (const row of allRows) {
     if (!row.variant_id) continue;
     const v = byVariant.get(row.variant_id) || { variant_id: row.variant_id, visitors: new Set(), conversions: 0 };
-    if (row.event_type === 'pageview' && row.event_data?.visitor_id) v.visitors.add(row.event_data.visitor_id);
+    if (row.event_type === 'page_view' && row.event_data?.visitor_id) v.visitors.add(row.event_data.visitor_id);
     if (row.event_type === 'lead_captured') v.conversions += 1;
     byVariant.set(row.variant_id, v);
   }
@@ -178,7 +181,7 @@ async function handleTestMilestone(req, res) {
     const { test, creatorEmail, testVariants, error } = await fetchTestWithCreatorAndVariants(test_id);
     if (error) return res.status(404).json({ error });
 
-    const counts = await fetchVariantCounts(test_id);
+    const counts = await fetchVariantCounts(test, testVariants);
     const variantCountsWithName = testVariants.map(tv => {
       const c = counts.find(x => x.variant_id === tv.variant_id) || { visitors: 0, conversions: 0 };
       return { label: tv.label, name: tv.projects?.name || tv.label, visitors: c.visitors, conversions: c.conversions };
@@ -202,7 +205,7 @@ async function handleTestSummary(req, res) {
       return res.status(400).json({ error: 'tests.summary_verdict not set or invalid; cron must persist verdict before send' });
     }
 
-    const counts = await fetchVariantCounts(test_id);
+    const counts = await fetchVariantCounts(test, testVariants);
     const variantCountsWithName = testVariants.map(tv => {
       const c = counts.find(x => x.variant_id === tv.variant_id) || { visitors: 0, conversions: 0 };
       return { label: tv.label, name: tv.projects?.name || tv.label, visitors: c.visitors, conversions: c.conversions };

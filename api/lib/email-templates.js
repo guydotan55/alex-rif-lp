@@ -143,6 +143,10 @@ export function renderSummaryEmail(test, decision, variantCounts) {
   const dashboardUrl = `${process.env.APP_URL || ''}/dashboard`;
   const newTestUrl   = `${process.env.APP_URL || ''}/dashboard`;
 
+  const economic = decision.economic;
+  const showCplColumn = economic && ['VIABLE', 'NOT_VIABLE', 'WINNER_BUT_CHEAPER_ELSEWHERE'].includes(economic.verdict);
+  const target_cpl = economic?.target_cpl;
+
   const sorted = [...variantCounts].sort((a, b) => (b.conversions / Math.max(1, b.visitors)) - (a.conversions / Math.max(1, a.visitors)));
   const standingsRows = sorted.map(v => {
     const cvr = v.visitors ? (v.conversions / v.visitors * 100).toFixed(1) : '0.0';
@@ -150,11 +154,19 @@ export function renderSummaryEmail(test, decision, variantCounts) {
     const nameCell = v.lpUrl
       ? `<a href="${escapeAttr(v.lpUrl)}" style="color:#0d2240;text-decoration:underline;">${safeName}</a> <a href="${escapeAttr(v.lpUrl)}" style="color:#999;text-decoration:none;font-size:11px;">↗</a>`
       : safeName;
+    let cplCell = '';
+    if (showCplColumn) {
+      const cpl = (v.spend != null && v.conversions > 0) ? v.spend / v.conversions : null;
+      const cplColor = cpl == null ? '#999' : (cpl <= target_cpl ? '#059669' : '#F59E0B');
+      const cplText = cpl == null ? '—' : `₪${cpl.toFixed(1)}`;
+      cplCell = `<td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:${cplColor};font-size:13px;font-weight:600;text-align:left;"><span dir="ltr">${cplText}</span></td>`;
+    }
     return `<tr>
       <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#1a1a1a;font-size:13px;">${nameCell}</td>
       <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#666;font-size:13px;text-align:left;"><span dir="ltr">${fmtN(v.visitors)}</span></td>
       <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#666;font-size:13px;text-align:left;"><span dir="ltr">${v.conversions}</span></td>
       <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#0d2240;font-size:13px;font-weight:600;text-align:left;"><span dir="ltr">${cvr}%</span></td>
+      ${cplCell}
     </tr>`;
   }).join('');
 
@@ -164,20 +176,68 @@ export function renderSummaryEmail(test, decision, variantCounts) {
       <th dir="rtl" style="padding:8px;text-align:left;color:#666;font-size:12px;font-weight:500;border-bottom:2px solid #ddd;">מבקרים</th>
       <th dir="rtl" style="padding:8px;text-align:left;color:#666;font-size:12px;font-weight:500;border-bottom:2px solid #ddd;">לידים</th>
       <th dir="rtl" style="padding:8px;text-align:left;color:#666;font-size:12px;font-weight:500;border-bottom:2px solid #ddd;">המרה</th>
+      ${showCplColumn ? `<th dir="rtl" style="padding:8px;text-align:left;color:#666;font-size:12px;font-weight:500;border-bottom:2px solid #ddd;">עלות לליד</th>` : ''}
     </tr></thead>
     <tbody>${standingsRows}</tbody>
   </table>`;
 
   let subject, headline, body, cta;
+  const isInsufficient = economic && ['INSUFFICIENT_SPEND', 'INSUFFICIENT_DATA'].includes(economic.verdict);
 
-  if (decision.verdict === 'WINNER_FOUND') {
-    const winnerNameRaw  = decision.winnerName || decision.winnerLabel || '';
+  if (decision.verdict === 'WINNER_FOUND' && economic?.verdict === 'VIABLE') {
+    const winnerNameRaw = decision.winnerName || decision.winnerLabel || '';
     const winnerNameHtml = escapeHtml(winnerNameRaw);
-    const liftDisplay = Math.floor(decision.liftPct);
-    subject = `יש מנצח: ${winnerNameRaw} (+${liftDisplay}% שיפור) | ${test.name}`;
+    subject = `יש זוכה ✓ והעלות לליד עומדת ביעד שלך | ${test.name}`;
+    headline = `<div style="background:#e8f5e9;border-right:4px solid #059669;padding:14px;border-radius:8px;margin:0 0 14px;">
+      <div style="color:#2e7d32;font-size:18px;font-weight:700;margin-bottom:4px;">🏆 ${winnerNameHtml} מנצחת</div>
+      <div style="color:#388e3c;font-size:14px;">הווריאנט המנצח עולה לך <span dir="ltr">₪${economic.cr_leader_cpl.toFixed(1)}</span> לליד — מתחת ליעד של <span dir="ltr">₪${economic.target_cpl}</span>. אפשר להעלות תקציב בביטחון.</div>
+    </div>`;
+    body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">שיפור של <span dir="ltr">+${Math.floor(decision.liftPct)}%</span> מעל הוורסיה השנייה.</p>`;
+    cta = btn('הגדל תקציב לקמפיין הזוכה ←', dashboardUrl);
+  } else if (decision.verdict === 'WINNER_FOUND' && economic?.verdict === 'NOT_VIABLE') {
+    const winnerNameRaw = decision.winnerName || decision.winnerLabel || '';
+    const winnerNameHtml = escapeHtml(winnerNameRaw);
+    subject = `מצאנו ניסוח מנצח — צריך לדבר על העלות | ${test.name}`;
+    headline = `<div style="background:#fff8e1;border-right:4px solid #F59E0B;padding:14px;border-radius:8px;margin:0 0 14px;">
+      <div style="color:#e65100;font-size:18px;font-weight:700;margin-bottom:4px;">יש לנו זוכה בהמרה</div>
+      <div style="color:#ef6c00;font-size:14px;">הניסוח של ${winnerNameHtml} ממיר טוב יותר ב-<span dir="ltr">${Math.floor(decision.liftPct)}%</span>, אבל בעלות של <span dir="ltr">₪${economic.cr_leader_cpl.toFixed(1)}</span> לליד — <span dir="ltr">₪${economic.gap.toFixed(1)}</span> מעל היעד שלך. תובנת המסר שווה זהב; השאלה היא איך להוזיל את הליד עצמו.</div>
+    </div>`;
+    body = ``;
+    cta = btn('איך להוזיל את הליד הזה — 4 רעיונות ←', dashboardUrl)
+        + `<p style="margin:0 0 12px;color:#666;font-size:12px;text-align:right;">המסר עצמו עובד — שמור עליו לטסט הבא עם הצעה אחרת.</p>`;
+  } else if (decision.verdict === 'WINNER_FOUND' && economic?.verdict === 'WINNER_BUT_CHEAPER_ELSEWHERE') {
+    const crWinnerName = escapeHtml(decision.winnerName || decision.winnerLabel || '');
+    const cplWinnerVar = variantCounts.find(v => v.label === economic.cpl_leader_variant_id || v.variant_id === economic.cpl_leader_variant_id);
+    const cplWinnerName = escapeHtml(cplWinnerVar?.name || cplWinnerVar?.label || economic.cpl_leader_variant_id);
+    subject = `מצאנו זוכה — אבל וריאציה אחרת זולה יותר לליד | ${test.name}`;
+    headline = `<div style="background:#fff8e1;border-right:4px solid #F59E0B;padding:14px;border-radius:8px;margin:0 0 14px;">
+      <div style="color:#e65100;font-size:16px;font-weight:700;margin-bottom:6px;">🏆 ניסוח מנצח: ${crWinnerName}</div>
+      <div style="color:#e65100;font-size:14px;margin-bottom:6px;">💰 עלות נמוכה יותר: ${cplWinnerName} (<span dir="ltr">₪${economic.cpl_leader_cpl.toFixed(1)}</span> מול <span dir="ltr">₪${economic.cr_leader_cpl.toFixed(1)}</span>)</div>
+      <div style="color:#ef6c00;font-size:14px;">המלצה: השק את ${crWinnerName}, אבל קח את הקריאייטיב/אאודיינס של ${cplWinnerName} ב-Meta כדי להוזיל גם את ה-CPC.</div>
+    </div>`;
+    body = ``;
+    cta = btn('פתח לוח בקרה לפרטים מלאים ←', dashboardUrl);
+  } else if (decision.verdict === 'WINNER_FOUND' && isInsufficient) {
+    const winnerNameRaw = decision.winnerName || decision.winnerLabel || '';
+    const winnerNameHtml = escapeHtml(winnerNameRaw);
+    subject = `יש מנצח: ${winnerNameRaw} (+${Math.floor(decision.liftPct)}% שיפור) | ${test.name}`;
     headline = `<div style="background:#e8f5e9;border-right:4px solid #43a047;padding:14px;border-radius:8px;margin:0 0 14px;">
       <div style="color:#2e7d32;font-size:18px;font-weight:700;margin-bottom:4px;">🏆 ${winnerNameHtml} מנצחת</div>
-      <div style="color:#388e3c;font-size:14px;">שיפור של <span dir="ltr">+${liftDisplay}%</span> מעל הוורסיה השנייה.</div>
+      <div style="color:#388e3c;font-size:14px;">שיפור של <span dir="ltr">+${Math.floor(decision.liftPct)}%</span> מעל הוורסיה השנייה.</div>
+    </div>`;
+    body = `<div style="background:#F3F4F6;border-radius:8px;padding:14px;margin:14px 0;">
+      <div style="font-weight:700;color:#0d2240;font-size:14px;margin-bottom:6px;">כדי לראות מסקנה כלכלית — צריך מספרי הוצאה עדכניים</div>
+      <div style="color:#444;font-size:13px;">ברגע שתעדכני, נחשב מחדש את העלות לליד ונציג את המסקנה המלאה.</div>
+    </div>`;
+    cta = btn('עדכן הוצאות עכשיו ←', dashboardUrl);
+  } else if (decision.verdict === 'WINNER_FOUND') {
+    // Existing back-compat path (no economic data)
+    const winnerNameRaw = decision.winnerName || decision.winnerLabel || '';
+    const winnerNameHtml = escapeHtml(winnerNameRaw);
+    subject = `יש מנצח: ${winnerNameRaw} (+${Math.floor(decision.liftPct)}% שיפור) | ${test.name}`;
+    headline = `<div style="background:#e8f5e9;border-right:4px solid #43a047;padding:14px;border-radius:8px;margin:0 0 14px;">
+      <div style="color:#2e7d32;font-size:18px;font-weight:700;margin-bottom:4px;">🏆 ${winnerNameHtml} מנצחת</div>
+      <div style="color:#388e3c;font-size:14px;">שיפור של <span dir="ltr">+${Math.floor(decision.liftPct)}%</span> מעל הוורסיה השנייה.</div>
     </div>`;
     body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">המלצה: החלף את ה-LP במטא ל-${winnerNameHtml} ועצור את הטסט.</p>`;
     cta = btn('הכרז מנצח ועצור את הטסט', dashboardUrl);
@@ -187,21 +247,20 @@ export function renderSummaryEmail(test, decision, variantCounts) {
       <div style="color:#424242;font-size:18px;font-weight:700;margin-bottom:4px;">אין מנצח ברור</div>
       <div style="color:#616161;font-size:14px;">הוורסיות הניבו ביצועים דומים בטווח השונות הסטטיסטית.</div>
     </div>`;
-    body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">מה זה כן אומר: ה-LP הקיים שלך עומד בפני וריאציות גסות. בטסט הבא, נסה שינוי גדול יותר (לדוגמה: הצעת ערך אחרת לחלוטין, לא רק שינוי כותרת).</p>`;
+    body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">מה זה כן אומר: ה-LP הקיים שלך עומד בפני וריאציות גסות. בטסט הבא, נסה שינוי גדול יותר.</p>`;
     cta = btn('צור טסט חדש', newTestUrl);
   } else {
     // TRENDING_UNDERPOWERED
-    const winnerNameRaw  = decision.winnerName || decision.winnerLabel || '';
-    const winnerNameHtml = escapeHtml(winnerNameRaw);
-    subject = `${winnerNameRaw} מוביל אך לא מובהק — להאריך או להחליט? | ${test.name}`;
+    const winnerName = escapeHtml(decision.winnerName || decision.winnerLabel || '');
+    subject = `${decision.winnerName || decision.winnerLabel || ''} מוביל אך לא מובהק — להאריך או להחליט? | ${test.name}`;
     headline = `<div style="background:#fff8e1;border-right:4px solid #ffa000;padding:14px;border-radius:8px;margin:0 0 14px;">
-      <div style="color:#e65100;font-size:18px;font-weight:700;margin-bottom:4px;">${winnerNameHtml} מוביל — אך לא מובהק</div>
+      <div style="color:#e65100;font-size:18px;font-weight:700;margin-bottom:4px;">${winnerName} מוביל — אך לא מובהק</div>
       <div style="color:#ef6c00;font-size:14px;">המגמה ברורה אבל אין מספיק נתונים לקבוע סופית.</div>
     </div>`;
     body = `<p style="margin:0 0 12px;color:#444;font-size:14px;">אפשרויות:</p>
       <ul style="margin:0 0 14px;padding-right:18px;color:#444;font-size:13px;line-height:1.7;">
-        <li>להאריך את הטסט ב-50% נוספים מהדגימה — סביר שתגיע למובהקות.</li>
-        <li>להחליט לפי המגמה ולעלות עם ${winnerNameHtml} עכשיו.</li>
+        <li>להאריך את הטסט ב-50% נוספים מהדגימה.</li>
+        <li>להחליט לפי המגמה ולעלות עם ${winnerName} עכשיו.</li>
         <li>לעצור ולנסות וריאציה חדשה לגמרי.</li>
       </ul>`;
     cta = btn('פתח את לוח הבקרה', dashboardUrl);

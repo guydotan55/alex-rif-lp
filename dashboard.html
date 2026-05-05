@@ -1949,6 +1949,7 @@
           <span style="color:var(--white); font-size:14px; font-weight:600;">~<span id="planner-days">—</span> ימים</span>
         </div>
         <div id="planner-velocity-note" style="color:var(--text-dim); font-size:11px; margin-top:6px; text-align:right;"></div>
+        <div id="planner-cpl-note" style="display:none; color:var(--text-dim); font-size:11px; margin-top:6px; text-align:right;"></div>
       </div>
 
       <div id="planner-error" style="display:none; color:#e57373; font-size:12px; margin-top:8px;"></div>
@@ -2606,6 +2607,36 @@ async function updatePlannerResults() {
     isFallback
       ? 'מבוסס על הערכה (100 מבקרים/יום). עדכן בהתאם לקצב התנועה הצפוי.'
       : `מבוסס על ${velocity.toLocaleString('he-IL')} מבקרים/יום בקהילה הזו ב-14 הימים האחרונים.`;
+
+  const targetCpl = selectedProject?.target_cpl;
+  const cplNoteEl = document.getElementById('planner-cpl-note');
+  if (cplNoteEl && targetCpl != null && targetCpl > 0) {
+    const leadsEstimate = Math.round(totalVisitors * baselineCr);
+    const targetBudget = Math.round(targetCpl * leadsEstimate);
+    const verdict = budget <= targetBudget ? 'בגדר היעד' : 'מעל יעד CPL';
+    const verdictColor = budget <= targetBudget ? '#43a047' : '#F59E0B';
+
+    // Build with createElement / textContent (no innerHTML)
+    cplNoteEl.textContent = '';
+    cplNoteEl.appendChild(document.createTextNode(
+      `↪ בתקציב הזה תשיג ~${leadsEstimate.toLocaleString('he-IL')} לידים. בעלות יעד ₪${targetCpl} × ${leadsEstimate} = `
+    ));
+    const budgetSpan = document.createElement('span');
+    budgetSpan.dir = 'ltr';
+    budgetSpan.textContent = `₪${targetBudget.toLocaleString('he-IL')}`;
+    cplNoteEl.appendChild(budgetSpan);
+    cplNoteEl.appendChild(document.createTextNode('. '));
+    const verdictSpan = document.createElement('span');
+    verdictSpan.style.color = verdictColor;
+    verdictSpan.style.fontWeight = '600';
+    verdictSpan.textContent = verdict;
+    cplNoteEl.appendChild(verdictSpan);
+
+    cplNoteEl.style.display = '';
+  } else if (cplNoteEl) {
+    cplNoteEl.style.display = 'none';
+  }
+
   resultsEl.style.display = '';
   _updateActivateGating();
 }

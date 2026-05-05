@@ -87,12 +87,17 @@ async function fetchTestWithCreatorAndVariants(testId) {
   if (!creator?.email) return { error: 'Test creator has no email' };
 
   const tvRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${testId}&select=id,variant_id,label,projects(name,slug),project_variants(variant_slug,is_default)`,
+    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${testId}&select=id,variant_id,label,spend,spend_updated_at,projects(name,slug,target_cpl),project_variants(variant_slug,is_default)`,
     { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   const testVariants = await tvRes.json();
 
-  return { test, creatorEmail: creator.email, testVariants };
+  return {
+    test,
+    creatorEmail: creator.email,
+    testVariants,
+    target_cpl: testVariants[0]?.projects?.target_cpl ?? null,
+  };
 }
 
 // Build the public LP URL for a test_variants row.

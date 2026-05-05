@@ -1385,6 +1385,13 @@
     opacity: 0.7;
     margin-top: 2px;
   }
+
+.planner-help {
+  display:inline-block; width:14px; height:14px; line-height:14px;
+  text-align:center; border-radius:50%; background:var(--border);
+  color:var(--text-dim); font-size:10px; cursor:help; margin-right:4px;
+}
+.planner-help:hover { background:var(--gold-dim); color:var(--gold); }
 </style>
 </head>
 <body>
@@ -1581,6 +1588,20 @@
                 <div class="card-sub">מייל אוטומטי שנשלח ללידים חדשים</div>
               </div>
             </div>
+        <!-- Target CPL (CPL feature) -->
+        <div style="margin-bottom:18px; padding:14px; background:var(--navy); border-radius:var(--radius-sm); border:1px solid var(--border);">
+          <label style="display:block; color:var(--gold); font-size:13px; font-weight:600; margin-bottom:6px;">עלות מקסימלית לליד (אופציונלי)</label>
+          <div style="position:relative; max-width:200px;">
+            <input type="number" id="settings-target-cpl" min="0" max="10000" step="0.5" placeholder="40" dir="ltr"
+              style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;">
+            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">₪</span>
+          </div>
+          <div style="color:var(--text-dim); font-size:11px; margin-top:6px; line-height:1.5;">
+            מעל זה, ליד עולה יותר ממה שהוא שווה. כלל אצבע: 1/3 עד 1/2 מהתרומה הממוצעת. למשל: תרומה ממוצעת ₪120 → CPL ₪40-60.
+          </div>
+          <button id="btn-save-target-cpl" onclick="saveTargetCpl()" style="margin-top:10px; padding:6px 14px; background:var(--gold-dim); border:1px solid var(--gold); border-radius:var(--radius-sm); color:var(--gold); cursor:pointer; font-family:'Heebo',sans-serif; font-size:12px;">שמור</button>
+          <span id="target-cpl-saved" style="display:none; margin-right:8px; color:#81c784; font-size:12px;">נשמר ✓</span>
+        </div>
             <div class="email-settings">
               <div class="toggle-row">
                 <label class="toggle-switch">
@@ -1669,6 +1690,17 @@
           <div id="test-url-bar" style="display:none; direction:ltr; background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:4px 6px 4px 12px; align-items:center; gap:8px; overflow:hidden;">
             <a id="test-url-link" href="#" target="_blank" style="color:var(--gold-soft); font-size:12px; text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; direction:ltr;"></a>
             <button onclick="copyTestUrl(event)" style="background:var(--gold-dim); border:1px solid var(--gold); border-radius:6px; color:var(--gold); cursor:pointer; font-family:'Heebo',sans-serif; font-size:11px; padding:3px 10px; white-space:nowrap;">העתק</button>
+          </div>
+        </div>
+
+        <!-- Recommend-stop banner (shown after summary email fires while test is still running) -->
+        <div id="test-recommend-banner" style="display:none; margin:12px 28px; padding:14px; border-radius:10px; border-right:4px solid #43a047; background:rgba(67,160,71,0.12);">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:14px;">
+            <div>
+              <div id="test-recommend-headline" style="color:#81c784; font-weight:700; font-size:15px; margin-bottom:4px;"></div>
+              <div id="test-recommend-body" style="color:var(--text-dim); font-size:13px;"></div>
+            </div>
+            <button id="test-recommend-cta" class="btn-action" onclick="_onRecommendBannerCta()" style="background:rgba(76,175,80,0.2);color:#81c784;border-color:#81c784;white-space:nowrap;">הכרז מנצח ועצור</button>
           </div>
         </div>
 
@@ -1858,6 +1890,73 @@
     <div id="test-weight-controls" style="display:none; margin-bottom:16px;">
       <label style="display:block; color:var(--text-dim); font-size:13px; margin-bottom:6px;">חלוקת תנועה</label>
       <div id="test-weight-sliders"></div>
+    </div>
+
+    <!-- Planner / budget calculator -->
+    <div style="margin-bottom:16px; padding:14px; background:var(--navy); border:1px solid var(--border); border-radius:var(--radius-sm);">
+      <div style="color:var(--gold); font-size:13px; font-weight:600; margin-bottom:10px;">תכנון תקציב</div>
+
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <div style="flex:1;">
+          <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:4px;">
+            אחוז המרה צפוי
+            <span class="planner-help" title="כמה אחוז מהמבקרים מתחזים בדרך כלל ללידים בקהילה הזו. אם אינך יודע — נסה 3%.">?</span>
+          </label>
+          <div style="position:relative;">
+            <input type="number" id="planner-baseline-cvr" min="0.1" max="50" step="0.1" placeholder="3.0" value="3.0" dir="ltr"
+              style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
+              oninput="updatePlannerResults()">
+            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">%</span>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:4px;">
+            שיפור שאתה רוצה לזהות
+            <span class="planner-help" title="כמה שיפור יחסי תרצה לזהות בין הוורסיות. 20% פירושו: למשל מ-3% ל-3.6%.">?</span>
+          </label>
+          <div style="position:relative;">
+            <input type="number" id="planner-mde" min="5" max="200" step="1" placeholder="20" value="100" dir="ltr"
+              style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
+              oninput="updatePlannerResults()">
+            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">%</span>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:4px;">
+            מחיר לקליק במטא
+            <span class="planner-help" title="המחיר הממוצע שאתה משלם על קליק לדף נחיתה במטא.">?</span>
+          </label>
+          <div style="position:relative;">
+            <input type="number" id="planner-cpc" min="0.1" max="100" step="0.1" placeholder="3.5" value="3" dir="ltr"
+              style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
+              oninput="updatePlannerResults()">
+            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">₪</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="planner-results" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+          <span style="color:var(--text-dim); font-size:13px;">נדרשים לכל וריאציה:</span>
+          <span style="color:var(--white); font-size:14px; font-weight:600;"><span id="planner-required-n">—</span> מבקרים</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+          <span style="color:var(--text-dim); font-size:13px;">תקציב משוער:</span>
+          <span style="color:var(--white); font-size:14px; font-weight:600;"><span dir="ltr">₪<span id="planner-budget">—</span></span></span>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-dim); font-size:13px;" id="planner-days-label">זמן צפוי:</span>
+          <span style="color:var(--white); font-size:14px; font-weight:600;">~<span id="planner-days">—</span> ימים</span>
+        </div>
+        <div id="planner-velocity-note" style="color:var(--text-dim); font-size:11px; margin-top:6px; text-align:right;"></div>
+        <div id="planner-cpl-note" style="display:none; color:var(--text-dim); font-size:11px; margin-top:6px; text-align:right;"></div>
+      </div>
+
+      <div id="planner-error" style="display:none; color:#e57373; font-size:12px; margin-top:8px;"></div>
+    </div>
+
+    <div style="margin-bottom:12px; padding:8px 10px; color:var(--text-dim); font-size:11px; line-height:1.5; text-align:right;">
+      💡 אם הרצת קמפיינים בעבר ויש לך נתונים אמיתיים, החלף את הערכים. אם לא — שאל את האדם שמנהל לך את הקמפיין במטא, או השאר את ברירות המחדל.
     </div>
 
     <!-- Create button -->
@@ -2224,6 +2323,7 @@ function setTestMode(mode) {
 }
 
 function showCreateTestModal() {
+  _plannerResetCache();
   testEditMode = false;
   testModalSelectedLPs = [];
   testModalMode = 'split';
@@ -2267,11 +2367,13 @@ function showCreateTestModal() {
 }
 
 function closeCreateTestModal() {
+  _plannerResetCache();
   document.getElementById('create-test-modal').style.display = 'none';
   testEditMode = false;
 }
 
 async function showEditTestModal() {
+  _plannerResetCache();
   if (!selectedTest || selectedTest.status !== 'draft') return;
   testEditMode = true;
   testModalSelectedLPs = [];
@@ -2333,6 +2435,19 @@ async function showEditTestModal() {
   }
 
   updateWeightControls();
+
+  // Pre-populate planner inputs from the existing test (M-4 backfill UX)
+  const cvrEl = document.getElementById('planner-baseline-cvr');
+  const mdeEl = document.getElementById('planner-mde');
+  const cpcEl = document.getElementById('planner-cpc');
+  if (cvrEl && mdeEl && cpcEl) {
+    cvrEl.value = selectedTest.baseline_cvr != null ? (selectedTest.baseline_cvr * 100).toFixed(1) : '';
+    mdeEl.value = selectedTest.mde != null ? (selectedTest.mde * 100).toFixed(0) : '';
+    cpcEl.value = selectedTest.expected_cpc != null ? selectedTest.expected_cpc : '';
+    // Trigger update if any value is filled
+    if (cvrEl.value || mdeEl.value || cpcEl.value) updatePlannerResults();
+  }
+
   document.getElementById('create-test-modal').style.display = 'flex';
 }
 
@@ -2400,6 +2515,154 @@ function updateWeightControls() {
   }).join('');
 }
 
+// ── Test Planner / Budget Calculator ─────────────────────
+// Mirror of api/lib/bayes.js sampleSizePerVariant — pure JS, runs in browser.
+// Keep these two implementations in sync if you change the formula.
+function _quantileNormalForPlanner(p) {
+  const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  const b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+  const c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  const d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  const pLow=0.02425, pHigh=1-pLow;
+  let q,r;
+  if (p<pLow){q=Math.sqrt(-2*Math.log(p));return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  if (p<=pHigh){q=p-0.5;r=q*q;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
+  q=Math.sqrt(-2*Math.log(1-p));return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+}
+function plannerSampleSize(baselineCr, mde, numVariants) {
+  const k = numVariants - 1;
+  const alpha = k > 1 ? 0.05 / k : 0.05;
+  const z_a = _quantileNormalForPlanner(1 - alpha / 2);
+  const z_b = 0.841621;
+  const p1 = baselineCr;
+  const p2 = baselineCr * (1 + mde);
+  if (p2 >= 1) return null;
+  const pBar = (p1 + p2) / 2;
+  const num = Math.pow(z_a*Math.sqrt(2*pBar*(1-pBar)) + z_b*Math.sqrt(p1*(1-p1)+p2*(1-p2)), 2);
+  return Math.ceil(num / Math.pow(p2 - p1, 2));
+}
+
+// Compute the community's recent visitor-velocity (visitors/day) for the
+// days-estimate. Returns {velocity, isFallback}. Fallback = 100/day.
+async function plannerCommunityVelocity(communityId) {
+  if (!communityId) return { velocity: 100, isFallback: true };
+  const since = new Date(Date.now() - 14 * 86400 * 1000).toISOString();
+  const { data, error } = await sb
+    .from('analytics_events')
+    .select('event_data,created_at,projects!inner(community_id)', { count: 'exact', head: false })
+    .eq('event_type', 'page_view')
+    .eq('projects.community_id', communityId)
+    .gte('created_at', since)
+    .limit(10000);
+  if (error || !data || data.length === 0) return { velocity: 100, isFallback: true };
+  const visitors = new Set(data.map(r => r.event_data?.visitor_id).filter(Boolean));
+  return { velocity: Math.max(1, Math.round(visitors.size / 14)), isFallback: false };
+}
+
+// Cached velocity per modal-open so we don't re-query on every keystroke.
+let _plannerVelocityCache = null;
+
+async function _ensurePlannerVelocity() {
+  if (_plannerVelocityCache) return _plannerVelocityCache;
+  const firstProject = projects.find(p => p.id === testModalSelectedLPs[0]?.projectId);
+  _plannerVelocityCache = await plannerCommunityVelocity(firstProject?.community_id);
+  return _plannerVelocityCache;
+}
+
+async function updatePlannerResults() {
+  const cvrEl = document.getElementById('planner-baseline-cvr');
+  const mdeEl = document.getElementById('planner-mde');
+  const cpcEl = document.getElementById('planner-cpc');
+  const resultsEl = document.getElementById('planner-results');
+  const errorEl = document.getElementById('planner-error');
+  const numVariants = Math.max(2, testModalSelectedLPs.length || 2);
+
+  const baselineCr = parseFloat(cvrEl.value) / 100;
+  const mde = parseFloat(mdeEl.value) / 100;
+  const cpc = parseFloat(cpcEl.value);
+
+  errorEl.style.display = 'none';
+  if (!(baselineCr > 0 && baselineCr < 1) || !(mde > 0) || !(cpc > 0)) {
+    resultsEl.style.display = 'none';
+    _updateActivateGating();
+    return;
+  }
+  const n = plannerSampleSize(baselineCr, mde, numVariants);
+  if (n === null) {
+    errorEl.textContent = 'השיפור גדול מדי עבור אחוז ההמרה הצפוי. הקטן את ה-MDE או הגדל את הבסיס.';
+    errorEl.style.display = '';
+    resultsEl.style.display = 'none';
+    _updateActivateGating();
+    return;
+  }
+  const totalVisitors = n * numVariants;
+  const budget = Math.round(totalVisitors * cpc);
+  const { velocity, isFallback } = await _ensurePlannerVelocity();
+  const days = Math.max(1, Math.ceil(totalVisitors / velocity));
+
+  document.getElementById('planner-required-n').textContent = n.toLocaleString('he-IL');
+  document.getElementById('planner-budget').textContent = budget.toLocaleString('he-IL');
+  document.getElementById('planner-days').textContent = days.toLocaleString('he-IL');
+  document.getElementById('planner-velocity-note').textContent =
+    isFallback
+      ? 'מבוסס על הערכה (100 מבקרים/יום). עדכן בהתאם לקצב התנועה הצפוי.'
+      : `מבוסס על ${velocity.toLocaleString('he-IL')} מבקרים/יום בקהילה הזו ב-14 הימים האחרונים.`;
+
+  const targetCpl = selectedProject?.target_cpl;
+  const cplNoteEl = document.getElementById('planner-cpl-note');
+  if (cplNoteEl && targetCpl != null && targetCpl > 0) {
+    const leadsEstimate = Math.round(totalVisitors * baselineCr);
+    const targetBudget = Math.round(targetCpl * leadsEstimate);
+    const verdict = budget <= targetBudget ? 'בגדר היעד' : 'מעל יעד CPL';
+    const verdictColor = budget <= targetBudget ? '#43a047' : '#F59E0B';
+
+    // Build with createElement / textContent (no innerHTML)
+    cplNoteEl.textContent = '';
+    cplNoteEl.appendChild(document.createTextNode(
+      `↪ בתקציב הזה תשיג ~${leadsEstimate.toLocaleString('he-IL')} לידים. בעלות יעד ₪${targetCpl} × ${leadsEstimate} = `
+    ));
+    const budgetSpan = document.createElement('span');
+    budgetSpan.dir = 'ltr';
+    budgetSpan.textContent = `₪${targetBudget.toLocaleString('he-IL')}`;
+    cplNoteEl.appendChild(budgetSpan);
+    cplNoteEl.appendChild(document.createTextNode('. '));
+    const verdictSpan = document.createElement('span');
+    verdictSpan.style.color = verdictColor;
+    verdictSpan.style.fontWeight = '600';
+    verdictSpan.textContent = verdict;
+    cplNoteEl.appendChild(verdictSpan);
+
+    cplNoteEl.style.display = '';
+  } else if (cplNoteEl) {
+    cplNoteEl.style.display = 'none';
+  }
+
+  resultsEl.style.display = '';
+  _updateActivateGating();
+}
+
+function _updateActivateGating() {
+  const btn = document.getElementById('btn-create-test-submit');
+  if (!btn) return;
+  const cvr = parseFloat(document.getElementById('planner-baseline-cvr').value) / 100;
+  const mde = parseFloat(document.getElementById('planner-mde').value) / 100;
+  const cpc = parseFloat(document.getElementById('planner-cpc').value);
+  const numVariants = testModalSelectedLPs.length;
+  const ok = cvr > 0 && cvr < 1 && mde > 0 && cpc > 0 && numVariants >= 2;
+  btn.disabled = !ok;
+  btn.style.opacity = ok ? '1' : '0.5';
+  btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+}
+
+// Reset cache when modal opens / closes — must be called from the existing
+// modal open + close functions in the next task.
+function _plannerResetCache() {
+  _plannerVelocityCache = null;
+  // Refresh button-gating + results panel on modal lifecycle (defaults populate live)
+  if (typeof _updateActivateGating === 'function') _updateActivateGating();
+  if (typeof updatePlannerResults === 'function') updatePlannerResults();
+}
+
 async function createTest() {
   const name = document.getElementById('test-name-input').value.trim();
   if (!name) { alert('נא להזין שם לטסט'); return; }
@@ -2417,13 +2680,31 @@ async function createTest() {
 
   const { data: { user } } = await sb.auth.getUser();
 
+  const baselineCrPct = parseFloat(document.getElementById('planner-baseline-cvr').value);
+  const mdePct        = parseFloat(document.getElementById('planner-mde').value);
+  const cpc           = parseFloat(document.getElementById('planner-cpc').value);
+  if (!(baselineCrPct > 0 && mdePct > 0 && cpc > 0)) {
+    alert('נא למלא את כל שדות תכנון התקציב');
+    return;
+  }
+  const numVariants = testModalSelectedLPs.length;
+  const targetN = plannerSampleSize(baselineCrPct / 100, mdePct / 100, numVariants);
+  if (targetN === null) {
+    alert('השיפור גדול מדי עבור אחוז ההמרה הצפוי. הקטן את ה-MDE.');
+    return;
+  }
+
   const { data: test, error: testErr } = await sb.from('tests').insert({
     name,
     slug,
     community_id: communityId,
     status: 'draft',
     created_by: user.id,
-    mode: testModalMode
+    mode: testModalMode,
+    baseline_cvr: baselineCrPct / 100,
+    mde: mdePct / 100,
+    expected_cpc: cpc,
+    target_sample_size: targetN
   }).select().single();
 
   if (testErr) {
@@ -2455,9 +2736,26 @@ async function createTest() {
 async function saveTestEdits(name) {
   const testId = selectedTest.id;
 
-  // Update test name and mode
+  // Update test name and mode (plus planner fields if supplied)
+  const baselineCrPct = parseFloat(document.getElementById('planner-baseline-cvr').value);
+  const mdePct        = parseFloat(document.getElementById('planner-mde').value);
+  const cpc           = parseFloat(document.getElementById('planner-cpc').value);
+  const numVariantsForEdit = testModalSelectedLPs.length;
+
+  const updatePayload = { name, mode: testModalMode, updated_at: new Date().toISOString() };
+
+  if (baselineCrPct > 0 && mdePct > 0 && cpc > 0 && numVariantsForEdit >= 2) {
+    const targetN = plannerSampleSize(baselineCrPct / 100, mdePct / 100, numVariantsForEdit);
+    if (targetN !== null) {
+      updatePayload.baseline_cvr = baselineCrPct / 100;
+      updatePayload.mde = mdePct / 100;
+      updatePayload.expected_cpc = cpc;
+      updatePayload.target_sample_size = targetN;
+    }
+  }
+
   const { error: nameErr } = await sb.from('tests')
-    .update({ name, mode: testModalMode, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq('id', testId);
   if (nameErr) {
     console.error('Update test name error:', nameErr);
@@ -2610,6 +2908,7 @@ async function selectTest(testId) {
 
   renderTestAnalytics();
   renderTestLeads();
+  _updateRecommendBanner();
 }
 
 function renderTestWeightsBar() {
@@ -2704,19 +3003,32 @@ function renderTestAnalytics() {
     return { vid, label: g.label, name: g.projectName, pv, uv, lf, cc, lc, convPct };
   });
 
-  // Find leader — only call a winner when sample is meaningful AND lift is material
+  // Find leader — call a winner if (a) backend already sent the summary email,
+  // OR (b) the legacy heuristic is satisfied. (a) is the authoritative signal.
   const MIN_UV_PER_VARIANT = 30;
   const MIN_LEADS_PER_VARIANT = 5;
-  const MIN_RELATIVE_LIFT_PCT = 30; // 30%+ lift over runner-up
-  const hasEnoughData = metrics.every(m => m.uv >= MIN_UV_PER_VARIANT && m.lc >= MIN_LEADS_PER_VARIANT);
+  const MIN_RELATIVE_LIFT_PCT = 30;
   let leader = null;
-  if (hasEnoughData && metrics.length >= 2) {
-    const sorted = [...metrics].sort((a, b) => b.convPct - a.convPct);
-    const delta = sorted[0].convPct - sorted[1].convPct;
-    const lift = sorted[1].convPct > 0 ? (delta / sorted[1].convPct) * 100 : Infinity;
-    if (lift >= MIN_RELATIVE_LIFT_PCT) {
+
+  if (selectedTest?.summary_sent_at) {
+    // Backend has decided — show the empirical leader regardless of heuristic
+    if (metrics.length >= 2) {
+      const sorted = [...metrics].sort((a, b) => b.convPct - a.convPct);
+      const delta = sorted[0].convPct - sorted[1].convPct;
+      const lift = sorted[1].convPct > 0 ? (delta / sorted[1].convPct) * 100 : Infinity;
       const deltaPct = Number.isFinite(lift) ? lift.toFixed(0) : '∞';
       leader = { vid: sorted[0].vid, deltaPct };
+    }
+  } else {
+    const hasEnoughData = metrics.every(m => m.uv >= MIN_UV_PER_VARIANT && m.lc >= MIN_LEADS_PER_VARIANT);
+    if (hasEnoughData && metrics.length >= 2) {
+      const sorted = [...metrics].sort((a, b) => b.convPct - a.convPct);
+      const delta = sorted[0].convPct - sorted[1].convPct;
+      const lift = sorted[1].convPct > 0 ? (delta / sorted[1].convPct) * 100 : Infinity;
+      if (lift >= MIN_RELATIVE_LIFT_PCT) {
+        const deltaPct = Number.isFinite(lift) ? lift.toFixed(0) : '∞';
+        leader = { vid: sorted[0].vid, deltaPct };
+      }
     }
   }
 
@@ -2737,6 +3049,51 @@ function renderTestAnalytics() {
       ? `<div style="color:var(--text-dim);font-size:11px;margin-top:6px;">לא מספיק נתונים</div>`
       : '';
 
+      const targetCpl = selectedProject?.target_cpl;
+      let spendCplBlock = '';
+      if (targetCpl != null && targetCpl > 0) {
+        const tv = testVariants.find(t => t.variant_id === m.vid);
+        const spend = tv?.spend != null ? Number(tv.spend) : null;
+        const spendUpdatedAt = tv?.spend_updated_at;
+        const ageDays = spendUpdatedAt ? Math.floor((Date.now() - new Date(spendUpdatedAt).getTime()) / 86400e3) : null;
+        const ageColor = ageDays == null ? '#999' : (ageDays > 7 ? '#F59E0B' : '#999');
+        const ageLabel = ageDays == null ? 'טרם עודכן' : (ageDays === 0 ? 'עודכן היום' : `עודכן לפני ${ageDays} ימים`);
+
+        const spendFloor = 3 * targetCpl;
+        const cpl = (spend != null && m.lc > 0) ? spend / m.lc : null;
+        let cplDisplay, cplColor, cplSubLabel;
+        if (spend == null || spend < spendFloor) {
+          cplDisplay = '—'; cplColor = '#999';
+          cplSubLabel = `אין מספיק נתונים (צריך ₪${spendFloor.toFixed(0)} לפחות)`;
+        } else if (cpl == null) {
+          cplDisplay = '—'; cplColor = '#999'; cplSubLabel = '';
+        } else if (cpl <= targetCpl) {
+          cplDisplay = `₪${cpl.toFixed(1)}`; cplColor = '#43a047';
+          cplSubLabel = `מתחת ליעד ₪${targetCpl}`;
+        } else {
+          cplDisplay = `₪${cpl.toFixed(1)}`; cplColor = '#F59E0B';
+          cplSubLabel = `₪${(cpl - targetCpl).toFixed(1)} מעל היעד`;
+        }
+
+        spendCplBlock = `
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+              <span style="color:var(--text-dim);font-size:12px;">הוצאה</span>
+              <span style="color:var(--white);font-size:13px;font-weight:600;">
+                <span dir="ltr">₪${spend != null ? spend.toFixed(0) : '—'}</span>
+                <button onclick="editVariantSpend('${m.vid}', ${spend ?? 'null'})" title="עדכן הוצאה" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:12px;margin-right:4px;">✏️</button>
+              </span>
+            </div>
+            <div style="color:${ageColor};font-size:10px;text-align:left;margin-bottom:8px;">${ageLabel}</div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;" title="עלות לליד = הוצאה ÷ לידים שמילאו טופס. לא מודד איכות לידים — רק כמות.">
+              <span style="color:var(--text-dim);font-size:12px;">עלות לליד</span>
+              <span style="color:${cplColor};font-size:13px;font-weight:600;"><span dir="ltr">${cplDisplay}</span></span>
+            </div>
+            <div style="color:var(--text-dim);font-size:10px;text-align:left;margin-top:2px;">${cplSubLabel}</div>
+          </div>
+        `;
+      }
+
     html += `<div class="variant-compare-column" style="${isLeader ? 'border-color:#81c784;' : ''}">
       <div style="font-weight:700;color:var(--gold);margin-bottom:4px;text-align:center;">${esc(m.label)}</div>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;text-align:center;">${esc(m.name)}</div>
@@ -2753,11 +3110,13 @@ function renderTestAnalytics() {
         ${leaderBadge}
         ${noDataMsg}
       </div>
+      ${spendCplBlock}
     </div>`;
   });
   html += '</div>';
 
   container.innerHTML = html;
+  maybeShowSpendTooltip();
 }
 
 function renderTestLeads() {
@@ -2801,14 +3160,139 @@ function copyText(btn, text) {
   setTimeout(() => btn.textContent = 'העתק', 1500);
 }
 
+async function editVariantSpend(variantId, currentSpend) {
+  const promptText = currentSpend != null
+    ? `עדכן הוצאה לוריאנט (₪). ערך נוכחי: ${currentSpend}`
+    : 'הזן הוצאה לוריאנט (₪):';
+  const raw = window.prompt(promptText, currentSpend ?? '');
+  if (raw === null) return;
+  const value = parseFloat(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1_000_000) {
+    alert('נא להזין מספר תקין בין 0 ל-1,000,000');
+    return;
+  }
+  const tv = testVariants.find(t => t.variant_id === variantId);
+  if (!tv) { alert('לא נמצאה רשומת וריאנט'); return; }
+  const { error } = await sb.from('test_variants')
+    .update({ spend: value, spend_updated_at: new Date().toISOString() })
+    .eq('id', tv.id);
+  if (error) { console.error('editVariantSpend error:', error); alert('שגיאה בעדכון'); return; }
+  tv.spend = value;
+  tv.spend_updated_at = new Date().toISOString();
+  if (typeof renderTestAnalytics === 'function') renderTestAnalytics();
+}
+
+function maybeShowSpendTooltip() {
+  if (localStorage.getItem('seen-spend-tooltip')) return;
+  setTimeout(() => {
+    const pencil = document.querySelector('button[onclick^="editVariantSpend"]');
+    if (!pencil) return;
+    const tip = document.createElement('div');
+    tip.style.cssText = 'position:absolute;background:#0d2240;color:#fff;padding:8px 12px;border-radius:6px;font-size:12px;z-index:9999;box-shadow:0 2px 12px rgba(0,0,0,0.3);';
+    tip.textContent = 'עדכן פעם בשבוע — זה מספיק';
+    const rect = pencil.getBoundingClientRect();
+    tip.style.top = (rect.top - 36 + window.scrollY) + 'px';
+    tip.style.right = (window.innerWidth - rect.right - 12) + 'px';
+    document.body.appendChild(tip);
+    setTimeout(() => tip.remove(), 4500);
+    localStorage.setItem('seen-spend-tooltip', '1');
+  }, 800);
+}
+
+function _updateRecommendBanner() {
+  const banner = document.getElementById('test-recommend-banner');
+  if (!banner || !selectedTest) return;
+
+  const fired = selectedTest.summary_sent_at && selectedTest.status === 'running';
+  if (!fired) { banner.style.display = 'none'; return; }
+
+  const headlineEl = document.getElementById('test-recommend-headline');
+  const bodyEl = document.getElementById('test-recommend-body');
+  const ctaEl = document.getElementById('test-recommend-cta');
+  banner.style.display = '';
+
+  const verdict = selectedTest.summary_verdict || 'WINNER_FOUND';
+  const econ    = selectedTest.economic_verdict;
+
+  const setColors = (border, bg, headlineColor, ctaBg, ctaColor, ctaBorder) => {
+    banner.style.borderRightColor = border;
+    banner.style.background = bg;
+    headlineEl.style.color = headlineColor;
+    ctaEl.style.background = ctaBg;
+    ctaEl.style.color = ctaColor;
+    ctaEl.style.borderColor = ctaBorder;
+  };
+
+  if (verdict === 'WINNER_FOUND' && econ === 'VIABLE') {
+    setColors('#43a047', 'rgba(67,160,71,0.12)', '#81c784',
+              'rgba(76,175,80,0.2)', '#81c784', '#81c784');
+    headlineEl.textContent = '🟢 מצאנו מנצח — והעלות לליד מתאימה';
+    bodyEl.textContent = 'אפשר להגדיל תקציב על הוורסיה הזו.';
+    ctaEl.textContent = 'הכרז מנצח ועצור';
+    ctaEl.style.display = '';
+  } else if (verdict === 'WINNER_FOUND' && econ === 'NOT_VIABLE') {
+    setColors('#F59E0B', 'rgba(245,158,11,0.12)', '#ffb74d',
+              'rgba(245,158,11,0.2)', '#ffb74d', '#ffb74d');
+    headlineEl.textContent = '🟡 מצאנו מנצח, אבל העלות לליד מעל היעד';
+    bodyEl.textContent = 'תובנת המסר שווה — ההצעה צריכה לעבוד שונה. בדוק את המייל לפרטים.';
+    ctaEl.textContent = 'איך להוזיל את הליד';
+    ctaEl.style.display = '';
+  } else if (verdict === 'WINNER_FOUND' && econ === 'WINNER_BUT_CHEAPER_ELSEWHERE') {
+    setColors('#F59E0B', 'rgba(245,158,11,0.12)', '#ffb74d',
+              'rgba(245,158,11,0.2)', '#ffb74d', '#ffb74d');
+    headlineEl.textContent = '🟡 מצאנו מנצח, אבל וריאציה אחרת זולה יותר לליד';
+    bodyEl.textContent = 'שקול לשלב — הצעת המנצח, אאודיינס/קריאייטיב של הזולה. בדוק את המייל.';
+    ctaEl.textContent = 'פתח לוח בקרה';
+    ctaEl.style.display = '';
+  } else if (verdict === 'WINNER_FOUND') {
+    setColors('#43a047', 'rgba(67,160,71,0.12)', '#81c784',
+              'rgba(76,175,80,0.2)', '#81c784', '#81c784');
+    headlineEl.textContent = '🟢 מצאנו מנצח';
+    bodyEl.textContent = econ === 'INSUFFICIENT_SPEND'
+      ? 'עדכן את ההוצאות כדי לקבל מסקנה כלכלית מלאה.'
+      : econ === 'INSUFFICIENT_DATA'
+        ? 'נתוני ההוצאה לא עדכניים — עדכן כדי לראות מסקנה כלכלית.'
+        : 'שלחנו לך מייל עם פירוט. אפשר לעצור את הטסט.';
+    ctaEl.textContent = (econ === 'INSUFFICIENT_SPEND' || econ === 'INSUFFICIENT_DATA') ? 'עדכן הוצאות' : 'הכרז מנצח ועצור';
+    ctaEl.style.display = '';
+  } else if (verdict === 'TRENDING_UNDERPOWERED') {
+    setColors('#ffa000', 'rgba(255,160,0,0.12)', '#ffb74d',
+              'rgba(255,160,0,0.2)', '#ffb74d', '#ffb74d');
+    headlineEl.textContent = '🟡 מוביל אך לא מובהק';
+    bodyEl.textContent = 'יש מגמה ברורה אבל אין מובהקות סטטיסטית. בדוק במייל את ההמלצות.';
+    ctaEl.textContent = 'הכרז מנצח בכל זאת';
+    ctaEl.style.display = '';
+  } else {
+    setColors('#9e9e9e', 'rgba(158,158,158,0.12)', '#bdbdbd', '', '', '');
+    headlineEl.textContent = '⚪ אין הבדל מובהק';
+    bodyEl.textContent = 'הוורסיות הניבו ביצועים דומים. בחר על פי שיקולים אחרים.';
+    ctaEl.style.display = 'none';
+  }
+}
+
+function _onRecommendBannerCta() {
+  const ctaEl = document.getElementById('test-recommend-cta');
+  if (ctaEl.textContent.includes('עדכן הוצאות')) {
+    const firstCard = document.querySelector('.variant-compare-column, [class*="variant"]');
+    if (firstCard) firstCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (ctaEl.textContent.includes('פתח לוח')) return;
+  showDeclareWinnerModal();
+}
+
 // ── Test Actions ─────────────────────────────────────────
 async function toggleTestStatus() {
   if (!selectedTest) return;
 
   const newStatus = selectedTest.status === 'running' ? 'draft' : 'running';
 
-  // If activating, verify all variant projects are published
+  // If activating, verify all variant projects are published AND planner inputs are set
   if (newStatus === 'running') {
+    if (!selectedTest.target_sample_size) {
+      alert('הטסט הזה נוצר לפני הוספת תכנון התקציב. ערוך אותו והוסף את ערכי התכנון לפני ההפעלה.');
+      return;
+    }
     for (const tv of testVariants) {
       const { data: variant } = await sb.from('project_variants')
         .select('status')
@@ -2822,14 +3306,40 @@ async function toggleTestStatus() {
     }
   }
 
+  const updates = { status: newStatus, updated_at: new Date().toISOString() };
+  if (newStatus === 'running' && !selectedTest.started_at) {
+    updates.started_at = new Date().toISOString();
+  }
+
   const { error } = await sb.from('tests')
-    .update({ status: newStatus, updated_at: new Date().toISOString() })
+    .update(updates)
     .eq('id', selectedTest.id);
 
   if (error) {
     console.error('Toggle test status error:', error);
     alert('שגיאה בעדכון סטטוס הטסט');
     return;
+  }
+
+  // Fire kickoff email on first activation (idempotent: only if kickoff_sent_at IS NULL)
+  if (newStatus === 'running' && !selectedTest.kickoff_sent_at) {
+    try {
+      const resp = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'test_kickoff', test_id: selectedTest.id }),
+      });
+      if (resp.ok) {
+        await sb.from('tests').update({ kickoff_sent_at: new Date().toISOString() }).eq('id', selectedTest.id);
+      } else {
+        const errBody = await resp.json().catch(() => ({}));
+        console.error('Kickoff email failed:', resp.status, errBody);
+        // Non-blocking: test is running, user already has dashboard. Show toast.
+        alert('הטסט פעיל. שליחת מייל פתיחה נכשלה — בדוק לוגים.');
+      }
+    } catch (err) {
+      console.error('Kickoff email exception:', err);
+    }
   }
 
   selectedTest.status = newStatus;
@@ -3953,6 +4463,7 @@ async function saveContent() {
 function loadEmailSettings() {
   if (!selectedProject) return;
 
+  document.getElementById('settings-target-cpl').value = selectedProject?.target_cpl ?? '';
   document.getElementById('email-enabled').checked = !!selectedProject.email_enabled;
   document.getElementById('email-subject').value = selectedProject.email_subject || '';
   document.getElementById('email-body').value = selectedProject.email_body || '';
@@ -4004,6 +4515,25 @@ async function saveEmailSettings() {
   okEl.style.display = 'block';
   setTimeout(() => okEl.style.display = 'none', 3500);
   showToast('הגדרות המייל נשמרו!', 'success');
+}
+
+async function saveTargetCpl() {
+  if (!selectedProject) return;
+  const raw = document.getElementById('settings-target-cpl').value.trim();
+  const value = raw === '' ? null : parseFloat(raw);
+  if (raw !== '' && (!Number.isFinite(value) || value < 0 || value > 10000)) {
+    alert('נא להזין מספר תקין בין 0 ל-10,000');
+    return;
+  }
+  const btn = document.getElementById('btn-save-target-cpl');
+  btn.disabled = true;
+  const { error } = await sb.from('projects').update({ target_cpl: value }).eq('id', selectedProject.id);
+  btn.disabled = false;
+  if (error) { console.error('saveTargetCpl error:', error); alert('שגיאה בשמירה'); return; }
+  selectedProject.target_cpl = value;
+  const ok = document.getElementById('target-cpl-saved');
+  ok.style.display = '';
+  setTimeout(() => ok.style.display = 'none', 2500);
 }
 
 // ── Analytics Tab ────────────────────────────────────────

@@ -3085,6 +3085,7 @@ function renderTestAnalytics() {
   html += '</div>';
 
   container.innerHTML = html;
+  maybeShowSpendTooltip();
 }
 
 function renderTestLeads() {
@@ -3126,6 +3127,45 @@ function copyText(btn, text) {
   navigator.clipboard.writeText(text);
   btn.textContent = 'הועתק!';
   setTimeout(() => btn.textContent = 'העתק', 1500);
+}
+
+async function editVariantSpend(variantId, currentSpend) {
+  const promptText = currentSpend != null
+    ? `עדכן הוצאה לוריאנט (₪). ערך נוכחי: ${currentSpend}`
+    : 'הזן הוצאה לוריאנט (₪):';
+  const raw = window.prompt(promptText, currentSpend ?? '');
+  if (raw === null) return;
+  const value = parseFloat(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1_000_000) {
+    alert('נא להזין מספר תקין בין 0 ל-1,000,000');
+    return;
+  }
+  const tv = testVariants.find(t => t.variant_id === variantId);
+  if (!tv) { alert('לא נמצאה רשומת וריאנט'); return; }
+  const { error } = await sb.from('test_variants')
+    .update({ spend: value, spend_updated_at: new Date().toISOString() })
+    .eq('id', tv.id);
+  if (error) { console.error('editVariantSpend error:', error); alert('שגיאה בעדכון'); return; }
+  tv.spend = value;
+  tv.spend_updated_at = new Date().toISOString();
+  if (typeof renderTestAnalytics === 'function') renderTestAnalytics();
+}
+
+function maybeShowSpendTooltip() {
+  if (localStorage.getItem('seen-spend-tooltip')) return;
+  setTimeout(() => {
+    const pencil = document.querySelector('button[onclick^="editVariantSpend"]');
+    if (!pencil) return;
+    const tip = document.createElement('div');
+    tip.style.cssText = 'position:absolute;background:#0d2240;color:#fff;padding:8px 12px;border-radius:6px;font-size:12px;z-index:9999;box-shadow:0 2px 12px rgba(0,0,0,0.3);';
+    tip.textContent = 'עדכן פעם בשבוע — זה מספיק';
+    const rect = pencil.getBoundingClientRect();
+    tip.style.top = (rect.top - 36 + window.scrollY) + 'px';
+    tip.style.right = (window.innerWidth - rect.right - 12) + 'px';
+    document.body.appendChild(tip);
+    setTimeout(() => tip.remove(), 4500);
+    localStorage.setItem('seen-spend-tooltip', '1');
+  }, 800);
 }
 
 function _updateRecommendBanner() {

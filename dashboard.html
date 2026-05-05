@@ -3018,6 +3018,51 @@ function renderTestAnalytics() {
       ? `<div style="color:var(--text-dim);font-size:11px;margin-top:6px;">לא מספיק נתונים</div>`
       : '';
 
+      const targetCpl = selectedProject?.target_cpl;
+      let spendCplBlock = '';
+      if (targetCpl != null && targetCpl > 0) {
+        const tv = testVariants.find(t => t.variant_id === m.vid);
+        const spend = tv?.spend != null ? Number(tv.spend) : null;
+        const spendUpdatedAt = tv?.spend_updated_at;
+        const ageDays = spendUpdatedAt ? Math.floor((Date.now() - new Date(spendUpdatedAt).getTime()) / 86400e3) : null;
+        const ageColor = ageDays == null ? '#999' : (ageDays > 7 ? '#F59E0B' : '#999');
+        const ageLabel = ageDays == null ? 'טרם עודכן' : (ageDays === 0 ? 'עודכן היום' : `עודכן לפני ${ageDays} ימים`);
+
+        const spendFloor = 3 * targetCpl;
+        const cpl = (spend != null && m.lc > 0) ? spend / m.lc : null;
+        let cplDisplay, cplColor, cplSubLabel;
+        if (spend == null || spend < spendFloor) {
+          cplDisplay = '—'; cplColor = '#999';
+          cplSubLabel = `אין מספיק נתונים (צריך ₪${spendFloor.toFixed(0)} לפחות)`;
+        } else if (cpl == null) {
+          cplDisplay = '—'; cplColor = '#999'; cplSubLabel = '';
+        } else if (cpl <= targetCpl) {
+          cplDisplay = `₪${cpl.toFixed(1)}`; cplColor = '#43a047';
+          cplSubLabel = `מתחת ליעד ₪${targetCpl}`;
+        } else {
+          cplDisplay = `₪${cpl.toFixed(1)}`; cplColor = '#F59E0B';
+          cplSubLabel = `₪${(cpl - targetCpl).toFixed(1)} מעל היעד`;
+        }
+
+        spendCplBlock = `
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+              <span style="color:var(--text-dim);font-size:12px;">הוצאה</span>
+              <span style="color:var(--white);font-size:13px;font-weight:600;">
+                <span dir="ltr">₪${spend != null ? spend.toFixed(0) : '—'}</span>
+                <button onclick="editVariantSpend('${m.vid}', ${spend ?? 'null'})" title="עדכן הוצאה" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:12px;margin-right:4px;">✏️</button>
+              </span>
+            </div>
+            <div style="color:${ageColor};font-size:10px;text-align:left;margin-bottom:8px;">${ageLabel}</div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;" title="עלות לליד = הוצאה ÷ לידים שמילאו טופס. לא מודד איכות לידים — רק כמות.">
+              <span style="color:var(--text-dim);font-size:12px;">עלות לליד</span>
+              <span style="color:${cplColor};font-size:13px;font-weight:600;"><span dir="ltr">${cplDisplay}</span></span>
+            </div>
+            <div style="color:var(--text-dim);font-size:10px;text-align:left;margin-top:2px;">${cplSubLabel}</div>
+          </div>
+        `;
+      }
+
     html += `<div class="variant-compare-column" style="${isLeader ? 'border-color:#81c784;' : ''}">
       <div style="font-weight:700;color:var(--gold);margin-bottom:4px;text-align:center;">${esc(m.label)}</div>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;text-align:center;">${esc(m.name)}</div>
@@ -3034,6 +3079,7 @@ function renderTestAnalytics() {
         ${leaderBadge}
         ${noDataMsg}
       </div>
+      ${spendCplBlock}
     </div>`;
   });
   html += '</div>';

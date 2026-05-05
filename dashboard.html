@@ -1588,6 +1588,20 @@
                 <div class="card-sub">מייל אוטומטי שנשלח ללידים חדשים</div>
               </div>
             </div>
+        <!-- Target CPL (CPL feature) -->
+        <div style="margin-bottom:18px; padding:14px; background:var(--navy); border-radius:var(--radius-sm); border:1px solid var(--border);">
+          <label style="display:block; color:var(--gold); font-size:13px; font-weight:600; margin-bottom:6px;">עלות מקסימלית לליד (אופציונלי)</label>
+          <div style="position:relative; max-width:200px;">
+            <input type="number" id="settings-target-cpl" min="0" max="10000" step="0.5" placeholder="40" dir="ltr"
+              style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;">
+            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">₪</span>
+          </div>
+          <div style="color:var(--text-dim); font-size:11px; margin-top:6px; line-height:1.5;">
+            מעל זה, ליד עולה יותר ממה שהוא שווה. כלל אצבע: 1/3 עד 1/2 מהתרומה הממוצעת. למשל: תרומה ממוצעת ₪120 → CPL ₪40-60.
+          </div>
+          <button id="btn-save-target-cpl" onclick="saveTargetCpl()" style="margin-top:10px; padding:6px 14px; background:var(--gold-dim); border:1px solid var(--gold); border-radius:var(--radius-sm); color:var(--gold); cursor:pointer; font-family:'Heebo',sans-serif; font-size:12px;">שמור</button>
+          <span id="target-cpl-saved" style="display:none; margin-right:8px; color:#81c784; font-size:12px;">נשמר ✓</span>
+        </div>
             <div class="email-settings">
               <div class="toggle-row">
                 <label class="toggle-switch">
@@ -4301,6 +4315,7 @@ async function saveContent() {
 function loadEmailSettings() {
   if (!selectedProject) return;
 
+  document.getElementById('settings-target-cpl').value = selectedProject?.target_cpl ?? '';
   document.getElementById('email-enabled').checked = !!selectedProject.email_enabled;
   document.getElementById('email-subject').value = selectedProject.email_subject || '';
   document.getElementById('email-body').value = selectedProject.email_body || '';
@@ -4352,6 +4367,25 @@ async function saveEmailSettings() {
   okEl.style.display = 'block';
   setTimeout(() => okEl.style.display = 'none', 3500);
   showToast('הגדרות המייל נשמרו!', 'success');
+}
+
+async function saveTargetCpl() {
+  if (!selectedProject) return;
+  const raw = document.getElementById('settings-target-cpl').value.trim();
+  const value = raw === '' ? null : parseFloat(raw);
+  if (raw !== '' && (!Number.isFinite(value) || value < 0 || value > 10000)) {
+    alert('נא להזין מספר תקין בין 0 ל-10,000');
+    return;
+  }
+  const btn = document.getElementById('btn-save-target-cpl');
+  btn.disabled = true;
+  const { error } = await sb.from('projects').update({ target_cpl: value }).eq('id', selectedProject.id);
+  btn.disabled = false;
+  if (error) { console.error('saveTargetCpl error:', error); alert('שגיאה בשמירה'); return; }
+  selectedProject.target_cpl = value;
+  const ok = document.getElementById('target-cpl-saved');
+  ok.style.display = '';
+  setTimeout(() => ok.style.display = 'none', 2500);
 }
 
 // ── Analytics Tab ────────────────────────────────────────

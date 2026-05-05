@@ -1700,7 +1700,7 @@
               <div id="test-recommend-headline" style="color:#81c784; font-weight:700; font-size:15px; margin-bottom:4px;"></div>
               <div id="test-recommend-body" style="color:var(--text-dim); font-size:13px;"></div>
             </div>
-            <button id="test-recommend-cta" class="btn-action" onclick="showDeclareWinnerModal()" style="background:rgba(76,175,80,0.2);color:#81c784;border-color:#81c784;white-space:nowrap;">הכרז מנצח ועצור</button>
+            <button id="test-recommend-cta" class="btn-action" onclick="_onRecommendBannerCta()" style="background:rgba(76,175,80,0.2);color:#81c784;border-color:#81c784;white-space:nowrap;">הכרז מנצח ועצור</button>
           </div>
         </div>
 
@@ -3204,50 +3204,81 @@ function _updateRecommendBanner() {
   if (!banner || !selectedTest) return;
 
   const fired = selectedTest.summary_sent_at && selectedTest.status === 'running';
-  if (!fired) {
-    banner.style.display = 'none';
-    return;
-  }
+  if (!fired) { banner.style.display = 'none'; return; }
 
   const headlineEl = document.getElementById('test-recommend-headline');
   const bodyEl = document.getElementById('test-recommend-body');
   const ctaEl = document.getElementById('test-recommend-cta');
-
   banner.style.display = '';
 
-  // Style banner based on persisted verdict (fix for I-4 from final review)
-  const verdict = selectedTest.summary_verdict || 'WINNER_FOUND'; // legacy default
-  if (verdict === 'WINNER_FOUND') {
-    banner.style.borderRightColor = '#43a047';
-    banner.style.background = 'rgba(67,160,71,0.12)';
-    headlineEl.style.color = '#81c784';
-    headlineEl.textContent = '🟢 מצאנו מנצח';
-    bodyEl.textContent = 'שלחנו לך מייל עם פירוט. אפשר לעצור את הטסט.';
+  const verdict = selectedTest.summary_verdict || 'WINNER_FOUND';
+  const econ    = selectedTest.economic_verdict;
+
+  const setColors = (border, bg, headlineColor, ctaBg, ctaColor, ctaBorder) => {
+    banner.style.borderRightColor = border;
+    banner.style.background = bg;
+    headlineEl.style.color = headlineColor;
+    ctaEl.style.background = ctaBg;
+    ctaEl.style.color = ctaColor;
+    ctaEl.style.borderColor = ctaBorder;
+  };
+
+  if (verdict === 'WINNER_FOUND' && econ === 'VIABLE') {
+    setColors('#43a047', 'rgba(67,160,71,0.12)', '#81c784',
+              'rgba(76,175,80,0.2)', '#81c784', '#81c784');
+    headlineEl.textContent = '🟢 מצאנו מנצח — והעלות לליד מתאימה';
+    bodyEl.textContent = 'אפשר להגדיל תקציב על הוורסיה הזו.';
     ctaEl.textContent = 'הכרז מנצח ועצור';
     ctaEl.style.display = '';
-    ctaEl.style.background = 'rgba(76,175,80,0.2)';
-    ctaEl.style.color = '#81c784';
-    ctaEl.style.borderColor = '#81c784';
+  } else if (verdict === 'WINNER_FOUND' && econ === 'NOT_VIABLE') {
+    setColors('#F59E0B', 'rgba(245,158,11,0.12)', '#ffb74d',
+              'rgba(245,158,11,0.2)', '#ffb74d', '#ffb74d');
+    headlineEl.textContent = '🟡 מצאנו מנצח, אבל העלות לליד מעל היעד';
+    bodyEl.textContent = 'תובנת המסר שווה — ההצעה צריכה לעבוד שונה. בדוק את המייל לפרטים.';
+    ctaEl.textContent = 'איך להוזיל את הליד';
+    ctaEl.style.display = '';
+  } else if (verdict === 'WINNER_FOUND' && econ === 'WINNER_BUT_CHEAPER_ELSEWHERE') {
+    setColors('#F59E0B', 'rgba(245,158,11,0.12)', '#ffb74d',
+              'rgba(245,158,11,0.2)', '#ffb74d', '#ffb74d');
+    headlineEl.textContent = '🟡 מצאנו מנצח, אבל וריאציה אחרת זולה יותר לליד';
+    bodyEl.textContent = 'שקול לשלב — הצעת המנצח, אאודיינס/קריאייטיב של הזולה. בדוק את המייל.';
+    ctaEl.textContent = 'פתח לוח בקרה';
+    ctaEl.style.display = '';
+  } else if (verdict === 'WINNER_FOUND') {
+    setColors('#43a047', 'rgba(67,160,71,0.12)', '#81c784',
+              'rgba(76,175,80,0.2)', '#81c784', '#81c784');
+    headlineEl.textContent = '🟢 מצאנו מנצח';
+    bodyEl.textContent = econ === 'INSUFFICIENT_SPEND'
+      ? 'עדכן את ההוצאות כדי לקבל מסקנה כלכלית מלאה.'
+      : econ === 'INSUFFICIENT_DATA'
+        ? 'נתוני ההוצאה לא עדכניים — עדכן כדי לראות מסקנה כלכלית.'
+        : 'שלחנו לך מייל עם פירוט. אפשר לעצור את הטסט.';
+    ctaEl.textContent = (econ === 'INSUFFICIENT_SPEND' || econ === 'INSUFFICIENT_DATA') ? 'עדכן הוצאות' : 'הכרז מנצח ועצור';
+    ctaEl.style.display = '';
   } else if (verdict === 'TRENDING_UNDERPOWERED') {
-    banner.style.borderRightColor = '#ffa000';
-    banner.style.background = 'rgba(255,160,0,0.12)';
-    headlineEl.style.color = '#ffb74d';
+    setColors('#ffa000', 'rgba(255,160,0,0.12)', '#ffb74d',
+              'rgba(255,160,0,0.2)', '#ffb74d', '#ffb74d');
     headlineEl.textContent = '🟡 מוביל אך לא מובהק';
     bodyEl.textContent = 'יש מגמה ברורה אבל אין מובהקות סטטיסטית. בדוק במייל את ההמלצות.';
     ctaEl.textContent = 'הכרז מנצח בכל זאת';
     ctaEl.style.display = '';
-    ctaEl.style.background = 'rgba(255,160,0,0.2)';
-    ctaEl.style.color = '#ffb74d';
-    ctaEl.style.borderColor = '#ffb74d';
   } else {
-    // PRACTICAL_TIE
-    banner.style.borderRightColor = '#9e9e9e';
-    banner.style.background = 'rgba(158,158,158,0.12)';
-    headlineEl.style.color = '#bdbdbd';
+    setColors('#9e9e9e', 'rgba(158,158,158,0.12)', '#bdbdbd', '', '', '');
     headlineEl.textContent = '⚪ אין הבדל מובהק';
     bodyEl.textContent = 'הוורסיות הניבו ביצועים דומים. בחר על פי שיקולים אחרים.';
-    ctaEl.style.display = 'none'; // no winner to declare
+    ctaEl.style.display = 'none';
   }
+}
+
+function _onRecommendBannerCta() {
+  const ctaEl = document.getElementById('test-recommend-cta');
+  if (ctaEl.textContent.includes('עדכן הוצאות')) {
+    const firstCard = document.querySelector('.variant-compare-column, [class*="variant"]');
+    if (firstCard) firstCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (ctaEl.textContent.includes('פתח לוח')) return;
+  showDeclareWinnerModal();
 }
 
 // ── Test Actions ─────────────────────────────────────────

@@ -2,6 +2,7 @@
 // Daily cron worker for test-planner: scans running tests, decides what to email.
 
 import { sampleBeta, computeWinnerProbabilities, computeExpectedLoss } from './lib/bayes.js';
+import { computeEconomicVerdict } from './lib/economic-verdict.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -182,6 +183,39 @@ async function markEmailSent(test, actionName, payload) {
     updates.summary_verdict = payload.verdict;
     if (payload.winnerVariantId) updates.summary_winner_variant_id = payload.winnerVariantId;
     if (typeof payload.liftPct === 'number') updates.summary_lift_pct = payload.liftPct;
+
+    // CPL feature: also compute and persist the economic verdict
+    try {
+      const tvRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${test.id}&select=variant_id,spend,spend_updated_at,projects(target_cpl)`,
+        { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+      );
+      const tvs = await tvRes.json();
+      const target_cpl = tvs[0]?.projects?.target_cpl ?? null;
+
+      const variantCounts = await fetchTestVariantsAndCounts(test);
+      const variantsForVerdict = tvs.map(tv => {
+        const c = variantCounts.find(x => x.variant_id === tv.variant_id) || { conversions: 0 };
+        return {
+          variant_id: tv.variant_id,
+          leads: c.conversions,
+          spend: tv.spend != null ? Number(tv.spend) : null,
+          spend_updated_at: tv.spend_updated_at,
+        };
+      });
+      const econ = computeEconomicVerdict({
+        cr_leader_variant_id: payload.winnerVariantId,
+        variants: variantsForVerdict,
+        target_cpl: target_cpl != null ? Number(target_cpl) : null,
+      });
+      updates.economic_verdict = econ.verdict;
+      if (econ.cpl_leader_variant_id) updates.cpl_leader_variant_id = econ.cpl_leader_variant_id;
+      if (typeof econ.oldest_spend_age_days === 'number' && Number.isFinite(econ.oldest_spend_age_days)) {
+        updates.oldest_spend_age_days = econ.oldest_spend_age_days;
+      }
+    } catch (err) {
+      console.error('markEmailSent: economic-verdict computation failed:', err);
+    }
   }
   if (actionName === 'test_stall_alert') updates.stall_alert_sent_at = new Date().toISOString();
 

@@ -87,12 +87,23 @@ async function fetchTestWithCreatorAndVariants(testId) {
   if (!creator?.email) return { error: 'Test creator has no email' };
 
   const tvRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${testId}&select=id,variant_id,label,projects(name)`,
+    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${testId}&select=id,variant_id,label,projects(name,slug),project_variants(variant_slug,is_default)`,
     { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   const testVariants = await tvRes.json();
 
   return { test, creatorEmail: creator.email, testVariants };
+}
+
+// Build the public LP URL for a test_variants row.
+// Default variant: /lp/<project_slug>. Non-default: /lp/<project_slug>/<variant_slug>.
+function buildLpUrl(tv) {
+  const projectSlug = tv.projects?.slug;
+  if (!projectSlug) return null;
+  const variantSlug = tv.project_variants?.variant_slug;
+  const isDefault = tv.project_variants?.is_default;
+  const path = isDefault || !variantSlug ? `/lp/${projectSlug}` : `/lp/${projectSlug}/${variantSlug}`;
+  return `${process.env.APP_URL || ''}${path}`;
 }
 
 async function fetchVariantCounts(test, testVariants) {
@@ -184,7 +195,7 @@ async function handleTestMilestone(req, res) {
     const counts = await fetchVariantCounts(test, testVariants);
     const variantCountsWithName = testVariants.map(tv => {
       const c = counts.find(x => x.variant_id === tv.variant_id) || { visitors: 0, conversions: 0 };
-      return { label: tv.label, name: tv.projects?.name || tv.label, visitors: c.visitors, conversions: c.conversions };
+      return { label: tv.label, name: tv.projects?.name || tv.label, visitors: c.visitors, conversions: c.conversions, lpUrl: buildLpUrl(tv) };
     });
 
     const { subject, html, text } = renderMilestoneEmail(test, milestone, variantCountsWithName);
@@ -208,7 +219,7 @@ async function handleTestSummary(req, res) {
     const counts = await fetchVariantCounts(test, testVariants);
     const variantCountsWithName = testVariants.map(tv => {
       const c = counts.find(x => x.variant_id === tv.variant_id) || { visitors: 0, conversions: 0 };
-      return { label: tv.label, name: tv.projects?.name || tv.label, visitors: c.visitors, conversions: c.conversions };
+      return { label: tv.label, name: tv.projects?.name || tv.label, visitors: c.visitors, conversions: c.conversions, lpUrl: buildLpUrl(tv) };
     });
 
     // Derive winner display name from persisted FK rather than trusting client

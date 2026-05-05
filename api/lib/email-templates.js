@@ -78,6 +78,11 @@ function escapeHtml(s) {
   }[c]));
 }
 
+// Escape only what's required for an HTML attribute value enclosed in double quotes.
+function escapeAttr(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
 const MILESTONE_COPY = {
   25: { subject: 'רבע מהדרך', headline: 'עברנו את רבע מהדרך', tone: 'מוקדם להכריז על מנצח. הנה תמונת המצב.' },
   50: { subject: 'חצי דרך — הפער מתחיל להתייצב', headline: 'חצי דרך', tone: 'הפער מתחיל להתבהר. עוד לא סטטיסטית מובהק.' },
@@ -90,12 +95,16 @@ export function renderMilestoneEmail(test, milestone, variantCounts) {
   const totalVisitors = variantCounts.reduce((s, v) => s + v.visitors, 0);
   const dashboardUrl = `${process.env.APP_URL || ''}/dashboard`;
 
-  // Build standings rows
+  // Build standings rows. If a variant has lpUrl, the name links to the LP.
   const sorted = [...variantCounts].sort((a, b) => (b.conversions / Math.max(1, b.visitors)) - (a.conversions / Math.max(1, a.visitors)));
   const rows = sorted.map(v => {
     const cvr = v.visitors ? (v.conversions / v.visitors * 100).toFixed(1) : '0.0';
+    const safeName = escapeHtml(v.name || v.label);
+    const nameCell = v.lpUrl
+      ? `<a href="${escapeAttr(v.lpUrl)}" style="color:#0d2240;text-decoration:underline;">${safeName}</a> <a href="${escapeAttr(v.lpUrl)}" style="color:#999;text-decoration:none;font-size:11px;">↗</a>`
+      : safeName;
     return `<tr>
-      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#1a1a1a;font-size:13px;">${escapeHtml(v.name || v.label)}</td>
+      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#1a1a1a;font-size:13px;">${nameCell}</td>
       <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#666;font-size:13px;text-align:left;"><span dir="ltr">${fmtN(v.visitors)}</span> מבקרים</td>
       <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#0d2240;font-size:13px;font-weight:600;text-align:left;"><span dir="ltr">${cvr}%</span></td>
     </tr>`;
@@ -137,8 +146,12 @@ export function renderSummaryEmail(test, decision, variantCounts) {
   const sorted = [...variantCounts].sort((a, b) => (b.conversions / Math.max(1, b.visitors)) - (a.conversions / Math.max(1, a.visitors)));
   const standingsRows = sorted.map(v => {
     const cvr = v.visitors ? (v.conversions / v.visitors * 100).toFixed(1) : '0.0';
+    const safeName = escapeHtml(v.name || v.label);
+    const nameCell = v.lpUrl
+      ? `<a href="${escapeAttr(v.lpUrl)}" style="color:#0d2240;text-decoration:underline;">${safeName}</a> <a href="${escapeAttr(v.lpUrl)}" style="color:#999;text-decoration:none;font-size:11px;">↗</a>`
+      : safeName;
     return `<tr>
-      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#1a1a1a;font-size:13px;">${escapeHtml(v.name || v.label)}</td>
+      <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#1a1a1a;font-size:13px;">${nameCell}</td>
       <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#666;font-size:13px;text-align:left;"><span dir="ltr">${fmtN(v.visitors)}</span></td>
       <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#666;font-size:13px;text-align:left;"><span dir="ltr">${v.conversions}</span></td>
       <td dir="rtl" style="padding:8px;border-bottom:1px solid #eee;color:#0d2240;font-size:13px;font-weight:600;text-align:left;"><span dir="ltr">${cvr}%</span></td>

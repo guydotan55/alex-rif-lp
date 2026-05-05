@@ -22,6 +22,22 @@ and email renderers in `api/lib/email-templates.js`).
 | `summary_verdict` | TEXT (CHECK) | cron worker | `WINNER_FOUND` / `PRACTICAL_TIE` / `TRENDING_UNDERPOWERED` |
 | `summary_winner_variant_id` | UUID FK→project_variants | cron worker | NULL for PRACTICAL_TIE |
 | `summary_lift_pct` | NUMERIC(8,2) | cron worker | NULL for PRACTICAL_TIE |
+| `economic_verdict` | TEXT (CHECK) | cron worker (markEmailSent) | one of `VIABLE` / `NOT_VIABLE` / `WINNER_BUT_CHEAPER_ELSEWHERE` / `INSUFFICIENT_SPEND` / `INSUFFICIENT_DATA` |
+| `cpl_leader_variant_id` | UUID FK→project_variants | cron worker | NULL except for `WINNER_BUT_CHEAPER_ELSEWHERE` |
+| `oldest_spend_age_days` | INT | cron worker | snapshot of staleness at email-send time |
+
+## Database — `projects` table additions (CPL feature)
+
+| Column | Type | Filled by | Notes |
+|---|---|---|---|
+| `target_cpl` | NUMERIC(8,2) | project create/edit form | Optional. NULL means CPL feature OFF for that project |
+
+## Database — `test_variants` table additions (CPL feature)
+
+| Column | Type | Filled by | Notes |
+|---|---|---|---|
+| `spend` | NUMERIC(10,2) | dashboard inline edit | Cumulative manually-entered spend |
+| `spend_updated_at` | TIMESTAMPTZ | dashboard inline edit | NULL until first entry |
 
 ## `/api/send-email` — new action discriminators
 

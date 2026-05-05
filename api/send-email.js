@@ -6,6 +6,7 @@ import {
   renderSummaryEmail,
   renderStallAlertEmail,
 } from "./lib/email-templates.js";
+import { computeEconomicVerdict } from "./lib/economic-verdict.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -215,7 +216,7 @@ async function handleTestSummary(req, res) {
   const { test_id } = req.body || {};
   if (!test_id) return res.status(400).json({ error: 'test_id required' });
   try {
-    const { test, creatorEmail, testVariants, error } = await fetchTestWithCreatorAndVariants(test_id);
+    const { test, creatorEmail, testVariants, target_cpl, error } = await fetchTestWithCreatorAndVariants(test_id);
     if (error) return res.status(404).json({ error });
     if (!test.summary_verdict || !['WINNER_FOUND', 'PRACTICAL_TIE', 'TRENDING_UNDERPOWERED'].includes(test.summary_verdict)) {
       return res.status(400).json({ error: 'tests.summary_verdict not set or invalid; cron must persist verdict before send' });
@@ -237,13 +238,40 @@ async function handleTestSummary(req, res) {
       }
     }
 
+    let economic = null;
+    try {
+      const variantsForVerdict = testVariants.map(tv => {
+        const c = counts.find(x => x.variant_id === tv.variant_id) || { conversions: 0 };
+        return {
+          variant_id: tv.variant_id,
+          leads: c.conversions,
+          spend: tv.spend != null ? Number(tv.spend) : null,
+          spend_updated_at: tv.spend_updated_at,
+        };
+      });
+      economic = computeEconomicVerdict({
+        cr_leader_variant_id: test.summary_winner_variant_id,
+        variants: variantsForVerdict,
+        target_cpl: target_cpl != null ? Number(target_cpl) : null,
+      });
+    } catch (err) {
+      console.error('computeEconomicVerdict failed:', err);
+      economic = null;
+    }
+
+    const variantCountsWithSpend = variantCountsWithName.map(v => {
+      const tv = testVariants.find(t => t.variant_id === v.variant_id || (t.label === v.label));
+      return { ...v, spend: tv?.spend != null ? Number(tv.spend) : null };
+    });
+
     const decision = {
       verdict: test.summary_verdict,
       winnerLabel,
       winnerName,
       liftPct: test.summary_lift_pct != null ? Number(test.summary_lift_pct) : 0,
+      economic,
     };
-    const { subject, html, text } = renderSummaryEmail(test, decision, variantCountsWithName);
+    const { subject, html, text } = renderSummaryEmail(test, decision, variantCountsWithSpend);
     const data = await sendBrevo(creatorEmail, subject, html, text);
     return res.status(200).json({ success: true, messageId: data.messageId });
   } catch (err) {

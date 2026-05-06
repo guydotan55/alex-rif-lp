@@ -3009,6 +3009,9 @@ function renderTestAnalytics() {
   const MIN_LEADS_PER_VARIANT = 5;
   const MIN_RELATIVE_LIFT_PCT = 30;
   let leader = null;
+  // Hoisted: read by the per-card "לא מספיק נתונים" badge below; needs to exist
+  // in BOTH branches (block-scoped const inside else broke variant-card render).
+  const hasEnoughData = metrics.every(m => m.uv >= MIN_UV_PER_VARIANT && m.lc >= MIN_LEADS_PER_VARIANT);
 
   if (selectedTest?.summary_sent_at) {
     // Backend has decided — show the empirical leader regardless of heuristic
@@ -3020,7 +3023,6 @@ function renderTestAnalytics() {
       leader = { vid: sorted[0].vid, deltaPct };
     }
   } else {
-    const hasEnoughData = metrics.every(m => m.uv >= MIN_UV_PER_VARIANT && m.lc >= MIN_LEADS_PER_VARIANT);
     if (hasEnoughData && metrics.length >= 2) {
       const sorted = [...metrics].sort((a, b) => b.convPct - a.convPct);
       const delta = sorted[0].convPct - sorted[1].convPct;

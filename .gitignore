@@ -1,5 +1,7 @@
 # Project-specific exclusions
-.claude/
+.claude/*
+!.claude/rules/
+!.claude/rules/**
 docs/plans/
 .DS_Store
 

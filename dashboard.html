@@ -3672,17 +3672,18 @@ async function loadEditableContent() {
 
     // Backfill event details (date / location / cost) for existing LPs whose
     // HTML carries data-editable on these values but has no saved row yet.
-    for (const evKey of ['event_date', 'event_location', 'event_cost']) {
-      if (!existingKeys.has(evKey) && htmlSource) {
-        try {
-          const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
+    if (htmlSource) {
+      try {
+        const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
+        for (const evKey of ['event_date', 'event_location', 'event_cost']) {
+          if (existingKeys.has(evKey)) continue;
           const el = doc.querySelector(`[data-editable="${evKey}"]`);
           if (el) {
             newItems.push({ key: evKey, value: el.textContent.trim() });
             existingKeys.add(evKey);
           }
-        } catch (e) { console.error(`${evKey} backfill failed:`, e); }
-      }
+        }
+      } catch (e) { console.error('event details backfill failed:', e); }
     }
 
     // Backfill features section using DOMParser for robust extraction

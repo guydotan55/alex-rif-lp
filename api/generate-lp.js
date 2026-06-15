@@ -375,6 +375,17 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Generated content is not valid HTML" });
     }
 
+    // Safety net for event_* editable values: they MUST be plain text. The serve-path
+    // override (applyOverrides) replaces up to the FIRST closing tag, so a nested tag
+    // inside one of these spans would orphan a closing tag and break the live page once
+    // the value is edited. The prompt asks for plain text, but the model can disobey —
+    // so flatten any markup it placed inside event_date/location/cost spans here.
+    // Scoped to event_* only: other fields (e.g. story_text) legitimately nest tags.
+    generatedHtml = generatedHtml.replace(
+      /(<span\b[^>]*\bdata-editable\s*=\s*"(?:event_date|event_location|event_cost)"[^>]*>)([\s\S]*?)(<\/span>)/gi,
+      (_m, open, inner, close) => open + inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() + close
+    );
+
     // 6. Resolve or create the variant to save HTML into
     let activeVariantId = variant_id;
 

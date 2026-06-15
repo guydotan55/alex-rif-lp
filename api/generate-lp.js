@@ -110,6 +110,7 @@ CRITICAL RULES:
    - data-editable="form_subtitle" on the form section subtitle/description text (e.g. "השאירו את כתובת המייל שלכם")
    - data-editable="thankyou_text" on the hidden thank-you element
    - data-editable="footer_text" on the footer paragraph/text element
+   - If the page shows an event-details block (date/time, location/venue, price/cost), wrap ONLY the changeable VALUE of each — never the "מתי:/איפה:/עלות:" label or icon — in its own inline <span> carrying, respectively, data-editable="event_date", data-editable="event_location", and data-editable="event_cost". Each such <span> must contain PLAIN TEXT ONLY — no nested tags (no <small>, <strong>, <br>, etc.) inside it. Example: <span><strong>מתי:</strong> <span data-editable="event_date">11/6/2026</span></span>. Skip any of these three that the page does not show.
 9. Add class="cta-button" and data-cta="true" to ALL CTA buttons.
 10. MOBILE IS THE #1 PRIORITY — 95% of traffic comes from mobile devices:
     - Design mobile-first: start with the mobile layout, then enhance for larger screens

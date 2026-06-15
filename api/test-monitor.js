@@ -128,7 +128,7 @@ async function fetchRunningTests() {
 async function fetchTestVariantsAndCounts(test) {
   // Get test_variants for label + project name
   const tvRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${test.id}&select=variant_id,label,projects(name)`,
+    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${encodeURIComponent(test.id)}&select=variant_id,label,projects(name)`,
     { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   const testVariants = await tvRes.json();
@@ -138,7 +138,7 @@ async function fetchTestVariantsAndCounts(test) {
   // Use the same start-time fallback chain the dashboard uses (line 2810):
   // started_at OR reset_at OR created_at
   const startedAt = test.started_at || test.reset_at || test.created_at;
-  const variantInList = variantIds.map(id => `"${id}"`).join(',');
+  const variantInList = variantIds.map(id => `"${encodeURIComponent(id)}"`).join(',');
 
   // Pull events for these variants since started_at, paginated.
   let allRows = [];
@@ -187,7 +187,7 @@ async function markEmailSent(test, actionName, payload) {
     // CPL feature: also compute and persist the economic verdict
     try {
       const tvRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${test.id}&select=variant_id,spend,spend_updated_at,projects(target_cpl)`,
+        `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${encodeURIComponent(test.id)}&select=variant_id,spend,spend_updated_at,projects(target_cpl)`,
         { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
       );
       const tvs = await tvRes.json();
@@ -220,7 +220,7 @@ async function markEmailSent(test, actionName, payload) {
   if (actionName === 'test_stall_alert') updates.stall_alert_sent_at = new Date().toISOString();
 
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/tests?id=eq.${test.id}`,
+    `${SUPABASE_URL}/rest/v1/tests?id=eq.${encodeURIComponent(test.id)}`,
     {
       method: 'PATCH',
       headers: {
@@ -238,7 +238,11 @@ async function markEmailSent(test, actionName, payload) {
 async function postEmailAction(test, action) {
   const res = await fetch(`${APP_ORIGIN}/api/send-email`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // Authenticate to send-email's server-only test_* actions.
+      Authorization: `Bearer ${CRON_SECRET}`,
+    },
     body: JSON.stringify({ action: action.name, test_id: test.id, ...action.payload }),
   });
   const body = await res.json().catch(() => ({}));

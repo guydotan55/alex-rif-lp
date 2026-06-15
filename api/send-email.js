@@ -7,6 +7,7 @@ import {
   renderStallAlertEmail,
 } from "./lib/email-templates.js";
 import { computeEconomicVerdict } from "./lib/economic-verdict.js";
+import { verifyUser, canAccessTest } from "./lib/auth-helper.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -15,6 +16,23 @@ const SENDER_EMAIL = process.env.SENDER_EMAIL || "libby.negev.ai@gmail.com";
 const APP_ORIGIN = process.env.APP_URL || "https://messaginglab-guydotan55s-projects.vercel.app";
 const META_PIXEL_ID = process.env.META_PIXEL_ID;
 const META_CAPI_TOKEN = process.env.META_CAPI_TOKEN;
+const CRON_SECRET = process.env.CRON_SECRET;
+
+// Cron-only actions: only the cron worker (test-monitor.js) triggers these,
+// authenticated with the shared CRON_SECRET. They send emails + read arbitrary
+// tests, so they must NOT be reachable by the public LP traffic that also POSTs
+// to this endpoint (lead emails / meta_capi).
+// NOTE: test_kickoff is intentionally NOT here — it is fired from the dashboard
+// by an authenticated user and is gated by that user's session (verifyUser +
+// canAccessTest) inside handleTestKickoff.
+const CRON_ONLY_ACTIONS = new Set([
+  "test_milestone",
+  "test_summary",
+  "test_stall_alert",
+]);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isUuid = (v) => typeof v === "string" && UUID_RE.test(v);
 
 function sha256(value) {
   return crypto.createHash("sha256").update(value.toLowerCase().trim()).digest("hex");
@@ -72,8 +90,9 @@ async function handleMetaCapi(req, res) {
 // ── Test-planner email helpers ─────────────────────────────
 
 async function fetchTestWithCreatorAndVariants(testId) {
+  if (!isUuid(testId)) return { error: 'Invalid test_id' };
   const testRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/tests?id=eq.${testId}&select=*&limit=1`,
+    `${SUPABASE_URL}/rest/v1/tests?id=eq.${encodeURIComponent(testId)}&select=*&limit=1`,
     { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   const testRows = await testRes.json();
@@ -81,14 +100,14 @@ async function fetchTestWithCreatorAndVariants(testId) {
   if (!test) return { error: 'Test not found' };
 
   const creatorRes = await fetch(
-    `${SUPABASE_URL}/auth/v1/admin/users/${test.created_by}`,
+    `${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(test.created_by)}`,
     { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   const creator = await creatorRes.json();
   if (!creator?.email) return { error: 'Test creator has no email' };
 
   const tvRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${testId}&select=id,variant_id,label,spend,spend_updated_at,projects(name,slug,target_cpl),project_variants(variant_slug,is_default)`,
+    `${SUPABASE_URL}/rest/v1/test_variants?test_id=eq.${encodeURIComponent(testId)}&select=id,variant_id,label,spend,spend_updated_at,projects(name,slug,target_cpl),project_variants(variant_slug,is_default)`,
     { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   const testVariants = await tvRes.json();
@@ -116,7 +135,7 @@ async function fetchVariantCounts(test, testVariants) {
   const variantIds = testVariants.map(tv => tv.variant_id);
   if (!variantIds.length) return [];
   const startedAt = test.started_at || test.reset_at || test.created_at;
-  const variantInList = variantIds.map(id => `"${id}"`).join(',');
+  const variantInList = variantIds.map(id => `"${encodeURIComponent(id)}"`).join(',');
 
   let allRows = [];
   let from = 0;
@@ -169,8 +188,23 @@ async function sendBrevo(to, subject, html, text, senderName = 'Messaging Lab') 
 
 async function handleTestKickoff(req, res) {
   const { test_id } = req.body || {};
-  if (!test_id) return res.status(400).json({ error: 'test_id required' });
+  if (!isUuid(test_id)) return res.status(400).json({ error: 'valid test_id (uuid) required' });
+
+  // Fired from the dashboard by an authenticated user — verify their session and
+  // that they actually have access to this test before sending its kickoff email.
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  const token = req.body?.access_token || (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null);
+  if (!token) return res.status(401).json({ error: 'Missing access token' });
+
   try {
+    // Auth inside try so a verifyUser/canAccessTest throw fails loud (500 + log),
+    // never an unhandled rejection.
+    const user = await verifyUser(token);
+    if (!user?.id) return res.status(401).json({ error: 'Invalid access token' });
+    if (!(await canAccessTest(user.id, test_id))) {
+      return res.status(403).json({ error: 'You do not have access to this test' });
+    }
+
     const { test, creatorEmail, testVariants, error } = await fetchTestWithCreatorAndVariants(test_id);
     if (error) return res.status(404).json({ error });
     if (!test.target_sample_size) return res.status(400).json({ error: 'target_sample_size missing' });
@@ -191,8 +225,8 @@ async function handleTestKickoff(req, res) {
 // Placeholder stubs — implemented in Tasks 14 and 15.
 async function handleTestMilestone(req, res) {
   const { test_id, milestone } = req.body || {};
-  if (!test_id || ![25, 50, 75].includes(milestone)) {
-    return res.status(400).json({ error: 'test_id + milestone in {25,50,75} required' });
+  if (!isUuid(test_id) || ![25, 50, 75].includes(milestone)) {
+    return res.status(400).json({ error: 'valid test_id (uuid) + milestone in {25,50,75} required' });
   }
   try {
     const { test, creatorEmail, testVariants, error } = await fetchTestWithCreatorAndVariants(test_id);
@@ -214,7 +248,7 @@ async function handleTestMilestone(req, res) {
 }
 async function handleTestSummary(req, res) {
   const { test_id } = req.body || {};
-  if (!test_id) return res.status(400).json({ error: 'test_id required' });
+  if (!isUuid(test_id)) return res.status(400).json({ error: 'valid test_id (uuid) required' });
   try {
     const { test, creatorEmail, testVariants, target_cpl, error } = await fetchTestWithCreatorAndVariants(test_id);
     if (error) return res.status(404).json({ error });
@@ -281,7 +315,7 @@ async function handleTestSummary(req, res) {
 }
 async function handleTestStallAlert(req, res) {
   const { test_id } = req.body || {};
-  if (!test_id) return res.status(400).json({ error: 'test_id required' });
+  if (!isUuid(test_id)) return res.status(400).json({ error: 'valid test_id (uuid) required' });
   try {
     const { test, creatorEmail, error } = await fetchTestWithCreatorAndVariants(test_id);
     if (error) return res.status(404).json({ error });
@@ -307,6 +341,16 @@ export default async function handler(req, res) {
     return handleMetaCapi(req, res);
   }
 
+  // Cron-only test-planner actions require the cron secret. Public LP traffic
+  // (lead emails / meta_capi) never carries it, so this gate can't break those
+  // paths; test_kickoff is gated separately by the user's session.
+  if (CRON_ONLY_ACTIONS.has(req.body?.action)) {
+    const auth = req.headers.authorization || req.headers.Authorization;
+    if (!CRON_SECRET || auth !== `Bearer ${CRON_SECRET}`) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+  }
+
   if (req.body?.action === 'test_kickoff') {
     return handleTestKickoff(req, res);
   }
@@ -330,7 +374,7 @@ export default async function handler(req, res) {
     try {
       // Fetch the project row from Supabase
       const projRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/projects?id=eq.${project_id}&select=*&limit=1`,
+        `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(project_id)}&select=*&limit=1`,
         {
           headers: {
             apikey: SUPABASE_SERVICE_ROLE_KEY,

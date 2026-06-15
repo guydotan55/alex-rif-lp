@@ -4182,6 +4182,22 @@ async function loadEditableContent() {
       }
     }
 
+    // Backfill event details (date / location / cost) for existing LPs whose
+    // HTML carries data-editable on these values but has no saved row yet.
+    if (htmlSource) {
+      try {
+        const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
+        for (const evKey of ['event_date', 'event_location', 'event_cost']) {
+          if (existingKeys.has(evKey)) continue;
+          const el = doc.querySelector(`[data-editable="${evKey}"]`);
+          if (el) {
+            newItems.push({ key: evKey, value: el.textContent.trim() });
+            existingKeys.add(evKey);
+          }
+        }
+      } catch (e) { console.error('event details backfill failed:', e); }
+    }
+
     // Backfill features section using DOMParser for robust extraction
     if (!existingKeys.has('feature_1_title') && htmlSource) {
       try {
@@ -4265,7 +4281,9 @@ async function loadEditableContent() {
     'feature_1_icon', 'feature_1_title', 'feature_1_text',
     'feature_2_icon', 'feature_2_title', 'feature_2_text',
     'feature_3_icon', 'feature_3_title', 'feature_3_text',
-    'cta_text', 'form_title', 'form_subtitle', 'thankyou_text', 'footer_text'
+    'cta_text', 'form_title', 'form_subtitle',
+    'event_date', 'event_location', 'event_cost',
+    'thankyou_text', 'footer_text'
   ];
   projectContent.sort((a, b) => {
     const ia = fieldOrder.indexOf(a.key);
@@ -4393,6 +4411,9 @@ const FIELD_LABELS = {
   cta_text: 'כפתור קריאה לפעולה',
   form_title: 'כותרת טופס',
   form_subtitle: 'תת כותרת טופס',
+  event_date: 'תאריך / שעת האירוע',
+  event_location: 'מיקום האירוע',
+  event_cost: 'עלות / מחיר',
   thankyou_text: 'הודעת תודה',
   footer_text: 'טקסט תחתית העמוד',
 };

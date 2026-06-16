@@ -1,8 +1,8 @@
 // api/test-monitor.js
 // Daily cron worker for test-planner: scans running tests, decides what to email.
 
-import { sampleBeta, computeWinnerProbabilities, computeExpectedLoss } from './lib/bayes.js';
-import { computeEconomicVerdict } from './lib/economic-verdict.js';
+import { sampleBeta, computeWinnerProbabilities, computeExpectedLoss } from './_lib/bayes.js';
+import { computeEconomicVerdict } from './_lib/economic-verdict.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;

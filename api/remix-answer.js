@@ -1,7 +1,7 @@
 // Vercel Serverless Function — rewrites questionnaire answers via Claude API
 // Returns 2 variations: "keep style" (sharpened original voice) + "pro copy" (marketing copywriter)
 import Anthropic from "@anthropic-ai/sdk";
-import { verifyUser } from "./lib/auth-helper.js";
+import { verifyUser } from "./_lib/auth-helper.js";
 
 const APP_ORIGIN = process.env.APP_URL || "https://messaginglab-guydotan55s-projects.vercel.app";
 

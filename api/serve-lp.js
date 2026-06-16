@@ -5,7 +5,7 @@ import {
   applyPageTitle,
   buildInjectedScript,
   fetchAndRenderVariant
-} from './lib/lp-renderer.js';
+} from './_lib/lp-renderer.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;

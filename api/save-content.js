@@ -1,5 +1,5 @@
 // Vercel Serverless Function — load and save editable text content for an LP variant
-import { authenticateAndAuthorize } from "./lib/auth-helper.js";
+import { authenticateAndAuthorize } from "./_lib/auth-helper.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;

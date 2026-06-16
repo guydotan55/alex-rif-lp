@@ -61,9 +61,13 @@ export default async function handler(req, res) {
       const auth = await authenticateAndAuthorize(req, res, { projectId: project_id });
       if (!auth) return; // sends 401/403 itself
 
-      // Read the currently stored HTML so we can no-op on equality.
+      // Read the stored HTML + the variant's OWN project_id (to no-op on equality
+      // and to confirm the variant actually belongs to the authorized project —
+      // the service-role key bypasses RLS, so we must check ownership ourselves or
+      // an admin of project A could overwrite another tenant's live LP via a
+      // foreign variant_id).
       const storedRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${encodeURIComponent(variant_id)}&select=generated_html&limit=1`,
+        `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${encodeURIComponent(variant_id)}&select=generated_html,project_id&limit=1`,
         { headers: SB_HEADERS }
       );
       if (!storedRes.ok) {
@@ -74,6 +78,9 @@ export default async function handler(req, res) {
       const rows = await storedRes.json();
       if (!rows.length) {
         return res.status(404).json({ error: "Variant not found" });
+      }
+      if (rows[0].project_id !== project_id) {
+        return res.status(403).json({ error: "Variant does not belong to this project" });
       }
       const stored = rows[0].generated_html;
 

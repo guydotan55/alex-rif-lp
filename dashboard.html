@@ -3893,9 +3893,10 @@ function healEventHooks(htmlString, parser) {
     if (!value) continue;
     if (value.includes('<') || value.includes('>')) continue;
     if (out.includes(`data-editable="${key}"`)) continue;
-    if (healCountOccurrences(out, value) !== 1) continue;
-    const wrapped = `<span data-editable="${key}">${value}</span>`;
-    out = out.replace(value, () => wrapped);
+    const datePos = out.indexOf(HEAL_DATE_EMOJI);
+    const idx = datePos === -1 ? -1 : out.indexOf(value, datePos);
+    if (idx === -1) continue;
+    out = out.slice(0, idx) + `<span data-editable="${key}">${value}</span>` + out.slice(idx + value.length);
     healed = true;
   }
   if (!healed) return { html: htmlString, healed: false, reason: 'already-hooked' };

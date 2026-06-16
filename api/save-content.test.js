@@ -72,7 +72,7 @@ test('write-back UNAUTHORIZED (invalid token) -> 401', async () => {
 test('write-back NO-OP when healed_html equals stored -> 200 written:false, NO PATCH', async () => {
   const STORED = '<html>same</html>';
   await withFetch(authOkRouter((url) => {
-    if (url.includes('/project_variants') ) return { json: [{ generated_html: STORED }] };
+    if (url.includes('/project_variants') ) return { json: [{ generated_html: STORED, project_id: 'p1' }] };
     return {};
   }), async (calls) => {
     const req = { method: 'POST', headers: { authorization: 'Bearer ok' }, body: { project_id: 'p1', variant_id: 'v1', healed_html: STORED } };
@@ -90,7 +90,7 @@ test('write-back HAPPY PATH -> single PATCH, 200 written:true', async () => {
   const HEALED = '<html>new with hooks</html>';
   await withFetch(authOkRouter((url, opts) => {
     if (url.includes('/project_variants') && (opts.method || 'GET') === 'GET') {
-      return { json: [{ generated_html: STORED }] };
+      return { json: [{ generated_html: STORED, project_id: 'p1' }] };
     }
     if (url.includes('/project_variants') && opts.method === 'PATCH') {
       return { ok: true, status: 204 };
@@ -105,6 +105,22 @@ test('write-back HAPPY PATH -> single PATCH, 200 written:true', async () => {
     const patches = calls.filter((c) => c.method === 'PATCH');
     assert.equal(patches.length, 1, 'exactly one PATCH');
     assert.ok(patches[0].opts.body.includes('new with hooks'), 'PATCH carries the healed html');
+  });
+});
+
+test('write-back CROSS-TENANT: variant belongs to another project -> 403, NO PATCH', async () => {
+  await withFetch(authOkRouter((url) => {
+    // The caller is authorized for project p1, but the variant they passed belongs
+    // to project OTHER — the ownership check must reject it (service role bypasses RLS).
+    if (url.includes('/project_variants')) return { json: [{ generated_html: '<x>old</x>', project_id: 'OTHER' }] };
+    return {};
+  }), async (calls) => {
+    const req = { method: 'POST', headers: { authorization: 'Bearer ok' }, body: { project_id: 'p1', variant_id: 'v_foreign', healed_html: '<x>attacker</x>' } };
+    const res = mockRes();
+    await handler(req, res);
+    assert.equal(res.statusCode, 403, 'cross-tenant write-back rejected');
+    const patches = calls.filter((c) => c.method === 'PATCH');
+    assert.equal(patches.length, 0, 'no PATCH on a foreign variant');
   });
 });
 

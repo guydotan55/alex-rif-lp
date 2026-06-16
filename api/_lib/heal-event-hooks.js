@@ -178,16 +178,24 @@ export function healEventHooks(htmlString, parser) {
     { key: "event_cost", value: extractValue(costRow) },
   ];
 
-  // --- BYTE-FAITHFUL string splice: wrap each value's UNIQUE occurrence ---
+  // --- BYTE-FAITHFUL string splice ---
+  // Wrap each value's first occurrence AT/AFTER the (gate-unique) 📅 — i.e. inside
+  // the event region. A decorative/unrelated duplicate elsewhere on the page can
+  // neither suppress the hook nor get wrapped by mistake, and the document is never
+  // reserialized (so <style>/<script>/entities stay byte-identical).
   let out = htmlString;
   let healed = false;
   for (const { key, value } of targets) {
     if (!value) continue;
     if (value.includes("<") || value.includes(">")) continue; // plain text only
     if (out.includes(`data-editable="${key}"`)) continue;     // idempotent
-    if (countOccurrences(out, value) !== 1) continue;          // ambiguous → skip safely
-    const wrapped = `<span data-editable="${key}">${value}</span>`;
-    out = out.replace(value, () => wrapped); // fn replacement: no $-pattern surprises
+    const datePos = out.indexOf(DATE_EMOJI);
+    const idx = datePos === -1 ? -1 : out.indexOf(value, datePos);
+    if (idx === -1) continue; // value not in/after the event region → skip safely
+    out =
+      out.slice(0, idx) +
+      `<span data-editable="${key}">${value}</span>` +
+      out.slice(idx + value.length);
     healed = true;
   }
   if (!healed) return { html: htmlString, healed: false, reason: "already-hooked" };

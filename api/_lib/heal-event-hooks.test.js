@@ -195,17 +195,27 @@ for (const [name, fx] of [['S1', S1], ['S2', S2], ['S4', S4], ['S5', S5]]) {
   });
 }
 
-test('SKIP ambiguous value: a date string that also appears in <meta> is NOT wrapped (no wrong-occurrence)', () => {
+test('value duplicated elsewhere on the page: heal hooks the EVENT occurrence (first at/after 📅), leaving the duplicates untouched, byte-faithfully', () => {
   const html =
     `<!DOCTYPE html><html><head><meta name="x" content="11.6.2026"></head><body>` +
     `<div class="event-details">` +
     `<div class="event-detail-card"><div class="detail-icon">📅</div><div class="detail-label">מתי</div><div class="detail-value">11.6.2026</div></div>` +
     `<div class="event-detail-card"><div class="detail-icon">📍</div><div class="detail-label">איפה</div><div class="detail-value">חיפה</div></div>` +
-    `</div></body></html>`;
+    `<div class="event-detail-card"><div class="detail-icon">🎁</div><div class="detail-label">עלות</div><div class="detail-value">הכניסה חופשית</div></div>` +
+    `</div>` +
+    `<div class="cta-micro">הכניסה חופשית! שריינו 11.6.2026</div>` + // date + cost duplicated, no 📅
+    `</body></html>`;
   const r = healEventHooks(html, new DOMParser());
-  assert.ok(!/data-editable="event_date"/.test(r.html), 'ambiguous date (2 occurrences) is skipped');
-  assert.equal(innerOf(r.html, 'event_location'), 'חיפה', 'unambiguous location still wrapped');
-  assert.equal(unwrapEventSpans(r.html), html, 'still byte-faithful');
+  assert.equal(r.healed, true);
+  // All three event fields hook the EVENT cells (date appears in <meta> + a cta badge;
+  // cost appears in the cta badge too — neither suppresses nor mis-targets the hook).
+  assert.equal(innerOf(r.html, 'event_date'), '11.6.2026');
+  assert.equal(innerOf(r.html, 'event_location'), 'חיפה');
+  assert.equal(innerOf(r.html, 'event_cost'), 'הכניסה חופשית');
+  // The duplicates outside the event block are left untouched.
+  assert.ok(r.html.includes('<meta name="x" content="11.6.2026">'), 'meta duplicate untouched');
+  assert.ok(r.html.includes('<div class="cta-micro">הכניסה חופשית! שריינו 11.6.2026</div>'), 'cta badge duplicate untouched');
+  assert.equal(unwrapEventSpans(r.html), html, 'byte-faithful');
 });
 
 test('every wrapped value span contains plain text only (no nested markup)', () => {

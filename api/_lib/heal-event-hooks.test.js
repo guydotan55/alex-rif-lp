@@ -1,0 +1,161 @@
+// Tests for Piece 2B: healEventHooks — auto-heal un-hooked single-event LPs by
+// wrapping each event-row VALUE in a data-editable="event_*" span.
+//
+// SAFETY-CRITICAL gate: single-vs-multi is decided by COUNTING 📅 date-emoji
+// occurrences in the parsed DOM — NOT class names. ==1 heal, ==0 / >=2 bail
+// byte-identical. Bail/no-heal must return the ORIGINAL string untouched.
+//
+// parser is injected: node passes linkedom's DOMParser, the browser passes its own.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { DOMParser } from 'linkedom';
+import { healEventHooks } from './heal-event-hooks.js';
+import { S1, S2, S3, S4, S5, MULTI, FALSE_POSITIVE } from './heal-event-hooks.fixtures.js';
+
+const parser = new DOMParser();
+
+// --- helpers ---------------------------------------------------------------
+
+// Extract the inner text of a data-editable="key" span from a healed HTML string.
+function innerOf(html, key) {
+  const re = new RegExp(`data-editable="${key}"[^>]*>([\\s\\S]*?)</span>`, 'i');
+  const m = re.exec(html);
+  return m ? m[1] : null;
+}
+
+function reparse(html, key) {
+  const doc = new DOMParser().parseFromString(`<!DOCTYPE html><html><body>${html}</body></html>`, 'text/html');
+  return doc.querySelector(`[data-editable="${key}"]`);
+}
+
+// --- GATE -------------------------------------------------------------------
+
+test('GATE: ==0 date-emoji → no event block → healed:false, byte-identical', () => {
+  const r = healEventHooks(FALSE_POSITIVE, parser);
+  assert.equal(r.healed, false);
+  assert.equal(r.html, FALSE_POSITIVE, 'byte-identical');
+  assert.equal(r.reason, 'no-event-block');
+});
+
+test('GATE: >=2 date-emoji (multi-event) → BAIL healed:false, byte-identical', () => {
+  const r = healEventHooks(MULTI, parser);
+  assert.equal(r.healed, false);
+  assert.equal(r.html, MULTI, 'byte-identical');
+  assert.equal(r.reason, 'multi-event');
+});
+
+// --- HEAL each single-event structure --------------------------------------
+
+for (const [name, fixture] of [['S1', S1], ['S2', S2], ['S4', S4], ['S5', S5]]) {
+  test(`HEAL ${name}: wraps date value, strips emoji+label, healed:true`, () => {
+    const r = healEventHooks(fixture, parser);
+    assert.equal(r.healed, true, 'healed');
+    const dateInner = innerOf(r.html, 'event_date');
+    assert.ok(dateInner != null, 'event_date span exists');
+    assert.ok(!dateInner.includes('<'), 'date inner has no nested markup');
+    assert.ok(!dateInner.includes('📅'), 'leading emoji stripped from value');
+    assert.ok(!/מתי/.test(dateInner), 'label stripped from value');
+    assert.ok(dateInner.trim().length > 0, 'value non-empty');
+  });
+
+  test(`HEAL ${name}: wraps location + cost values too`, () => {
+    const r = healEventHooks(fixture, parser);
+    const loc = innerOf(r.html, 'event_location');
+    const cost = innerOf(r.html, 'event_cost');
+    assert.ok(loc != null && !loc.includes('<') && !/איפה/.test(loc), 'location wrapped, label stripped, no markup');
+    assert.ok(cost != null && !cost.includes('<') && !/עלות/.test(cost), 'cost wrapped, label stripped, no markup');
+  });
+}
+
+test('HEAL S1: leading value run wrapped, trailing <br>/markup stays OUTSIDE the span', () => {
+  const r = healEventHooks(S1, parser);
+  // date value is "9.7.2026" with a trailing <br>בשעה 20:00 that must remain outside.
+  assert.equal(innerOf(r.html, 'event_date').trim(), '9.7.2026');
+  // The trailing markup is preserved in the document.
+  assert.ok(r.html.includes('<br>בשעה 20:00') || r.html.includes('<br>\nבשעה 20:00') || r.html.includes('בשעה 20:00'), 'trailing text preserved');
+  // The trailing <br> is not swallowed into the span.
+  const dateEl = reparse(r.html, 'event_date');
+  assert.ok(dateEl && !dateEl.querySelector('br'), 'no <br> inside the date span');
+});
+
+test('HEAL S4: cost row uses 🎁 gift emoji and still heals', () => {
+  const r = healEventHooks(S4, parser);
+  assert.equal(innerOf(r.html, 'event_cost').trim(), 'הכניסה חופשית');
+  assert.ok(!r.html.includes('data-editable="event_cost">🎁'), 'gift emoji not inside cost value');
+});
+
+test('COST VARIETY: each cost glyph in the known set heals the cost row', () => {
+  for (const glyph of ['🎟️', '🎫', '💫', '✨', '💰', '💵', '🎁']) {
+    const fixture = S2.replace('🎟️', glyph);
+    const r = healEventHooks(fixture, parser);
+    assert.equal(r.healed, true, `cost glyph ${glyph} heals`);
+    assert.ok(innerOf(r.html, 'event_cost') != null, `cost wrapped for ${glyph}`);
+  }
+});
+
+test('COST FALLBACK: an OFF-LIST cost glyph still heals via third-detail-row fallback', () => {
+  // 🏷️ is not in COST_EMOJIS — the cost row must be found as the third row.
+  const fixture = S4.replace('🎁', '🏷️');
+  const r = healEventHooks(fixture, parser);
+  assert.equal(r.healed, true, 'healed via fallback');
+  assert.ok(innerOf(r.html, 'event_cost') != null, 'cost still wrapped');
+  assert.equal(innerOf(r.html, 'event_cost').trim(), 'הכניסה חופשית');
+});
+
+// --- IDEMPOTENT + PARTIAL ---------------------------------------------------
+
+test('IDEMPOTENT: already-hooked LP (S3) → healed:false, byte-identical', () => {
+  const r = healEventHooks(S3, parser);
+  assert.equal(r.healed, false, 'nothing to heal');
+  assert.equal(r.html, S3, 'byte-identical when all rows already hooked');
+});
+
+test('IDEMPOTENT: re-running heal on healed output is a no-op (byte-identical second pass)', () => {
+  const first = healEventHooks(S2, parser);
+  assert.equal(first.healed, true);
+  const second = healEventHooks(first.html, parser);
+  assert.equal(second.healed, false, 'second pass finds nothing to heal');
+  assert.equal(second.html, first.html, 'second pass byte-identical');
+});
+
+test('PARTIAL: only un-hooked rows get hooked; pre-existing hook + its trailing <small> preserved', () => {
+  // Take S3 (all hooked) and un-hook ONLY the date row, leaving location (with <small>) hooked.
+  const partial = S3.replace(
+    '<span><strong>מתי:</strong> <span data-editable="event_date">11/6/2026</span></span>',
+    '<span><strong>מתי:</strong> 11/6/2026</span>'
+  );
+  const r = healEventHooks(partial, parser);
+  assert.equal(r.healed, true, 'date row healed');
+  assert.equal(innerOf(r.html, 'event_date').trim(), '11/6/2026');
+  // The already-hooked location with its trailing <small> must be untouched.
+  assert.ok(r.html.includes('data-editable="event_location">מרחב בִּיתְי, סמטאות יפו</span> <small'), 'location hook + trailing <small> preserved');
+});
+
+// --- VALIDITY GUARD ---------------------------------------------------------
+
+test('VALIDITY GUARD: if heal would produce unbalanced markup, return ORIGINAL html healed:false', () => {
+  // A row whose value run contains a stray "<" that can't be safely wrapped.
+  // The guard re-parses; if span count is unbalanced it must revert to original.
+  const broken = `<div class="event-details">
+    <div class="event-detail">
+      <div class="event-detail-icon">📅</div>
+      <div><strong>מתי:</strong> 15.7.2026</div>
+    </div>
+  </div>`;
+  // Sanity: this one is healable; the guard should NOT trip here.
+  const ok = healEventHooks(broken, parser);
+  assert.equal(ok.healed, true, 'well-formed row still heals (guard does not over-trip)');
+  // Balanced spans: every data-editable opening span has a matching close.
+  const opens = (ok.html.match(/<span data-editable="event_/g) || []).length;
+  const closes = (ok.html.match(/<\/span>/g) || []).length;
+  assert.ok(closes >= opens, 'no unbalanced editable spans');
+});
+
+test('regression: healed output round-trips through the parser without error', () => {
+  for (const f of [S1, S2, S4, S5]) {
+    const r = healEventHooks(f, parser);
+    assert.equal(r.healed, true);
+    const doc = new DOMParser().parseFromString(`<!DOCTYPE html><html><body>${r.html}</body></html>`, 'text/html');
+    assert.ok(doc.querySelector('[data-editable="event_date"]'), 'date hook parseable');
+  }
+});

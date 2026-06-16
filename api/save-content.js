@@ -1,5 +1,6 @@
 // Vercel Serverless Function — load and save editable text content for an LP variant
 import { authenticateAndAuthorize } from "./_lib/auth-helper.js";
+import { isWriteBackRequest, shouldWriteBack } from "./_lib/write-back.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -47,7 +48,54 @@ export default async function handler(req, res) {
 
   // POST: save editable content
   if (req.method === "POST") {
-    const { project_id, variant_id, items } = req.body || {};
+    const { project_id, variant_id, items, healed_html } = req.body || {};
+
+    // --- One-time healed-HTML write-back (Task 2B) ---
+    // The editor sends { variant_id, healed_html } once, after auto-hooking an
+    // un-hooked single-event LP. Authenticate the same way, then PATCH
+    // project_variants.generated_html ONCE — but only if it actually changed.
+    if (isWriteBackRequest(req.body || {})) {
+      if (!project_id) {
+        return res.status(400).json({ error: "Missing project_id" });
+      }
+      const auth = await authenticateAndAuthorize(req, res, { projectId: project_id });
+      if (!auth) return; // sends 401/403 itself
+
+      // Read the currently stored HTML so we can no-op on equality.
+      const storedRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${encodeURIComponent(variant_id)}&select=generated_html&limit=1`,
+        { headers: SB_HEADERS }
+      );
+      if (!storedRes.ok) {
+        const err = await storedRes.text();
+        console.error("write-back fetch error:", storedRes.status, err);
+        return res.status(500).json({ error: "Failed to load variant for write-back" });
+      }
+      const rows = await storedRes.json();
+      if (!rows.length) {
+        return res.status(404).json({ error: "Variant not found" });
+      }
+      const stored = rows[0].generated_html;
+
+      if (!shouldWriteBack(stored, healed_html)) {
+        return res.status(200).json({ ok: true, written: false, reason: "no-op" });
+      }
+
+      const patchRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${encodeURIComponent(variant_id)}`,
+        {
+          method: "PATCH",
+          headers: { ...SB_HEADERS, Prefer: "return=minimal" },
+          body: JSON.stringify({ generated_html: healed_html }),
+        }
+      );
+      if (!patchRes.ok) {
+        const err = await patchRes.text();
+        console.error("write-back PATCH error:", patchRes.status, err);
+        return res.status(500).json({ error: "Failed to write back healed HTML" });
+      }
+      return res.status(200).json({ ok: true, written: true });
+    }
 
     if (!project_id || !variant_id || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Missing project_id, variant_id, or items" });

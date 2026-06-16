@@ -1,6 +1,6 @@
 // Vercel Serverless Function — resolves images for LP generation
 import Anthropic from "@anthropic-ai/sdk";
-import { verifyUser, canAccessProject } from "./lib/auth-helper.js";
+import { verifyUser, canAccessProject } from "./_lib/auth-helper.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -11,7 +11,7 @@
 //   { action: "delete-community", id }            — admin+
 //   { action: "invite-user", email, role, community_id? }  — admin+
 
-import { authenticateAndAuthorize, hasMinRole } from "./lib/auth-helper.js";
+import { authenticateAndAuthorize, hasMinRole } from "./_lib/auth-helper.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;

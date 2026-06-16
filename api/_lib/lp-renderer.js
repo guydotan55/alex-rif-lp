@@ -6,7 +6,9 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const META_PIXEL_ID = process.env.META_PIXEL_ID || "";
 
 export function escapeHtml(str) {
-  if (!str) return "";
+  if (str == null || str === "") return "";
+  // Coerce non-strings (numeric/boolean override values) so .replace can't throw a 500 on /lp.
+  if (typeof str !== "string") str = String(str);
   return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

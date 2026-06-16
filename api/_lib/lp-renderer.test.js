@@ -74,3 +74,22 @@ test('unknown key leaves html unchanged', () => {
   const out = applyOverrides(html, [{ key: 'nope', value: 'b' }]);
   assert.equal(out, html);
 });
+
+test('numeric override value is stringified, does not throw a 500', () => {
+  const html = '<p data-editable="event_cost">old</p>';
+  // A numeric value (e.g. cost saved as a number) must not crash escapeHtml.
+  let out;
+  assert.doesNotThrow(() => {
+    out = applyOverrides(html, [{ key: 'event_cost', value: 100 }]);
+  });
+  assert.equal(out, '<p data-editable="event_cost">100</p>');
+});
+
+test('boolean override value is stringified, does not throw', () => {
+  const html = '<p data-editable="x">old</p>';
+  let out;
+  assert.doesNotThrow(() => {
+    out = applyOverrides(html, [{ key: 'x', value: true }]);
+  });
+  assert.equal(out, '<p data-editable="x">true</p>');
+});

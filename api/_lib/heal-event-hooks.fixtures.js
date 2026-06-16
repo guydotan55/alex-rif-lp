@@ -120,3 +120,28 @@ export const FALSE_POSITIVE = `<section class="hero">
   <p>מקום של שייכות ✨ קהילה חמה</p>
   <a class="cta-button" data-cta="true">להצטרף</a>
 </section>`;
+
+// FULL_DECOY — a FULL <!DOCTYPE html> document modeled on real variant d9f69f33:
+// a decorative ✨ offering card in the STORY section appears BEFORE the event block,
+// and the real cost row uses 🎁. This is the production reality the trimmed fixtures
+// missed (LPs are always full documents). healEventHooks must wrap event_cost on the
+// REAL cost row — never the offering heading — and leave the rest of the document
+// (including <head><style> with quotes/entities) byte-for-byte identical.
+export const FULL_DECOY = `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<style>.offering-icon{content:"״";background:url("data:image/svg+xml,%3Csvg/%3E")}</style>
+</head>
+<body>
+<section class="story">
+  <div class="offering-card"><div class="offering-icon">✨</div><h4>רוח והעשרה למבוגרים</h4><p>לימוד זוהר מעמיק, מפגשי ניגון.</p></div>
+</section>
+<section class="form">
+  <div class="event-details">
+    <div class="event-detail-card"><div class="detail-icon">📅</div><div class="detail-label">מתי</div><div class="detail-value">11.6.2026</div></div>
+    <div class="event-detail-card"><div class="detail-icon">📍</div><div class="detail-label">איפה</div><div class="detail-value">מרחב בִּתְאָ, סמטאות יפו</div></div>
+    <div class="event-detail-card"><div class="detail-icon">🎁</div><div class="detail-label">עלות</div><div class="detail-value">הכניסה חופשית</div></div>
+  </div>
+</section>
+</body>
+</html>`;

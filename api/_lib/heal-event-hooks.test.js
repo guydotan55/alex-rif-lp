@@ -10,9 +10,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DOMParser } from 'linkedom';
 import { healEventHooks } from './heal-event-hooks.js';
-import { S1, S2, S3, S4, S5, MULTI, FALSE_POSITIVE } from './heal-event-hooks.fixtures.js';
+import { S1, S2, S3, S4, S5, MULTI, FALSE_POSITIVE, FULL_DECOY } from './heal-event-hooks.fixtures.js';
 
 const parser = new DOMParser();
+
+// Removing the injected event spans must yield the EXACT original string — the
+// byte-faithfulness invariant that lets us write a healed LP back onto /lp/* safely.
+function unwrapEventSpans(html) {
+  return html.replace(/<span data-editable="event_(?:date|location|cost)">([\s\S]*?)<\/span>/g, '$1');
+}
 
 // --- helpers ---------------------------------------------------------------
 
@@ -157,5 +163,55 @@ test('regression: healed output round-trips through the parser without error', (
     assert.equal(r.healed, true);
     const doc = new DOMParser().parseFromString(`<!DOCTYPE html><html><body>${r.html}</body></html>`, 'text/html');
     assert.ok(doc.querySelector('[data-editable="event_date"]'), 'date hook parseable');
+  }
+});
+
+// --- The case the trimmed fixtures missed: a FULL document where a decorative
+// --- emoji from the cost set (✨) precedes the event block. This reproduces the
+// --- live-data corruption the review panel caught.
+test('FULL DOC, decorative ✨ before the event block: event_cost lands on the REAL cost row, not the offering heading', () => {
+  const r = healEventHooks(FULL_DECOY, new DOMParser());
+  assert.equal(r.healed, true);
+  assert.equal(innerOf(r.html, 'event_cost'), 'הכניסה חופשית');
+  assert.ok(!/data-editable="event_cost">רוח/.test(r.html), 'must NOT hook the offering heading "רוח והעשרה..."');
+  assert.equal(innerOf(r.html, 'event_date'), '11.6.2026');
+  assert.equal(innerOf(r.html, 'event_location'), 'מרחב בִּתְאָ, סמטאות יפו');
+});
+
+test('FULL DOC heal is byte-faithful: unwrap spans === original, and <head><style> is untouched', () => {
+  const r = healEventHooks(FULL_DECOY, new DOMParser());
+  assert.equal(unwrapEventSpans(r.html), FULL_DECOY);
+  assert.ok(
+    r.html.includes('<style>.offering-icon{content:"״";background:url("data:image/svg+xml,%3Csvg/%3E")}</style>'),
+    '<style> block (quotes + entities) preserved byte-for-byte'
+  );
+});
+
+for (const [name, fx] of [['S1', S1], ['S2', S2], ['S4', S4], ['S5', S5]]) {
+  test(`byte-faithful (${name}): unwrapping the injected spans equals the original`, () => {
+    const r = healEventHooks(fx, new DOMParser());
+    assert.equal(r.healed, true);
+    assert.equal(unwrapEventSpans(r.html), fx);
+  });
+}
+
+test('SKIP ambiguous value: a date string that also appears in <meta> is NOT wrapped (no wrong-occurrence)', () => {
+  const html =
+    `<!DOCTYPE html><html><head><meta name="x" content="11.6.2026"></head><body>` +
+    `<div class="event-details">` +
+    `<div class="event-detail-card"><div class="detail-icon">📅</div><div class="detail-label">מתי</div><div class="detail-value">11.6.2026</div></div>` +
+    `<div class="event-detail-card"><div class="detail-icon">📍</div><div class="detail-label">איפה</div><div class="detail-value">חיפה</div></div>` +
+    `</div></body></html>`;
+  const r = healEventHooks(html, new DOMParser());
+  assert.ok(!/data-editable="event_date"/.test(r.html), 'ambiguous date (2 occurrences) is skipped');
+  assert.equal(innerOf(r.html, 'event_location'), 'חיפה', 'unambiguous location still wrapped');
+  assert.equal(unwrapEventSpans(r.html), html, 'still byte-faithful');
+});
+
+test('every wrapped value span contains plain text only (no nested markup)', () => {
+  const r = healEventHooks(FULL_DECOY, new DOMParser());
+  for (const key of ['event_date', 'event_location', 'event_cost']) {
+    const inner = innerOf(r.html, key);
+    assert.ok(inner != null && !inner.includes('<'), `${key} inner is plain text`);
   }
 });

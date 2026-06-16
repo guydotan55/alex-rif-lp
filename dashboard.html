@@ -3830,12 +3830,11 @@ function healRowHasValue(row) { return !!healFindValueTextNode(row); }
 function healFindRowByEmoji(root, emoji) {
   const all = root.querySelectorAll('*');
   for (const el of all) {
-    const txt = el.textContent || '';
-    if (!txt.includes(emoji)) continue;
-    if (healIsEmojiOnly(el.textContent || '') && (el.textContent || '').includes(emoji)) {
+    if (!(el.textContent || '').includes(emoji)) continue;
+    if (healIsEmojiOnly(el.textContent || '')) {
       let row = el.parentElement;
-      while (row && !healRowHasValue(row)) row = row.parentElement;
-      if (row) return row;
+      while (row && row !== root.parentElement && !healRowHasValue(row)) row = row.parentElement;
+      if (row && healRowHasValue(row)) return row;
     }
   }
   for (const el of all) {
@@ -3844,70 +3843,68 @@ function healFindRowByEmoji(root, emoji) {
   }
   return null;
 }
-function healRow(doc, row, key) {
-  if (!row) return false;
-  if (healHasHook(row, key)) return false;
-  const textNode = healFindValueTextNode(row);
-  if (!textNode) return false;
-  const raw = textNode.nodeValue || '';
-  const stripped = healStripEmojiAndLabel(raw);
-  const value = stripped.trim();
-  if (!value) return false;
-  const prefixLen = raw.length - stripped.length;
-  const prefix = raw.slice(0, prefixLen);
-  const afterValueIdx = raw.indexOf(value, prefixLen) + value.length;
-  const suffix = raw.slice(afterValueIdx);
-  const span = doc.createElement('span');
-  span.setAttribute('data-editable', key);
-  span.textContent = value;
-  const parent = textNode.parentNode;
-  if (prefix) parent.insertBefore(doc.createTextNode(prefix), textNode);
-  parent.insertBefore(span, textNode);
-  if (suffix) parent.insertBefore(doc.createTextNode(suffix), textNode);
-  parent.removeChild(textNode);
-  return true;
+// Cost row located ONLY inside the event container (never page-global), so a
+// decorative ✨/💰 elsewhere on the page can't be mis-hooked as event_cost.
+function healFindCostRow(container, dateRow, locationRow) {
+  for (const ce of HEAL_COST_EMOJIS) {
+    const row = healFindRowByEmoji(container, ce);
+    if (row && row !== dateRow && row !== locationRow) return row;
+  }
+  const siblings = [...container.children].filter(
+    c => c !== dateRow && c !== locationRow && c.tagName !== 'H3' && healRowHasValue(c)
+  );
+  return siblings[0] || null;
 }
+function healExtractValue(row) {
+  if (!row) return null;
+  const textNode = healFindValueTextNode(row);
+  if (!textNode) return null;
+  const value = healStripEmojiAndLabel(textNode.nodeValue || '').trim();
+  return value || null;
+}
+// BYTE-FAITHFUL: locate each value via DOM, then wrap that exact substring in the
+// ORIGINAL html (only when it occurs exactly once). Never reserializes the doc.
 function healEventHooks(htmlString, parser) {
   if (typeof htmlString !== 'string' || !htmlString) return { html: htmlString, healed: false, reason: 'empty' };
-  const doc = parser.parseFromString(htmlString, 'text/html');
-  // Real LPs are full documents (body populated). Resolve the populated root so a
-  // bare fragment (where some parsers leave body empty) still works.
-  let body = doc.body || doc.querySelector('body');
-  if (!body || (body.textContent || '').trim() === '') {
-    body = doc.documentElement || body;
-  }
-  if (!body) return { html: htmlString, healed: false, reason: 'parse-error' };
-  const dateCount = healCountOccurrences(body.textContent || '', HEAL_DATE_EMOJI);
+  let doc;
+  try {
+    const looksFull = /^\s*(?:<!doctype\b|<html[\s>])/i.test(htmlString);
+    const toParse = looksFull ? htmlString : `<!DOCTYPE html><html><body>${htmlString}</body></html>`;
+    doc = parser.parseFromString(toParse, 'text/html');
+  } catch (e) { return { html: htmlString, healed: false, reason: 'parse-error' }; }
+  const root = (doc && (doc.body || doc.documentElement)) || null;
+  if (!root) return { html: htmlString, healed: false, reason: 'parse-error' };
+  const dateCount = healCountOccurrences(root.textContent || '', HEAL_DATE_EMOJI);
   if (dateCount === 0) return { html: htmlString, healed: false, reason: 'no-event-block' };
   if (dateCount >= 2) return { html: htmlString, healed: false, reason: 'multi-event' };
-  const dateRow = healFindRowByEmoji(body, HEAL_DATE_EMOJI);
-  const locationRow = healFindRowByEmoji(body, HEAL_LOCATION_EMOJI);
-  let costRow = null;
-  for (const ce of HEAL_COST_EMOJIS) { costRow = healFindRowByEmoji(body, ce); if (costRow) break; }
-  if (!costRow && dateRow && dateRow.parentElement) {
-    const siblings = [...dateRow.parentElement.children].filter(
-      c => c !== dateRow && c !== locationRow && (c.textContent || '').trim() !== ''
-    );
-    costRow = siblings.find(c => c.tagName !== 'H3' && c !== locationRow) || null;
-  }
+  const dateRow = healFindRowByEmoji(root, HEAL_DATE_EMOJI);
+  if (!dateRow) return { html: htmlString, healed: false, reason: 'no-date-row' };
+  const container = dateRow.parentElement || dateRow;
+  const locationRow = healFindRowByEmoji(container, HEAL_LOCATION_EMOJI);
+  const costRow = healFindCostRow(container, dateRow, locationRow);
+  const targets = [
+    { key: 'event_date', value: healExtractValue(dateRow) },
+    { key: 'event_location', value: healExtractValue(locationRow) },
+    { key: 'event_cost', value: healExtractValue(costRow) },
+  ];
+  let out = htmlString;
   let healed = false;
-  healed = healRow(doc, dateRow, 'event_date') || healed;
-  healed = healRow(doc, locationRow, 'event_location') || healed;
-  healed = healRow(doc, costRow, 'event_cost') || healed;
+  for (const { key, value } of targets) {
+    if (!value) continue;
+    if (value.includes('<') || value.includes('>')) continue;
+    if (out.includes(`data-editable="${key}"`)) continue;
+    if (healCountOccurrences(out, value) !== 1) continue;
+    const wrapped = `<span data-editable="${key}">${value}</span>`;
+    out = out.replace(value, () => wrapped);
+    healed = true;
+  }
   if (!healed) return { html: htmlString, healed: false, reason: 'already-hooked' };
-  // Serialize the full document so we write back a complete LP, not just a fragment.
-  const out = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+  const addedOpen = (out.match(/<span\b/gi) || []).length - (htmlString.match(/<span\b/gi) || []).length;
+  const addedClose = (out.match(/<\/span>/gi) || []).length - (htmlString.match(/<\/span>/gi) || []).length;
+  if (addedOpen <= 0 || addedOpen !== addedClose) return { html: htmlString, healed: false, reason: 'validity-guard' };
   try {
     const check = parser.parseFromString(out, 'text/html');
-    if (!(check.body || check.querySelector('body'))) return { html: htmlString, healed: false, reason: 'validity-guard' };
-    const openSpans = (out.match(/<span\b/gi) || []).length;
-    const closeSpans = (out.match(/<\/span>/gi) || []).length;
-    if (openSpans !== closeSpans) return { html: htmlString, healed: false, reason: 'validity-guard' };
-    const innerRe = /data-editable="event_(?:date|location|cost)"[^>]*>([\s\S]*?)<\/span>/gi;
-    let m;
-    while ((m = innerRe.exec(out)) !== null) {
-      if (m[1].includes('<')) return { html: htmlString, healed: false, reason: 'validity-guard' };
-    }
+    if (!check || !(check.body || check.documentElement)) return { html: htmlString, healed: false, reason: 'validity-guard' };
   } catch (e) { return { html: htmlString, healed: false, reason: 'validity-guard' }; }
   return { html: out, healed: true, reason: 'healed' };
 }

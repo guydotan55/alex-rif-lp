@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { DOMParser } from 'linkedom';
-import { S1, S2, S4, S5, MULTI, FALSE_POSITIVE } from './_lib/heal-event-hooks.fixtures.js';
+import { S1, S2, S4, S5, MULTI, FALSE_POSITIVE, FULL_DECOY } from './_lib/heal-event-hooks.fixtures.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dash = readFileSync(join(__dirname, '..', 'dashboard.html'), 'utf8');
@@ -61,3 +61,15 @@ for (const [name, fixture, expDate, expCost] of [
     assert.ok(innerOf(r.html, 'event_location') != null, 'location hooked');
   });
 }
+
+// The production code path (dashboard copy) on the real-world bug condition: a
+// FULL document with a decorative ✨ before the event block. It must hook the REAL
+// cost row and leave the document byte-faithful.
+test('dashboard heal FULL_DECOY: event_cost on the real row (not the offering), byte-faithful', () => {
+  const r = healEventHooks(FULL_DECOY, new DOMParser());
+  assert.equal(r.healed, true);
+  assert.equal(innerOf(r.html, 'event_cost'), 'הכניסה חופשית');
+  assert.ok(!/data-editable="event_cost">רוח/.test(r.html), 'does NOT hook the offering heading');
+  const unwrapped = r.html.replace(/<span data-editable="event_(?:date|location|cost)">([\s\S]*?)<\/span>/g, '$1');
+  assert.equal(unwrapped, FULL_DECOY, 'byte-faithful: unwrap === original');
+});

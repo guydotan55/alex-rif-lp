@@ -16,37 +16,94 @@ export function escapeHtml(str) {
 }
 
 /**
- * Apply text overrides: replace innerHTML of elements with data-editable="key"
+ * Apply text overrides: replace the inner content of every element carrying
+ * data-editable="key" with the (escaped) override value.
+ *
+ * Replacement is nesting-aware: it matches the editable element's OWN closing
+ * tag via depth counting, so a nested tag inside it (e.g. <span>•</span> in a
+ * headline, <small> in an event row, or <p> inside story_text) does not cut the
+ * replacement short and leave the old text behind.
  */
 export function applyOverrides(html, overrides) {
   if (!overrides || overrides.length === 0) return html;
 
   for (const { key, value } of overrides) {
     if (!key || value == null) continue;
-    const escapedValue = escapeHtml(value);
-    const regex = new RegExp(
-      `(<[^>]*\\bdata-editable\\s*=\\s*"${key}"[^>]*>)([\\s\\S]*?)(<\\/[^>]+>)`,
-      "gi"
-    );
     const before = html;
-    if (value === '') {
-      html = html.replace(regex, (match, open, content, close) => {
-        const hiddenOpen = open.replace(/>$/, ' style="display:none;">');
-        return hiddenOpen + close;
-      });
-    } else {
-      html = html.replace(regex, `$1${escapedValue}$3`);
-    }
+    html = replaceEditable(html, key, value);
 
+    // Legacy fallback: old LPs whose footer has no data-editable hook.
     if (key === "footer_text" && html === before) {
       html = html.replace(
         /(<footer[^>]*>)([\s\S]*?)(<\/footer>)/i,
-        `$1<p>${escapedValue}</p>$3`
+        `$1<p>${escapeHtml(value)}</p>$3`
       );
     }
   }
 
   return html;
+}
+
+/**
+ * Find the index range of the closing tag that matches an element of `tagName`
+ * whose content starts at `fromIndex`. Depth-counts nested same-name tags and
+ * ignores self-closing ones. Returns {start, end} or null if unbalanced.
+ */
+function findMatchingClose(str, tagName, fromIndex) {
+  const re = new RegExp(`<(/?)${tagName}\\b(?:[^>]*?)(/?)>`, "gi");
+  re.lastIndex = fromIndex;
+  let depth = 1;
+  let m;
+  while ((m = re.exec(str)) !== null) {
+    if (m[1] === "/") {
+      depth--;
+      if (depth === 0) return { start: m.index, end: m.index + m[0].length };
+    } else if (m[2] !== "/") {
+      depth++;
+    }
+  }
+  return null;
+}
+
+/**
+ * Replace the inner content of every <tag data-editable="key">…</tag> in `html`.
+ * value === "" hides the element (display:none) and clears its content.
+ */
+function replaceEditable(html, key, value) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const openRe = new RegExp(
+    `<([a-zA-Z][a-zA-Z0-9]*)\\b[^>]*\\bdata-editable\\s*=\\s*"${escapedKey}"[^>]*>`,
+    "i"
+  );
+  const escapedValue = escapeHtml(value);
+
+  let out = "";
+  let rest = html;
+  while (true) {
+    const m = openRe.exec(rest);
+    if (!m) { out += rest; break; }
+    const openTag = m[0];
+    const tagName = m[1];
+    const openEnd = m.index + openTag.length;
+
+    const close = findMatchingClose(rest, tagName, openEnd);
+    if (!close) {
+      // Unbalanced markup — skip past this opening tag rather than corrupt it.
+      out += rest.slice(0, openEnd);
+      rest = rest.slice(openEnd);
+      continue;
+    }
+
+    out += rest.slice(0, m.index);
+    const closeTag = rest.slice(close.start, close.end);
+    if (value === "") {
+      out += openTag.replace(/>$/, ' style="display:none;">') + closeTag;
+    } else {
+      out += openTag + escapedValue + closeTag;
+    }
+    rest = rest.slice(close.end);
+  }
+  return out;
 }
 
 export function applyImageOverrides(html, imageOverrides) {

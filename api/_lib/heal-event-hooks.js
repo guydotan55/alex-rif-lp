@@ -194,6 +194,13 @@ export function healEventHooks(htmlString, parser) {
   // earlier one can't nest inside it, and (b) a duplicate value in decorative text
   // can neither suppress nor mis-target the hook. The document is never reserialized
   // (so <style>/<script>/entities stay byte-identical).
+  //
+  // KNOWN LIMITATION (latent, byte-faithful — never corrupts the page): if a decoy
+  // carries BOTH the row's icon emoji AND a verbatim duplicate of the value and sits
+  // between the cursor and the real cell, the anchor lands on the decoy. The LP
+  // generator emits tight icon→label→value rows with no such interleaving, and this
+  // occurs on zero real LPs; the result stays byte-faithful so it can only ever
+  // mis-target an editable hook, not damage the served page.
   let out = htmlString;
   let healed = false;
   let cursor = out.indexOf(DATE_EMOJI); // gate-unique floor

@@ -66,8 +66,9 @@ function buildBrief(project) {
 
 /**
  * Build the system prompt instructing Claude how to generate the LP.
+ * Exported for unit testing the event-block instructions.
  */
-function buildSystemPrompt(imageMode, resolvedImages) {
+export function buildSystemPrompt(imageMode, resolvedImages) {
   return `You are an expert landing page designer and front-end developer.
 Your job is to create a complete, production-ready, single-file HTML landing page based on the provided brief and inspiration image.
 
@@ -110,7 +111,7 @@ CRITICAL RULES:
    - data-editable="form_subtitle" on the form section subtitle/description text (e.g. "השאירו את כתובת המייל שלכם")
    - data-editable="thankyou_text" on the hidden thank-you element
    - data-editable="footer_text" on the footer paragraph/text element
-   - If the page shows an event-details block (date/time, location/venue, price/cost), wrap ONLY the changeable VALUE of each — never the "מתי:/איפה:/עלות:" label or icon — in its own inline <span> carrying, respectively, data-editable="event_date", data-editable="event_location", and data-editable="event_cost". Each such <span> must contain PLAIN TEXT ONLY — no nested tags (no <small>, <strong>, <br>, etc.) inside it. Example: <span><strong>מתי:</strong> <span data-editable="event_date">11/6/2026</span></span>. Skip any of these three that the page does not show.
+   - If the page shows an event-details block (date/time, location/venue, price/cost), wrap ONLY the changeable VALUE of each — never the "מתי:/איפה:/עלות:" label — in its own inline <span> carrying, respectively, data-editable="event_date", data-editable="event_location", and data-editable="event_cost". Each such VALUE <span> must contain PLAIN TEXT ONLY — no nested tags (no <small>, <strong>, <br>, etc.) inside it. ALSO wrap the leading emoji GLYPH of each row in its own inline <span> carrying, respectively, data-editable="event_date_icon", data-editable="event_location_icon", and data-editable="event_cost_icon" — these icon spans must contain the emoji ONLY (a single bare emoji, no label, no text, no nested tags). The icon span is parallel to (separate from) the value span. Example: <span><span data-editable="event_date_icon">📅</span> <strong>מתי:</strong> <span data-editable="event_date">11/6/2026</span></span>. Skip any of these three rows that the page does not show.
 9. Add class="cta-button" and data-cta="true" to ALL CTA buttons.
 10. MOBILE IS THE #1 PRIORITY — 95% of traffic comes from mobile devices:
     - Design mobile-first: start with the mobile layout, then enhance for larger screens

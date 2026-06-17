@@ -12,5 +12,8 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0"
+  },
+  "devDependencies": {
+    "linkedom": "^0.18.12"
   }
 }

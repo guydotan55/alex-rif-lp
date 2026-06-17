@@ -6,7 +6,9 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const META_PIXEL_ID = process.env.META_PIXEL_ID || "";
 
 export function escapeHtml(str) {
-  if (!str) return "";
+  if (str == null || str === "") return "";
+  // Coerce non-strings (numeric/boolean override values) so .replace can't throw a 500 on /lp.
+  if (typeof str !== "string") str = String(str);
   return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -188,6 +190,25 @@ export function buildInjectedScript(projectId, variantId, testId, anonKey, supab
         }).catch(function() {});` : "";
 
   return `
+<!-- LP Builder: Twemoji (consistent emoji rendering as SVG, pinned) -->
+<style>img.emoji{height:1em;width:1em;margin:0 .1em;vertical-align:-0.1em;display:inline-block}</style>
+<script src="https://cdn.jsdelivr.net/npm/@twemoji/api@17.0.3/dist/twemoji.min.js" crossorigin="anonymous"></script>
+<script>
+// Guarded Twemoji parser — MUST NEVER throw on /lp. No-ops if twemoji failed to load.
+window.__twemojiParse = function(node) {
+  try {
+    if (typeof window.twemoji === "undefined" || !node) return;
+    window.twemoji.parse(node, {
+      folder: 'svg',
+      ext: '.svg',
+      base: 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@17.0.3/assets/',
+      className: 'emoji'
+    });
+  } catch (e) {
+    // Swallow — emoji rendering is cosmetic and must not break the page.
+  }
+};
+</script>
 <!-- LP Builder: Analytics & Form Handling -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -309,12 +330,17 @@ export function buildInjectedScript(projectId, variantId, testId, anonKey, supab
         if (thankyouEl) {
           thankyouEl.style.display = "block";
           form.style.display = "none";
+          __twemojiParse(thankyouEl);
         } else {
           form.innerHTML = '<div style="text-align:center;padding:32px 16px;"><p style="font-size:1.4em;font-weight:700;margin-bottom:8px;">Thank you!</p><p>We received your details.</p></div>';
+          __twemojiParse(form);
         }
       });
     });
   }
+
+  // Render all emoji on the page as SVG via Twemoji — LAST statement of the IIFE.
+  __twemojiParse(document.body);
 })();
 </script>
 `;

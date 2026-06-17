@@ -2004,6 +2004,8 @@ let selectedProject = null;
 let projectLeads = [];
 let projectEvents = [];
 let projectContent = [];
+// Staged healed LP HTML (event auto-hook) — written back ONCE on explicit Save.
+let pendingHealedHtml = null;
 let leadsPage = 1;
 const PAGE_SIZE = 20;
 let projectVariants = [];
@@ -3708,6 +3710,217 @@ async function toggleFold2Image(enabled) {
   loadPreview();
 }
 
+// ── Shared LP override helpers — ported VERBATIM from api/_lib/lp-renderer.js ──
+// so the dashboard PREVIEW matches exactly what gets published (no first-closing-tag
+// divergence). Covered by api/_lib/lp-renderer.test.js.
+function lpEscapeHtml(str) {
+  if (str == null || str === '') return '';
+  if (typeof str !== 'string') str = String(str);
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Depth-count to the closing tag that matches the editable element's OWN open tag.
+function lpFindMatchingClose(str, tagName, fromIndex) {
+  const re = new RegExp(`<(/?)${tagName}\\b(?:[^>]*?)(/?)>`, 'gi');
+  re.lastIndex = fromIndex;
+  let depth = 1;
+  let m;
+  while ((m = re.exec(str)) !== null) {
+    if (m[1] === '/') {
+      depth--;
+      if (depth === 0) return { start: m.index, end: m.index + m[0].length };
+    } else if (m[2] !== '/') {
+      depth++;
+    }
+  }
+  return null;
+}
+
+// Replace the inner content of every <tag data-editable="key">…</tag>, nesting-aware.
+function lpReplaceEditable(html, key, value) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const openRe = new RegExp(
+    `<([a-zA-Z][a-zA-Z0-9]*)\\b[^>]*\\bdata-editable\\s*=\\s*"${escapedKey}"[^>]*>`,
+    'i'
+  );
+  const escapedValue = lpEscapeHtml(value);
+
+  let out = '';
+  let rest = html;
+  while (true) {
+    const m = openRe.exec(rest);
+    if (!m) { out += rest; break; }
+    const openTag = m[0];
+    const tagName = m[1];
+    const openEnd = m.index + openTag.length;
+
+    const close = lpFindMatchingClose(rest, tagName, openEnd);
+    if (!close) {
+      out += rest.slice(0, openEnd);
+      rest = rest.slice(openEnd);
+      continue;
+    }
+
+    out += rest.slice(0, m.index);
+    const closeTag = rest.slice(close.start, close.end);
+    if (value === '') {
+      out += openTag.replace(/>$/, ' style="display:none;">') + closeTag;
+    } else {
+      out += openTag + escapedValue + closeTag;
+    }
+    rest = rest.slice(close.end);
+  }
+  return out;
+}
+
+// ── Event auto-heal — ported from api/_lib/heal-event-hooks.js (browser DOMParser).
+// Covered by api/_lib/heal-event-hooks.test.js. Safety gate: counts 📅 in the parsed
+// DOM (NOT class names). 0 → no block, >=2 → multi-event BAIL byte-identical, 1 → heal.
+const HEAL_DATE_EMOJI = '📅';
+const HEAL_LOCATION_EMOJI = '📍';
+const HEAL_COST_EMOJIS = ['🎟️', '🎫', '💫', '✨', '💰', '💵', '🎁'];
+const HEAL_LABELS = ['מתי', 'איפה', 'עלות'];
+const HEAL_LEADING_EMOJI_RE = /^[\s‍]*(?:\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*)+[\s‍]*/u;
+
+function healCountOccurrences(haystack, needle) {
+  if (!needle) return 0;
+  let count = 0, i = 0;
+  while ((i = haystack.indexOf(needle, i)) !== -1) { count++; i += needle.length; }
+  return count;
+}
+function healStripEmojiAndLabel(text) {
+  let out = text.replace(HEAL_LEADING_EMOJI_RE, '');
+  const labelRe = new RegExp(`^[\\s]*(?:${HEAL_LABELS.join('|')})\\s*:?\\s*`);
+  return out.replace(labelRe, '');
+}
+function healIsEmojiOnly(text) { return text.replace(HEAL_LEADING_EMOJI_RE, '').trim() === ''; }
+function healIsLabelOnly(text) {
+  const t = text.trim().replace(/:$/, '').trim();
+  return HEAL_LABELS.includes(t);
+}
+function healHasHook(el, key) { return !!el.querySelector(`[data-editable="${key}"]`); }
+function healDirectText(el) {
+  let s = '';
+  for (const n of el.childNodes) { if (n.nodeType === 3) s += n.nodeValue || ''; }
+  return s;
+}
+function healWalk(node, out) {
+  for (const child of node.childNodes) { out.push(child); if (child.nodeType === 1) healWalk(child, out); }
+}
+function healFindValueTextNode(row) {
+  const queue = [];
+  healWalk(row, queue);
+  for (const n of queue) {
+    if (n.nodeType !== 3) continue;
+    const v = n.nodeValue || '';
+    if (v.trim() === '') continue;
+    if (healIsEmojiOnly(v)) continue;
+    if (healIsLabelOnly(v)) continue;
+    if (healStripEmojiAndLabel(v).trim() === '') continue;
+    return n;
+  }
+  return null;
+}
+function healRowHasValue(row) { return !!healFindValueTextNode(row); }
+function healFindRowByEmoji(root, emoji) {
+  const all = root.querySelectorAll('*');
+  for (const el of all) {
+    if (!(el.textContent || '').includes(emoji)) continue;
+    if (healIsEmojiOnly(el.textContent || '')) {
+      let row = el.parentElement;
+      while (row && row !== root.parentElement && !healRowHasValue(row)) row = row.parentElement;
+      if (row && healRowHasValue(row)) return row;
+    }
+  }
+  for (const el of all) {
+    const direct = healDirectText(el);
+    if (direct && direct.trimStart().startsWith(emoji) && !healIsEmojiOnly(direct)) return el;
+  }
+  return null;
+}
+// Cost row located ONLY inside the event container (never page-global), so a
+// decorative ✨/💰 elsewhere on the page can't be mis-hooked as event_cost.
+function healFindCostRow(container, dateRow, locationRow) {
+  for (const ce of HEAL_COST_EMOJIS) {
+    const row = healFindRowByEmoji(container, ce);
+    if (row && row !== dateRow && row !== locationRow) return row;
+  }
+  const siblings = [...container.children].filter(
+    c => c !== dateRow && c !== locationRow && c.tagName !== 'H3' && healRowHasValue(c)
+  );
+  return siblings[0] || null;
+}
+function healExtractValue(row) {
+  if (!row) return null;
+  const textNode = healFindValueTextNode(row);
+  if (!textNode) return null;
+  const value = healStripEmojiAndLabel(textNode.nodeValue || '').trim();
+  return value || null;
+}
+const HEAL_EMOJI_RE = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/u;
+function healFirstEmojiIn(row) {
+  if (!row) return null;
+  const m = (row.textContent || '').match(HEAL_EMOJI_RE);
+  return m ? m[0] : null;
+}
+// BYTE-FAITHFUL: locate each value via DOM, then wrap that exact substring in the
+// ORIGINAL html (only when it occurs exactly once). Never reserializes the doc.
+function healEventHooks(htmlString, parser) {
+  if (typeof htmlString !== 'string' || !htmlString) return { html: htmlString, healed: false, reason: 'empty' };
+  let doc;
+  try {
+    const looksFull = /^\s*(?:<!doctype\b|<html[\s>])/i.test(htmlString);
+    const toParse = looksFull ? htmlString : `<!DOCTYPE html><html><body>${htmlString}</body></html>`;
+    doc = parser.parseFromString(toParse, 'text/html');
+  } catch (e) { return { html: htmlString, healed: false, reason: 'parse-error' }; }
+  const root = (doc && (doc.body || doc.documentElement)) || null;
+  if (!root) return { html: htmlString, healed: false, reason: 'parse-error' };
+  const dateCount = healCountOccurrences(root.textContent || '', HEAL_DATE_EMOJI);
+  if (dateCount === 0) return { html: htmlString, healed: false, reason: 'no-event-block' };
+  if (dateCount >= 2) return { html: htmlString, healed: false, reason: 'multi-event' };
+  const dateRow = healFindRowByEmoji(root, HEAL_DATE_EMOJI);
+  if (!dateRow) return { html: htmlString, healed: false, reason: 'no-date-row' };
+  const container = dateRow.parentElement || dateRow;
+  const locationRow = healFindRowByEmoji(container, HEAL_LOCATION_EMOJI);
+  const costRow = healFindCostRow(container, dateRow, locationRow);
+  const items = [
+    { key: 'event_date', value: healExtractValue(dateRow), emoji: HEAL_DATE_EMOJI },
+    { key: 'event_location', value: healExtractValue(locationRow), emoji: HEAL_LOCATION_EMOJI },
+    { key: 'event_cost', value: healExtractValue(costRow), emoji: healFirstEmojiIn(costRow) },
+  ];
+  let out = htmlString;
+  let healed = false;
+  let cursor = out.indexOf(HEAL_DATE_EMOJI);
+  if (cursor === -1) return { html: htmlString, healed: false, reason: 'no-date-row' };
+  for (const { key, value, emoji } of items) {
+    if (!value) continue;
+    if (value.includes('<') || value.includes('>')) continue;
+    if (out.includes(`data-editable="${key}"`)) continue;
+    let anchor = cursor;
+    if (emoji) { const e = out.indexOf(emoji, cursor); if (e !== -1) anchor = e; }
+    const idx = out.indexOf(value, anchor);
+    if (idx === -1) continue;
+    const span = `<span data-editable="${key}">${value}</span>`;
+    out = out.slice(0, idx) + span + out.slice(idx + value.length);
+    healed = true;
+    cursor = idx + span.length;
+  }
+  if (!healed) return { html: htmlString, healed: false, reason: 'already-hooked' };
+  const addedOpen = (out.match(/<span\b/gi) || []).length - (htmlString.match(/<span\b/gi) || []).length;
+  const addedClose = (out.match(/<\/span>/gi) || []).length - (htmlString.match(/<\/span>/gi) || []).length;
+  if (addedOpen <= 0 || addedOpen !== addedClose) return { html: htmlString, healed: false, reason: 'validity-guard' };
+  try {
+    const check = parser.parseFromString(out, 'text/html');
+    if (!check || !(check.body || check.documentElement)) return { html: htmlString, healed: false, reason: 'validity-guard' };
+  } catch (e) { return { html: htmlString, healed: false, reason: 'validity-guard' }; }
+  return { html: out, healed: true, reason: 'healed' };
+}
+
 // ── Preview Tab ──────────────────────────────────────────
 async function loadPreview() {
   if (!selectedProject) return;
@@ -3780,19 +3993,9 @@ async function loadPreview() {
           if (textOverrides && textOverrides.length) {
             textOverrides.forEach(({ key, value }) => {
               if (!key || value == null) return;
-              const escaped = value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-              const regex = new RegExp(
-                `(<[^>]*\\bdata-editable\\s*=\\s*"${key}"[^>]*>)([\\s\\S]*?)(<\\/[^>]+>)`, 'gi'
-              );
+              // Nesting-aware replace — IDENTICAL to the publish path (lp-renderer.js).
               const before = previewHtml;
-              if (value === '') {
-                // Empty value: hide the element
-                previewHtml = previewHtml.replace(regex, (m, open, content, close) => {
-                  return open.replace(/>$/, ' style="display:none;">') + close;
-                });
-              } else {
-                previewHtml = previewHtml.replace(regex, `$1${escaped}$3`);
-              }
+              previewHtml = lpReplaceEditable(previewHtml, key, value);
               // Fallback for footer_text on older LPs without data-editable attribute
               if (key === 'footer_text' && previewHtml === before) {
                 if (value === '') {
@@ -3800,7 +4003,7 @@ async function loadPreview() {
                 } else {
                   previewHtml = previewHtml.replace(
                     /(<footer[^>]*>)([\s\S]*?)(<\/footer>)/i,
-                    `$1<p>${escaped}</p>$3`
+                    `$1<p>${lpEscapeHtml(value)}</p>$3`
                   );
                 }
               }
@@ -4182,17 +4385,52 @@ async function loadEditableContent() {
       }
     }
 
-    // Backfill event details (date / location / cost) for existing LPs whose
-    // HTML carries data-editable on these values but has no saved row yet.
+    // Backfill event details (date / location / cost + their icons).
+    // New/hooked LPs already carry data-editable="event_*"; un-hooked single-event
+    // LPs get auto-healed (healEventHooks) so the value spans are added — and the
+    // healed HTML is staged for a one-time write-back on the next explicit Save.
+    pendingHealedHtml = null;
     if (htmlSource) {
       try {
-        const doc = new DOMParser().parseFromString(htmlSource, 'text/html');
-        for (const evKey of ['event_date', 'event_location', 'event_cost']) {
-          if (existingKeys.has(evKey)) continue;
-          const el = doc.querySelector(`[data-editable="${evKey}"]`);
-          if (el) {
-            newItems.push({ key: evKey, value: el.textContent.trim() });
-            existingKeys.add(evKey);
+        let sourceForBackfill = htmlSource;
+        const alreadyHooked = htmlSource.includes('data-editable="event_date"');
+        if (!alreadyHooked) {
+          const result = healEventHooks(htmlSource, new DOMParser());
+          if (result.healed) {
+            sourceForBackfill = result.html;
+            // Stage for a ONE-TIME write-back on explicit Save (NOT on tab-open).
+            pendingHealedHtml = result.html;
+          }
+        }
+        const doc = new DOMParser().parseFromString(sourceForBackfill, 'text/html');
+        const evRows = [
+          { value: 'event_date', icon: 'event_date_icon', emoji: '📅' },
+          { value: 'event_location', icon: 'event_location_icon', emoji: '📍' },
+          { value: 'event_cost', icon: 'event_cost_icon', emoji: '🎟️' },
+        ];
+        for (const { value, icon } of evRows) {
+          const el = doc.querySelector(`[data-editable="${value}"]`);
+          if (!el) continue;
+          if (!existingKeys.has(value)) {
+            newItems.push({ key: value, value: el.textContent.trim() });
+            existingKeys.add(value);
+          }
+          // Icon: prefer a data-editable icon span; else the row's leading emoji glyph.
+          if (!existingKeys.has(icon)) {
+            let emoji = '';
+            const iconEl = doc.querySelector(`[data-editable="${icon}"]`);
+            if (iconEl) {
+              emoji = iconEl.textContent.trim();
+            } else {
+              // Find the leading emoji in the same event row as the value span.
+              const row = el.closest('.event-detail, .event-detail-row, .event-detail-card, .detail-row, .event__info-card') || el.parentElement;
+              const m = (row?.textContent || '').match(new RegExp(HEAL_LEADING_EMOJI_RE.source, 'u'));
+              if (m) emoji = (m[0] || '').trim();
+            }
+            if (emoji) {
+              newItems.push({ key: icon, value: emoji });
+              existingKeys.add(icon);
+            }
           }
         }
       } catch (e) { console.error('event details backfill failed:', e); }
@@ -4282,7 +4520,9 @@ async function loadEditableContent() {
     'feature_2_icon', 'feature_2_title', 'feature_2_text',
     'feature_3_icon', 'feature_3_title', 'feature_3_text',
     'cta_text', 'form_title', 'form_subtitle',
-    'event_date', 'event_location', 'event_cost',
+    'event_date_icon', 'event_date',
+    'event_location_icon', 'event_location',
+    'event_cost_icon', 'event_cost',
     'thankyou_text', 'footer_text'
   ];
   projectContent.sort((a, b) => {
@@ -4291,10 +4531,13 @@ async function loadEditableContent() {
     return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
   });
 
-  // Separate feature fields from regular fields for grouped rendering
+  // Separate feature + event fields from regular fields for grouped rendering
   const featureKeys = new Set(fieldOrder.filter(k => k.startsWith('feature')));
-  const regularFields = projectContent.filter(item => !featureKeys.has(item.key));
+  const eventKeys = new Set(['event_date', 'event_location', 'event_cost',
+    'event_date_icon', 'event_location_icon', 'event_cost_icon']);
+  const regularFields = projectContent.filter(item => !featureKeys.has(item.key) && !eventKeys.has(item.key));
   const featureFields = projectContent.filter(item => featureKeys.has(item.key));
+  const eventFields = projectContent.filter(item => eventKeys.has(item.key));
 
   let html = '';
 
@@ -4304,13 +4547,71 @@ async function loadEditableContent() {
       html += renderFeaturesGroup(featureFields);
     }
     html += renderEditField(item);
+    // Insert event-details group right after the form subtitle (it lives near the form).
+    if (item.key === 'form_subtitle' && eventFields.length > 0) {
+      html += renderEventGroup(eventFields);
+    }
   }
   // If no cta_text field, append features at end
   if (!regularFields.some(i => i.key === 'cta_text') && featureFields.length > 0) {
     html += renderFeaturesGroup(featureFields);
   }
+  // If no form_subtitle field, append events at end
+  if (!regularFields.some(i => i.key === 'form_subtitle') && eventFields.length > 0) {
+    html += renderEventGroup(eventFields);
+  }
 
   container.innerHTML = html;
+}
+
+// Render the event-details editor: each row pairs an emoji input (event_*_icon)
+// with its value field — mirrors renderFeaturesGroup. regenHint degrades for
+// un-hooked LPs (no data-editable="event_date" in the source HTML).
+function renderEventGroup(eventFields) {
+  const byKey = {};
+  eventFields.forEach(f => byKey[f.key] = f.value || '');
+
+  const rows = [
+    { value: 'event_date', icon: 'event_date_icon' },
+    { value: 'event_location', icon: 'event_location_icon' },
+    { value: 'event_cost', icon: 'event_cost_icon' },
+  ];
+
+  const cards = rows.map(({ value, icon }) => {
+    const v = byKey[value];
+    const ic = byKey[icon];
+    // Only render a row that exists (has a value field saved/backfilled).
+    if (v == null && ic == null) return '';
+    return `
+      <div class="edit-feature-card">
+        <div class="edit-field">
+          <input class="edit-emoji-input" data-key="${icon}" value="${escAttr(ic || '')}" maxlength="4" />
+        </div>
+        <div class="edit-field">
+          <label>${esc(FIELD_LABELS[value] || value)}</label>
+          <input class="edit-input" data-key="${value}" value="${escAttr(v || '')}" />
+        </div>
+      </div>
+    `;
+  }).filter(Boolean).join('');
+
+  if (!cards) return '';
+
+  // regenHint: un-hooked LPs (no value hook in source HTML) can't update live.
+  const htmlSource = selectedVariant?.generated_html || selectedProject?.generated_html || '';
+  const hasEventEditable = htmlSource.includes('data-editable="event_date"');
+  const regenHint = !hasEventEditable ? `
+    <div style="background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--gold-soft);line-height:1.6;">
+      &#128161; כדי שהשינויים יופיעו בדף — לחצו ״ייצר מחדש״ בלשונית תצוגה מקדימה. דפים ישנים לא תומכים בעדכון ישיר של סקשן זה.
+    </div>` : '';
+
+  return `
+    <div class="edit-section-group">
+      <div class="edit-section-group-title">&#128197; פרטי האירוע</div>
+      ${regenHint}
+      <div class="edit-feature-cards">${cards}</div>
+    </div>
+  `;
 }
 
 function renderEditField(item) {
@@ -4411,8 +4712,11 @@ const FIELD_LABELS = {
   cta_text: 'כפתור קריאה לפעולה',
   form_title: 'כותרת טופס',
   form_subtitle: 'תת כותרת טופס',
+  event_date_icon: 'אימוג׳י תאריך',
   event_date: 'תאריך / שעת האירוע',
+  event_location_icon: 'אימוג׳י מיקום',
   event_location: 'מיקום האירוע',
+  event_cost_icon: 'אימוג׳י עלות',
   event_cost: 'עלות / מחיר',
   thankyou_text: 'הודעת תודה',
   footer_text: 'טקסט תחתית העמוד',
@@ -4472,6 +4776,32 @@ async function saveContent() {
     errEl.textContent = 'שגיאה: ' + error.message;
     errEl.style.display = 'block';
     return;
+  }
+
+  // One-time healed-HTML write-back: if this LP was auto-hooked when the editor
+  // opened, persist the hooked HTML now (on EXPLICIT save, not on tab-open).
+  if (pendingHealedHtml && selectedVariant?.id) {
+    try {
+      const wbResp = await fetch('/api/save-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          project_id: selectedProject.id,
+          variant_id: selectedVariant.id,
+          access_token: token,
+          healed_html: pendingHealedHtml,
+        }),
+      });
+      if (wbResp.ok) {
+        // Reflect the now-hooked HTML locally so preview + regenHint update.
+        selectedVariant.generated_html = pendingHealedHtml;
+        pendingHealedHtml = null;
+      } else {
+        console.error('healed-html write-back failed:', wbResp.status);
+      }
+    } catch (e) {
+      console.error('healed-html write-back error:', e);
+    }
   }
 
   okEl.style.display = 'block';

@@ -138,6 +138,15 @@ function extractValue(row) {
   return value || null;
 }
 
+// The first emoji glyph (with any VS16/ZWJ sequence) appearing in a row, or null.
+// Used to anchor each value's splice to its OWN row's icon.
+const EMOJI_RE = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/u;
+function firstEmojiIn(row) {
+  if (!row) return null;
+  const m = (row.textContent || "").match(EMOJI_RE);
+  return m ? m[0] : null;
+}
+
 export function healEventHooks(htmlString, parser) {
   if (typeof htmlString !== "string" || !htmlString) {
     return { html: htmlString, healed: false, reason: "empty" };
@@ -172,31 +181,38 @@ export function healEventHooks(htmlString, parser) {
   const locationRow = findRowByEmoji(container, LOCATION_EMOJI);
   const costRow = findCostRow(container, dateRow, locationRow);
 
-  const targets = [
-    { key: "event_date", value: extractValue(dateRow) },
-    { key: "event_location", value: extractValue(locationRow) },
-    { key: "event_cost", value: extractValue(costRow) },
+  const items = [
+    { key: "event_date", value: extractValue(dateRow), emoji: DATE_EMOJI },
+    { key: "event_location", value: extractValue(locationRow), emoji: LOCATION_EMOJI },
+    { key: "event_cost", value: extractValue(costRow), emoji: firstEmojiIn(costRow) },
   ];
 
-  // --- BYTE-FAITHFUL string splice ---
-  // Wrap each value's first occurrence AT/AFTER the (gate-unique) 📅 — i.e. inside
-  // the event region. A decorative/unrelated duplicate elsewhere on the page can
-  // neither suppress the hook nor get wrapped by mistake, and the document is never
-  // reserialized (so <style>/<script>/entities stay byte-identical).
+  // --- BYTE-FAITHFUL string splice, anchored PER ROW ---
+  // Wrap each value at its first occurrence AT/AFTER its OWN row's icon emoji (the
+  // date 📅 is gate-unique; location/cost emojis are taken at/after it). A running
+  // cursor advances past each wrap, so (a) a later value that is a substring of an
+  // earlier one can't nest inside it, and (b) a duplicate value in decorative text
+  // can neither suppress nor mis-target the hook. The document is never reserialized
+  // (so <style>/<script>/entities stay byte-identical).
   let out = htmlString;
   let healed = false;
-  for (const { key, value } of targets) {
+  let cursor = out.indexOf(DATE_EMOJI); // gate-unique floor
+  if (cursor === -1) return { html: htmlString, healed: false, reason: "no-date-row" };
+  for (const { key, value, emoji } of items) {
     if (!value) continue;
     if (value.includes("<") || value.includes(">")) continue; // plain text only
     if (out.includes(`data-editable="${key}"`)) continue;     // idempotent
-    const datePos = out.indexOf(DATE_EMOJI);
-    const idx = datePos === -1 ? -1 : out.indexOf(value, datePos);
-    if (idx === -1) continue; // value not in/after the event region → skip safely
-    out =
-      out.slice(0, idx) +
-      `<span data-editable="${key}">${value}</span>` +
-      out.slice(idx + value.length);
+    let anchor = cursor;
+    if (emoji) {
+      const e = out.indexOf(emoji, cursor);
+      if (e !== -1) anchor = e;
+    }
+    const idx = out.indexOf(value, anchor);
+    if (idx === -1) continue; // value not found in/after its row → skip safely
+    const span = `<span data-editable="${key}">${value}</span>`;
+    out = out.slice(0, idx) + span + out.slice(idx + value.length);
     healed = true;
+    cursor = idx + span.length; // advance past the wrap so the next value can't nest
   }
   if (!healed) return { html: htmlString, healed: false, reason: "already-hooked" };
 

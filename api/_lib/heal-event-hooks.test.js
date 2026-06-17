@@ -225,3 +225,37 @@ test('every wrapped value span contains plain text only (no nested markup)', () 
     assert.ok(inner != null && !inner.includes('<'), `${key} inner is plain text`);
   }
 });
+
+// One event value CONTAINS another (cost is a substring of the date). Per-row
+// anchoring + the advancing cursor must NOT nest the cost span inside the date span.
+test('NESTING GUARD: when one event value is a substring of another, spans never nest; byte-faithful', () => {
+  const html =
+    `<!DOCTYPE html><html><body><div class="event-details">` +
+    `<div class="event-detail-card"><div class="detail-icon">📅</div><div class="detail-label">מתי</div><div class="detail-value">5 שקלים ביוני</div></div>` +
+    `<div class="event-detail-card"><div class="detail-icon">📍</div><div class="detail-label">איפה</div><div class="detail-value">יפו</div></div>` +
+    `<div class="event-detail-card"><div class="detail-icon">🎁</div><div class="detail-label">עלות</div><div class="detail-value">5 שקלים</div></div>` +
+    `</div></body></html>`;
+  const r = healEventHooks(html, new DOMParser());
+  assert.equal(r.healed, true);
+  assert.equal(innerOf(r.html, 'event_date'), '5 שקלים ביוני');
+  assert.equal(innerOf(r.html, 'event_cost'), '5 שקלים');
+  assert.ok(!/data-editable="event_[a-z]+">\s*<span data-editable/.test(r.html), 'no nested editable span');
+  assert.equal(unwrapEventSpans(r.html), html, 'byte-faithful (no nesting, nothing else touched)');
+});
+
+// A decoy duplicate of the location value sits in a subtitle BETWEEN the date and
+// location rows. Anchoring on the location row's own 📍 must hook the real cell.
+test('DECOY GUARD: a value duplicated in text between rows is not hooked; per-row emoji anchors to the real cell', () => {
+  const html =
+    `<!DOCTYPE html><html><body><div class="event-details">` +
+    `<div class="event-detail-card"><div class="detail-icon">📅</div><div class="detail-label">מתי</div><div class="detail-value">11.6.2026</div></div>` +
+    `<p class="subtitle">האירוע יתקיים ב תל אביב</p>` +
+    `<div class="event-detail-card"><div class="detail-icon">📍</div><div class="detail-label">איפה</div><div class="detail-value">תל אביב</div></div>` +
+    `<div class="event-detail-card"><div class="detail-icon">🎁</div><div class="detail-label">עלות</div><div class="detail-value">חינם</div></div>` +
+    `</div></body></html>`;
+  const r = healEventHooks(html, new DOMParser());
+  assert.equal(r.healed, true);
+  assert.equal(innerOf(r.html, 'event_location'), 'תל אביב');
+  assert.ok(r.html.includes('<p class="subtitle">האירוע יתקיים ב תל אביב</p>'), 'decoy subtitle untouched');
+  assert.equal(unwrapEventSpans(r.html), html, 'byte-faithful');
+});

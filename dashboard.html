@@ -3862,6 +3862,12 @@ function healExtractValue(row) {
   const value = healStripEmojiAndLabel(textNode.nodeValue || '').trim();
   return value || null;
 }
+const HEAL_EMOJI_RE = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/u;
+function healFirstEmojiIn(row) {
+  if (!row) return null;
+  const m = (row.textContent || '').match(HEAL_EMOJI_RE);
+  return m ? m[0] : null;
+}
 // BYTE-FAITHFUL: locate each value via DOM, then wrap that exact substring in the
 // ORIGINAL html (only when it occurs exactly once). Never reserializes the doc.
 function healEventHooks(htmlString, parser) {
@@ -3882,22 +3888,27 @@ function healEventHooks(htmlString, parser) {
   const container = dateRow.parentElement || dateRow;
   const locationRow = healFindRowByEmoji(container, HEAL_LOCATION_EMOJI);
   const costRow = healFindCostRow(container, dateRow, locationRow);
-  const targets = [
-    { key: 'event_date', value: healExtractValue(dateRow) },
-    { key: 'event_location', value: healExtractValue(locationRow) },
-    { key: 'event_cost', value: healExtractValue(costRow) },
+  const items = [
+    { key: 'event_date', value: healExtractValue(dateRow), emoji: HEAL_DATE_EMOJI },
+    { key: 'event_location', value: healExtractValue(locationRow), emoji: HEAL_LOCATION_EMOJI },
+    { key: 'event_cost', value: healExtractValue(costRow), emoji: healFirstEmojiIn(costRow) },
   ];
   let out = htmlString;
   let healed = false;
-  for (const { key, value } of targets) {
+  let cursor = out.indexOf(HEAL_DATE_EMOJI);
+  if (cursor === -1) return { html: htmlString, healed: false, reason: 'no-date-row' };
+  for (const { key, value, emoji } of items) {
     if (!value) continue;
     if (value.includes('<') || value.includes('>')) continue;
     if (out.includes(`data-editable="${key}"`)) continue;
-    const datePos = out.indexOf(HEAL_DATE_EMOJI);
-    const idx = datePos === -1 ? -1 : out.indexOf(value, datePos);
+    let anchor = cursor;
+    if (emoji) { const e = out.indexOf(emoji, cursor); if (e !== -1) anchor = e; }
+    const idx = out.indexOf(value, anchor);
     if (idx === -1) continue;
-    out = out.slice(0, idx) + `<span data-editable="${key}">${value}</span>` + out.slice(idx + value.length);
+    const span = `<span data-editable="${key}">${value}</span>`;
+    out = out.slice(0, idx) + span + out.slice(idx + value.length);
     healed = true;
+    cursor = idx + span.length;
   }
   if (!healed) return { html: htmlString, healed: false, reason: 'already-hooked' };
   const addedOpen = (out.match(/<span\b/gi) || []).length - (htmlString.match(/<span\b/gi) || []).length;

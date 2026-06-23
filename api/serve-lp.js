@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
     // Fetch project by slug
     const projectRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/projects?slug=eq.${encodeURIComponent(slug)}&select=id,name,email_enabled&limit=1`,
+      `${SUPABASE_URL}/rest/v1/projects?slug=eq.${encodeURIComponent(slug)}&select=id,name,email_enabled,meta_pixel_id&limit=1`,
       { headers }
     );
 
@@ -105,7 +105,7 @@ export default async function handler(req, res) {
           html = applyImageOverrides(html, imageOverrides);
         }
         const emailEnabled = project.email_enabled === true;
-        const injectedScript = buildInjectedScript(project.id, null, null, SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled);
+        const injectedScript = buildInjectedScript(project.id, null, null, SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled, project.meta_pixel_id || "");
         if (html.includes("</body>")) {
           html = html.replace("</body>", injectedScript + "\n</body>");
         } else {

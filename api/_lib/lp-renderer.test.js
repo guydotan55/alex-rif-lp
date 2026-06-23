@@ -3,7 +3,7 @@
 // closing tag, even when it contains nested tags (the headline-duplication bug).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyOverrides } from './lp-renderer.js';
+import { applyOverrides, buildInjectedScript } from './lp-renderer.js';
 
 test('simple field: replaces content of a single-element editable', () => {
   const html = '<p data-editable="feature_1_text">old text</p>';
@@ -92,4 +92,35 @@ test('boolean override value is stringified, does not throw', () => {
     out = applyOverrides(html, [{ key: 'x', value: true }]);
   });
   assert.equal(out, '<p data-editable="x">true</p>');
+});
+
+// ── buildInjectedScript: per-project Meta Pixel injection ──────────────────
+// (projectId, variantId, testId, anonKey, supabaseUrl, emailEnabled, metaPixelId)
+const injectArgs = (pixel) => ['proj-1', 'var-1', null, 'anon-key', 'https://sb.example.co', true, pixel];
+
+test('injects the per-project Meta Pixel id when one is provided', () => {
+  const out = buildInjectedScript(...injectArgs('37738239499108437'));
+  assert.ok(out.includes("fbq('init', '37738239499108437')"), 'inits the given pixel');
+  assert.ok(out.includes("fbq('track', 'PageView')"), 'fires PageView on load');
+  assert.ok(out.includes("fbq('track', 'CompleteRegistration'"), 'fires CompleteRegistration on submit');
+});
+
+test('CAPI payload carries project_id so the server can resolve the right token', () => {
+  const out = buildInjectedScript(...injectArgs('37738239499108437'));
+  assert.ok(out.includes('project_id: PROJECT_ID'), 'CAPI body includes project_id');
+  assert.ok(out.includes('action: "meta_capi"'));
+});
+
+test('different projects render different pixels — nothing hardcoded to one customer', () => {
+  const kili = buildInjectedScript(...injectArgs('37738239499108437'));
+  const lipaz = buildInjectedScript(...injectArgs('1435123421262484'));
+  assert.ok(kili.includes("fbq('init', '37738239499108437')"));
+  assert.ok(lipaz.includes("fbq('init', '1435123421262484')"));
+  assert.ok(!kili.includes('1435123421262484'), 'kili page carries no trace of the lipaz pixel');
+});
+
+test('no pixel id => no Meta Pixel snippet at all', () => {
+  const out = buildInjectedScript(...injectArgs(''));
+  assert.ok(!out.includes('fbq('), 'no fbq calls');
+  assert.ok(!out.includes('connect.facebook.net'), 'no pixel library loaded');
 });

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feedback widget — mockup</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171c22; --panel2:#1e252d; --line:#2b333d;
+    --ink:#eef1f4; --dim:#9aa6b2; --gold:#e3b341; --gold-dk:#caa033;
+    --green:#3ecb7a; --red:#ef5a5a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+
+  /* explainer ribbon (not part of the product) */
+  .ribbon{background:#11233a; border-bottom:1px solid #1f3a5c; color:#cfe0ff;
+    font-size:13px; padding:8px 16px; text-align:center}
+  .ribbon b{color:#fff}
+
+  /* fake dashboard chrome */
+  .top{display:flex; align-items:center; gap:12px; padding:14px 18px;
+    border-bottom:1px solid var(--line); background:var(--panel)}
+  .logo{font-weight:800; color:var(--gold); letter-spacing:.02em}
+  .top .sp{flex:1}
+  .pill{font-size:13px; color:var(--dim); border:1px solid var(--line);
+    padding:5px 10px; border-radius:20px}
+  .layout{display:flex; min-height:78vh}
+  .side{width:230px; border-left:1px solid var(--line); padding:16px; background:var(--panel)}
+  .side h4{margin:0 0 10px; font-size:12px; color:var(--dim); font-weight:700; letter-spacing:.05em}
+  .proj{background:var(--panel2); border:1px solid var(--line); border-radius:9px;
+    padding:10px 12px; margin-bottom:8px; font-size:14px}
+  .proj small{color:var(--dim); display:block; font-size:12px; margin-top:2px}
+  .main{flex:1; padding:26px}
+  .skel{background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    height:120px; margin-bottom:16px; position:relative; overflow:hidden}
+  .skel::after{content:""; position:absolute; inset:0;
+    background:linear-gradient(90deg,transparent,#ffffff08,transparent);
+    transform:translateX(100%); animation:sh 1.8s infinite}
+  @keyframes sh{to{transform:translateX(-100%)}}
+  .main h2{margin:0 0 4px}
+  .main .muted{color:var(--dim); margin:0 0 22px}
+
+  /* ===== THE WIDGET (what we'd actually build) ===== */
+  /* FAB: round, fixed bottom-LEFT (RTL), clears center toast + sidebar toggle */
+  .fab{position:fixed; bottom:22px; left:22px; z-index:9998;
+    display:flex; align-items:center; gap:8px;
+    background:var(--gold); color:#1a1408; border:0; cursor:pointer;
+    height:54px; padding:0 18px 0 16px; border-radius:30px; font:inherit; font-weight:700;
+    box-shadow:0 8px 22px #0008, 0 0 0 1px #0003; transition:transform .12s, box-shadow .12s}
+  .fab:hover{transform:translateY(-1px); box-shadow:0 12px 26px #000a}
+  .fab:active{transform:translateY(0)}
+  .fab .ic{width:24px; height:24px; display:grid; place-items:center;
+    background:#1a140822; border-radius:50%; font-size:15px}
+
+  /* Panel */
+  .ov{position:fixed; inset:0; background:#0008; z-index:9997; display:none}
+  .ov.show{display:block}
+  .panel{position:fixed; left:22px; bottom:86px; z-index:9999; width:330px; max-width:calc(100vw - 32px);
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    box-shadow:0 20px 50px #000b; padding:18px; display:none}
+  .panel.show{display:block}
+  .panel h3{margin:0 0 4px; font-size:18px}
+  .panel .hint{margin:0 0 12px; color:var(--dim); font-size:13px}
+  .panel textarea{width:100%; min-height:110px; resize:vertical; font:inherit;
+    color:var(--ink); background:var(--panel2); border:1px solid var(--line);
+    border-radius:10px; padding:11px 13px}
+  .panel textarea:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 3px #e3b34133}
+  .row{display:flex; gap:10px; margin-top:12px}
+  .btn{flex:1; appearance:none; border:0; cursor:pointer; font:inherit; font-weight:700;
+    padding:11px; border-radius:10px}
+  .send{background:var(--gold); color:#1a1408}
+  .send:disabled{opacity:.45; cursor:not-allowed}
+  .cancel{background:var(--panel2); color:var(--ink); border:1px solid var(--line)}
+  .spin{width:16px;height:16px;border:2px solid #1a140855;border-top-color:#1a1408;
+    border-radius:50%; display:inline-block; vertical-align:-3px; animation:rot .7s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+
+  /* Toast (center bottom, as in app) */
+  .toast{position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px);
+    z-index:10000; background:#11161b; border:1px solid var(--line); color:var(--ink);
+    padding:12px 18px; border-radius:12px; box-shadow:0 12px 30px #000a; font-size:14.5px;
+    opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; max-width:90vw}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .toast.ok{border-color:#225a3b} .toast.ok b{color:var(--green)}
+  .toast.err{border-color:#5a2828} .toast.err b{color:var(--red)}
+
+  /* preview controls */
+  .demo{position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:10001;
+    background:#0c0f13ee; border:1px solid var(--line); border-radius:30px; padding:6px 8px;
+    display:flex; gap:6px; align-items:center; backdrop-filter:blur(4px)}
+  .demo span{font-size:12px; color:var(--dim); padding:0 6px}
+  .demo button{font:inherit; font-size:13px; cursor:pointer; border:1px solid var(--line);
+    background:var(--panel2); color:var(--ink); border-radius:20px; padding:5px 11px}
+  .demo button:hover{border-color:var(--gold)}
+</style>
+</head>
+<body>
+
+  <div class="ribbon">
+    <b>Mockup only</b> — the "report a problem" button shows on <b>every logged-in page</b> for every NGO admin (shown here on the dashboard). Real Hebrew copy from the spec. Click the gold button (bottom-left).
+  </div>
+
+  <div class="top">
+    <span class="logo">Messaging Lab</span>
+    <span class="sp"></span>
+    <span class="pill">סופר אדמין</span>
+  </div>
+
+  <div class="layout">
+    <aside class="side">
+      <h4>הפרויקטים שלי</h4>
+      <div class="proj">ליפז אלה <small>3 וריאנטים · פעיל</small></div>
+      <div class="proj">קמפיין חורף <small>2 וריאנטים · טיוטה</small></div>
+      <div class="proj">דף תרומות <small>1 וריאנט · פעיל</small></div>
+    </aside>
+    <main class="main">
+      <h2>לוח בקרה</h2>
+      <p class="muted">תצוגה לדוגמה — הכפתור צף תמיד בפינה השמאלית התחתונה.</p>
+      <div class="skel"></div>
+      <div class="skel"></div>
+    </main>
+  </div>
+
+  <!-- preview controls (demo only) -->
+  <div class="demo">
+    <span>צפייה במצב:</span>
+    <button onclick="openPanel()">פתח</button>
+    <button onclick="setLoading()">שולח…</button>
+    <button onclick="showSuccess()">הצלחה</button>
+    <button onclick="showError()">שגיאה</button>
+  </div>
+
+  <!-- ===== widget ===== -->
+  <button class="fab" id="fab" onclick="openPanel()" aria-haspopup="dialog">
+    <span class="ic">!</span> משהו לא עובד?
+  </button>
+
+  <div class="ov" id="ov" onclick="closePanel()"></div>
+
+  <div class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="pt">
+    <h3 id="pt">מה קרה?</h3>
+    <p class="hint">ספרו לנו מה לא עבד ונטפל בזה.</p>
+    <textarea id="ta" placeholder="כתבו כאן מה קרה…" oninput="syncSend()"></textarea>
+    <div class="row">
+      <button class="btn cancel" onclick="closePanel()">ביטול</button>
+      <button class="btn send" id="send" disabled onclick="submit()">שליחה</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><span id="toasttext"></span></div>
+
+<script>
+  const panel=document.getElementById('panel'), ov=document.getElementById('ov'),
+        ta=document.getElementById('ta'), send=document.getElementById('send'),
+        toast=document.getElementById('toast'), toasttext=document.getElementById('toasttext');
+
+  function openPanel(){ panel.classList.add('show'); ov.classList.add('show'); setTimeout(()=>ta.focus(),30); syncSend(); }
+  function closePanel(){ panel.classList.remove('show'); ov.classList.remove('show'); resetSend(); } // keeps typed text
+  function syncSend(){ send.disabled = ta.value.trim().length===0; }
+  function resetSend(){ send.innerHTML='שליחה'; syncSend(); }
+  function setLoading(){ if(!panel.classList.contains('show')) openPanel(); send.disabled=true; send.innerHTML='<span class="spin"></span> שולח…'; }
+
+  function submit(){ setLoading(); setTimeout(showSuccess, 900); } // demo: always succeeds
+
+  function showSuccess(){
+    // success → toast + clear + close
+    flash('ok','תודה! קיבלנו את הדיווח ונטפל בזה.');
+    ta.value=''; closePanel();
+  }
+  function showError(){
+    // error → toast, KEEP text, panel stays open
+    if(!panel.classList.contains('show')) openPanel();
+    resetSend();
+    flash('err','משהו השתבש בשליחה. אפשר לנסות שוב — מה שכתבת נשמר.');
+  }
+  function flash(kind,msg){
+    toasttext.innerHTML = msg;
+    toast.className='toast show '+kind;
+    clearTimeout(flash._t); flash._t=setTimeout(()=>toast.className='toast '+kind, 3200);
+  }
+
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && panel.classList.contains('show')) closePanel(); });
+</script>
+</body>
+</html>

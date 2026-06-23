@@ -1439,6 +1439,7 @@
     <div class="dash-user">
       <span class="dash-user-email" id="user-email"></span>
       <a href="/settings" id="header-settings-link" style="display:none;color:var(--text-dim); font-size:0.8rem; font-weight:500; text-decoration:none; opacity:0.85; transition:var(--transition); white-space:nowrap;" onmouseover="this.style.opacity='1';this.style.color='var(--gold)'" onmouseout="this.style.opacity='0.85';this.style.color='var(--text-dim)'" >&#9881; הגדרות</a>
+      <a href="/reports" id="header-feedback-link" style="display:none;color:var(--text-dim); font-size:0.8rem; font-weight:500; text-decoration:none; opacity:0.85; transition:var(--transition); white-space:nowrap;" onmouseover="this.style.opacity='1';this.style.color='var(--gold)'" onmouseout="this.style.opacity='0.85';this.style.color='var(--text-dim)'" >&#128236; דיווחים</a>
       <a href="/new" style="color:var(--gold); font-size:0.8rem; font-weight:500; text-decoration:none; opacity:0.85; transition:var(--transition); white-space:nowrap;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.85'">+ דף נחיתה חדש</a>
       <button class="btn-logout" onclick="doLogout()">התנתק</button>
     </div>
@@ -2133,6 +2134,11 @@ async function showDashboard() {
       communities = comms || [];
       renderCommunityFilter();
       document.getElementById('header-settings-link').style.display = 'inline';
+    }
+
+    // Feedback inbox is super_admin only (the vendor reads all tenants' tickets)
+    if (userRole.role === 'super_admin') {
+      document.getElementById('header-feedback-link').style.display = 'inline';
     }
 
     // Show community name for managers
@@ -5676,5 +5682,6 @@ window.addEventListener('message', (event) => {
   }
 });
 </script>
+<script src="/feedback-widget.js" defer></script>
 </body>
 </html>

@@ -1,4 +1,8 @@
+# Load-bearing: co-located *.test.js files are NOT Vercel functions. Excluding
+# them keeps api/ at 12 serverless functions (Vercel Hobby cap). Adding a 13th
+# real function silently breaks deploys — do not remove this line.
 **/*.test.js
 docs/
 .claude/
 .claude-flow/
+.playwright-mcp/

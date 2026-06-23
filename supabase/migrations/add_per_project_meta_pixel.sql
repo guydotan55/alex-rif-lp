@@ -24,3 +24,6 @@ ALTER TABLE meta_capi_tokens ENABLE ROW LEVEL SECURITY;
 
 -- Token values are inserted out-of-band (not in this migration) so secrets
 -- never land in git. See ops notes / runbook.
+
+-- Expose the new column to PostgREST immediately (matches what was applied live).
+NOTIFY pgrst, 'reload schema';

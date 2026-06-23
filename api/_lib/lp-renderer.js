@@ -182,6 +182,7 @@ export function buildInjectedScript(projectId, variantId, testId, anonKey, supab
             action: "meta_capi",
             event_name: "CompleteRegistration",
             event_id: eventId,
+            project_id: PROJECT_ID,
             email: email,
             source_url: window.location.href,
             fbc: fbcCookie,
@@ -402,18 +403,23 @@ export async function fetchAndRenderVariant(projectId, variantId, testId, projec
   }
 
   const projRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(projectId)}&select=email_enabled&limit=1`,
+    `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(projectId)}&select=email_enabled,meta_pixel_id&limit=1`,
     { headers }
   );
   let emailEnabled = false;
+  let metaPixelId = META_PIXEL_ID; // per-project override below; null/empty => global
   if (projRes.ok) {
     const projs = await projRes.json();
-    emailEnabled = projs.length > 0 && projs[0].email_enabled === true;
+    if (projs.length > 0) {
+      emailEnabled = projs[0].email_enabled === true;
+      const perProject = (projs[0].meta_pixel_id || "").toString().trim();
+      if (perProject) metaPixelId = perProject;
+    }
   }
 
   const injectedScript = buildInjectedScript(
     projectId, variantId, testId,
-    SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled, META_PIXEL_ID
+    SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled, metaPixelId
   );
 
   if (html.includes("</body>")) {

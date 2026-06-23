@@ -2488,6 +2488,10 @@ async function toggleTestLP(checkbox) {
   }
 
   updateWeightControls();
+  // Selection changed → recompute budget/sample math AND re-gate the Create
+  // button. numVariants feeds _updateActivateGating(); without this call the
+  // button stays disabled after picking LPs (you can't create a test).
+  updatePlannerResults();
 }
 
 function updateWeightControls() {

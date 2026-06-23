@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feedback Feature — Review &amp; Your Answers</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#fff; --ink:#1d2430; --dim:#5b6675;
+    --line:#e3e6eb; --blue:#2563eb;
+    --red:#c62828; --redbg:#fdecec;
+    --orange:#b45309; --orangebg:#fff4e5;
+    --gray:#475569; --graybg:#eef1f5;
+    --green:#15803d;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    padding:24px 14px 80px;
+  }
+  .wrap{max-width:820px; margin:0 auto}
+  h1{font-size:24px; margin:0 0 4px}
+  .sub{color:var(--dim); margin:0 0 20px}
+
+  .reco{
+    background:#eef5ff; border:1px solid #cfe0ff; border-left:5px solid var(--blue);
+    padding:14px 16px; border-radius:10px; margin:0 0 24px; font-weight:600;
+  }
+  .reco span{display:block; font-weight:400; color:var(--dim); font-size:13px; margin-bottom:4px}
+
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:16px 16px 14px; margin:0 0 16px;
+  }
+  .tag{
+    display:inline-block; font-size:12px; font-weight:700; letter-spacing:.03em;
+    padding:3px 9px; border-radius:20px; margin-bottom:8px; text-transform:uppercase;
+  }
+  .t-block{background:var(--redbg); color:var(--red)}
+  .t-major{background:var(--orangebg); color:var(--orange)}
+  .t-minor{background:var(--graybg); color:var(--gray)}
+  .t-q{background:#eef5ff; color:var(--blue)}
+
+  .card h3{margin:0 0 8px; font-size:18px}
+  .card p{margin:0 0 8px}
+  .why{color:var(--dim); font-size:14.5px}
+  .why b{color:var(--ink)}
+  .rec{background:#f0f8f1; border-left:4px solid var(--green); padding:9px 12px;
+    border-radius:7px; font-size:14.5px; margin:0 0 8px}
+  .rec b{color:var(--green)}
+  .hint{font-weight:400; color:#94a0b0; font-size:12px}
+
+  label{display:block; font-size:13px; font-weight:600; color:var(--dim); margin:12px 0 5px}
+  select,textarea{
+    width:100%; font:inherit; color:var(--ink); background:#fff;
+    border:1px solid #cdd3db; border-radius:8px; padding:9px 11px;
+  }
+  select{height:40px}
+  textarea{min-height:64px; resize:vertical}
+  textarea:focus,select:focus{outline:none; border-color:var(--blue); box-shadow:0 0 0 3px #2563eb22}
+
+  .sectionhead{font-size:14px; font-weight:700; color:var(--dim); text-transform:uppercase;
+    letter-spacing:.04em; margin:28px 0 12px; border-bottom:1px solid var(--line); padding-bottom:6px}
+
+  .bar{
+    position:sticky; bottom:0; margin-top:24px; background:var(--card);
+    border:1px solid var(--line); border-radius:12px; padding:14px 16px;
+    box-shadow:0 -6px 18px #0000000d;
+  }
+  .btn{
+    appearance:none; border:0; cursor:pointer; font:inherit; font-weight:700;
+    background:var(--blue); color:#fff; padding:11px 20px; border-radius:9px;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn.sec{background:#e9edf3; color:var(--ink)}
+  .ok{color:var(--green); font-weight:600; margin-left:10px; font-size:14px}
+  .preview{margin-top:12px}
+  .preview textarea{min-height:150px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; background:#fafbfc}
+  details{margin-top:10px}
+  summary{cursor:pointer; color:var(--blue); font-size:14px; font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Feedback Feature — Review &amp; Your Answers</h1>
+  <p class="sub">Spec: <code>2026-06-17-feedback-feature.md</code> · Fill in the boxes, then hit <b>Copy my answers</b> and paste back to me.</p>
+
+  <div class="reco">
+    <span>My one-sentence recommendation</span>
+    Don't build it yet — first fix the "inbox can run bad code" risk and decide whether once-a-day sorting is good enough; the rest are quick cleanups.
+  </div>
+
+  <div class="sectionhead">Problems I found (worst first)</div>
+  <div id="findings"></div>
+
+  <div class="sectionhead">Questions I need you to answer</div>
+  <div id="questions"></div>
+
+  <div class="bar">
+    <button class="btn" onclick="copyAll()">Copy my answers</button>
+    <button class="btn sec" onclick="togglePreview()">Show/hide text</button>
+    <span id="ok" class="ok" style="display:none">Copied! Now paste it back to me.</span>
+    <div class="preview" id="previewWrap" style="display:none">
+      <textarea id="preview" readonly></textarea>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const FINDINGS = [
+  {
+    sev:"block", tag:"Blocker",
+    title:"The inbox could run bad code (security hole)",
+    what:"A user can type a trick into a feedback ticket. When you open the inbox, that trick could run inside YOUR admin browser, because the inbox shows ticket text the same loose way the rest of the dashboard does.",
+    why:"Any logged-in user from any customer could attack your admin screen. The spec never says to show ticket text as plain-text-only, and the easy/normal way to code it here is the unsafe way.",
+    fix:"Decision: show every ticket field as plain text only (no HTML)?",
+    rec:"Fix it. Non-negotiable — show every field as plain text and add a test that proves a script in a ticket can't run.",
+    recVal:"Fix it"
+  },
+  {
+    sev:"major", tag:"Major",
+    title:"Tickets only get sorted once a day",
+    what:"The AI sorter runs at 7am daily. A ticket sent at 7:05am waits almost 24 hours before it's sorted. On the free Vercel plan you can't run it more often than once a day.",
+    why:"The goal says 'a pre-sorted inbox', but in real life it's 'sorted by tomorrow'. A ticket that keeps failing takes 3 days to give up.",
+    fix:"Is up-to-24h delay OK for now, or do you want sorting the moment a ticket arrives?",
+    rec:"Leave as-is for the pilot (volume is tiny), but write in the goal that sorting is once-a-day so it's a known trade-off, not a surprise.",
+    recVal:"Leave as-is"
+  },
+  {
+    sev:"major", tag:"Major",
+    title:"The daily sorter has no limit and could get stuck",
+    what:"The daily job tries to sort ALL waiting tickets at once. If many pile up (or someone spams), it runs out of time and may sort none of them.",
+    why:"There's no cap on the batch and no limit on submissions, so a flood can permanently jam sorting.",
+    fix:"OK to add a per-run limit (e.g. sort up to N tickets each day)?",
+    rec:"Fix it. One line — add a limit (say 25 per run) so the job can never run out of time. Cheap insurance.",
+    recVal:"Fix it"
+  },
+  {
+    sev:"major", tag:"Major",
+    title:"One missing setting silently breaks sorting",
+    what:"If the CRON_SECRET setting is missing, the daily sorter quietly returns 'not allowed' forever — and nobody is told.",
+    why:"Tickets pile up unsorted with no error you'd notice. The project rule is 'fail loud, never silent.'",
+    fix:"Can you confirm CRON_SECRET is set in Vercel (and add it to the checklist)?",
+    rec:"Fix it. Confirm CRON_SECRET is set and add it to the pre-build checklist. Already used by test-monitor, so likely set — just verify.",
+    recVal:"Fix it"
+  },
+  {
+    sev:"major", tag:"Major",
+    title:"The report button is only on the dashboard",
+    what:"The 'something not working?' button shows only on the dashboard page — not on other pages like the brief-builder, where things are most likely to break.",
+    why:"The goal says report 'from inside the app', but most pages have no button. Also the saved page-address is almost always just the dashboard.",
+    fix:"Dashboard-only for v1, or put the button on all admin pages?",
+    rec:"DECIDED: show the button on ALL logged-in pages (dashboard, brief-builder, settings…) for every NGO admin. Build it once as a shared snippet; the public ad pages stay untouched.",
+    recVal:"Fix it"
+  },
+  {
+    sev:"minor", tag:"Minor",
+    title:"App version is sent twice and could be trusted wrongly",
+    what:"The app version is both sent by the browser and stamped by the server. The server should ignore the browser's value.",
+    why:"A coder might wire up the wrong one, weakening the 'never trust the browser' rule.",
+    fix:"Confirm: drop the version from the browser, keep only the server-stamped one?",
+    rec:"Fix it. Drop it from the browser payload, keep only the server-stamped value.",
+    recVal:"Fix it"
+  },
+  {
+    sev:"minor", tag:"Minor",
+    title:"'Last updated' time never actually updates",
+    what:"There's an 'updated_at' field but nothing ever changes it, so it always equals the created time.",
+    why:"Misleading data if anyone later trusts it.",
+    fix:"OK to either auto-update it or remove it?",
+    rec:"Fix it. Simplest: drop the column for now — you're not using it yet.",
+    recVal:"Fix it"
+  },
+  {
+    sev:"minor", tag:"Minor",
+    title:"Re-running the database setup can error",
+    what:"The setup script can't be safely re-run — the security-rule part errors the second time.",
+    why:"Common during pilot tweaking; the setup fails halfway.",
+    fix:"OK to make it safely re-runnable?",
+    rec:"Fix it. Add one 'drop rule if it exists' line so the script is safe to re-run.",
+    recVal:"Fix it"
+  },
+  {
+    sev:"minor", tag:"Minor",
+    title:"How/when the database table gets created isn't stated",
+    what:"The spec gives the table file but not who runs it or when, relative to deploying.",
+    why:"If the table isn't created first, the first ticket submission errors.",
+    fix:"Add the 'create table first' step to the checklist — agreed?",
+    rec:"Fix it. Add 'create the table before deploying' as the first checklist step.",
+    recVal:"Fix it"
+  },
+  {
+    sev:"minor", tag:"Minor",
+    title:"Two small coding gaps",
+    what:"The auth check example is missing an 'await', and the text box doesn't stop people typing past the 5000-character limit.",
+    why:"Copied as-is, the first is a sneaky auth bug; the second turns a long paste into a server error instead of a clean message.",
+    fix:"Note both as must-fix during build — agreed?",
+    rec:"Fix it. Both are tiny — add the 'await' and cap the text box at 5000 characters.",
+    recVal:"Fix it"
+  }
+];
+
+const QUESTIONS = [
+  {
+    q:"Will the inbox show ticket text safely (plain text, no HTML)? This is the big one.",
+    why:"It decides whether the feature ships with a security hole that lets a user attack your admin screen. I can't build it safely without a yes.",
+    rec:"Yes — plain text only, plus a test proving a script in a ticket can't run. (Same as problem #1.)"
+  },
+  {
+    q:"Is up-to-24-hour sorting delay acceptable, given the free plan can't run it more often?",
+    why:"It sets the whole design. If 24h is fine, the simple daily job stays. If not, I have to build instant sorting — more code and more cost.",
+    rec:"Accept 24h for the pilot and just say so in the goal. Revisit only if customers complain about the wait."
+  },
+  {
+    q:"What's the per-run limit for the sorter, and what stops one user from flooding it?",
+    why:"Without a number, the daily job can run out of time and jam. I need a cap to write the code against.",
+    rec:"Sort up to 25 tickets per run; skip flood-limits for the pilot but watch the numbers. Add limits later if volume grows."
+  },
+  {
+    q:"Is the anti-injection defense worth its complexity? The worst case is a user mislabeling their OWN ticket, shown only to you.",
+    why:"It's the most complex part to build, for a small payoff. I want to know whether to build the full defense or a lighter one.",
+    rec:"Build the light version — keep the simple 'this is untrusted text' wrapper, drop the heavy parts. Fixing #1 (plain text) already removes the real danger."
+  },
+  {
+    q:"Report button: dashboard only, or every admin page?",
+    why:"It decides how much UI I build and whether the goal wording is honest.",
+    rec:"DECIDED: all logged-in pages, shown to every NGO admin + you. Inbox stays you-only. Public ad pages untouched."
+  },
+  {
+    q:"Is CRON_SECRET set in Vercel, and how would you notice if it goes missing?",
+    why:"If it's not set, sorting silently never runs and tickets pile up unseen. I need to confirm it before launch.",
+    rec:"Confirm it's set now, add it to the checklist, and log a loud warning if it's ever missing."
+  },
+  {
+    q:"Who creates the database table, when, and what's the undo plan if it half-creates?",
+    why:"If the table isn't created before deploy, the very first ticket errors. I need the exact step and a rollback.",
+    rec:"You run the setup in Supabase first, before deploying. If it half-creates, drop the table and re-run (safe once we fix problem #8)."
+  }
+];
+
+const RECO = "Don't build it yet — first fix the 'inbox can run bad code' risk and decide whether once-a-day sorting is good enough; the rest are quick cleanups.";
+
+function tagClass(s){ return s==="block"?"t-block":s==="major"?"t-major":"t-minor"; }
+
+const fEl = document.getElementById('findings');
+FINDINGS.forEach((f,i)=>{
+  const d=document.createElement('div'); d.className='card';
+  d.innerHTML =
+    '<span class="tag '+tagClass(f.sev)+'">'+f.tag+'</span>'+
+    '<h3>'+(i+1)+'. '+esc(f.title)+'</h3>'+
+    '<p>'+esc(f.what)+'</p>'+
+    '<p class="why"><b>Why it matters:</b> '+esc(f.why)+'</p>'+
+    '<p class="rec"><b>My recommendation:</b> '+esc(f.rec)+'</p>'+
+    '<label>'+esc(f.fix)+' <span class="hint">(pre-set to my pick — change if you disagree)</span></label>'+
+    '<select data-fdec="'+i+'">'+
+      '<option value="">— choose —</option>'+
+      opt("Fix it",f.recVal)+
+      opt("Leave as-is",f.recVal)+
+      opt("Not sure / discuss",f.recVal)+
+    '</select>'+
+    '<label>Notes (optional)</label>'+
+    '<textarea data-fnote="'+i+'" placeholder="Anything you want to add..."></textarea>';
+  fEl.appendChild(d);
+});
+
+const qEl = document.getElementById('questions');
+QUESTIONS.forEach((q,i)=>{
+  const d=document.createElement('div'); d.className='card';
+  d.innerHTML =
+    '<span class="tag t-q">Q'+(i+1)+'</span>'+
+    '<h3 style="font-size:16px">'+esc(q.q)+'</h3>'+
+    '<p class="why"><b>Why I’m asking:</b> '+esc(q.why)+'</p>'+
+    '<p class="rec"><b>My recommendation:</b> '+esc(q.rec)+'</p>'+
+    '<label>Your answer <span class="hint">(or just write “agree”)</span></label>'+
+    '<textarea data-qans="'+i+'" placeholder="Your answer..."></textarea>';
+  qEl.appendChild(d);
+});
+
+function opt(label,sel){return '<option'+(label===sel?' selected':'')+'>'+label+'</option>';}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function val(sel){const el=document.querySelector(sel);return el?el.value.trim():'';}
+
+function buildText(){
+  let out = "FEEDBACK FEATURE REVIEW — MY ANSWERS\n";
+  out += "Spec: 2026-06-17-feedback-feature.md\n\n";
+  out += "CLAUDE'S RECOMMENDATION:\n"+RECO+"\n\n";
+  out += "=== PROBLEMS ===\n\n";
+  FINDINGS.forEach((f,i)=>{
+    const dec = val('[data-fdec="'+i+'"]') || "(no choice)";
+    const note = val('[data-fnote="'+i+'"]') || "(none)";
+    out += "["+f.tag+"] "+(i+1)+". "+f.title+"\n";
+    out += "  Claude recommended: "+f.recVal+" — "+f.rec+"\n";
+    out += "  My decision: "+dec+"\n";
+    out += "  My notes: "+note+"\n\n";
+  });
+  out += "=== QUESTIONS ===\n\n";
+  QUESTIONS.forEach((q,i)=>{
+    const a = val('[data-qans="'+i+'"]') || "(blank)";
+    out += "Q"+(i+1)+": "+q.q+"\n";
+    out += "  Claude recommended: "+q.rec+"\n";
+    out += "  My answer: "+a+"\n\n";
+  });
+  return out;
+}
+
+function copyAll(){
+  const text = buildText();
+  document.getElementById('preview').value = text;
+  document.getElementById('previewWrap').style.display = 'block';
+  const done = ()=>{ const ok=document.getElementById('ok'); ok.style.display='inline'; setTimeout(()=>ok.style.display='none',4000); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>{ selectPreview(); done(); });
+  } else { selectPreview(); done(); }
+}
+function selectPreview(){ const t=document.getElementById('preview'); t.focus(); t.select(); try{document.execCommand('copy');}catch(e){} }
+function togglePreview(){
+  const w=document.getElementById('previewWrap');
+  if(w.style.display==='none'){ document.getElementById('preview').value=buildText(); w.style.display='block'; }
+  else w.style.display='none';
+}
+</script>
+</body>
+</html>

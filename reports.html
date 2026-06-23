@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מרכז דיווחים — Messaging Lab</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --navy:#0a1628; --navy-light:#0f2037; --navy-mid:#132a46; --navy-card:#0e1e35; --navy-surface:#112640;
+    --gold:#f5c842; --gold-soft:#ffe680; --gold-dim:rgba(245,200,66,0.15);
+    --cream:#f0e8d8; --text:#c8bfa8; --text-dim:#8a8270; --white:#fff;
+    --error:#ff5252; --success:#4caf50;
+    --border:rgba(245,200,66,0.1); --border-strong:rgba(245,200,66,0.2);
+    --radius:14px; --radius-sm:10px; --radius-xs:6px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--navy);color:var(--text);font-family:'Heebo',-apple-system,Segoe UI,Roboto,Arial,sans-serif;min-height:100vh}
+  a{color:inherit;text-decoration:none}
+
+  .hdr{display:flex;align-items:center;gap:16px;padding:16px 28px;border-bottom:1px solid var(--border);background:var(--navy-card)}
+  .hdr .brand{font-weight:800;color:var(--gold);letter-spacing:.02em}
+  .hdr .sp{flex:1}
+  .hdr a.link,.hdr button{color:var(--text-dim);font-size:.82rem;background:none;border:0;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .hdr a.link:hover{color:var(--gold)}
+  .btn-logout{border:1px solid var(--border)!important;border-radius:var(--radius-xs);padding:6px 12px}
+
+  .wrap{max-width:1000px;margin:0 auto;padding:26px 20px 90px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:14px;flex-wrap:wrap}
+  .topbar h1{font-size:1.7rem;color:var(--cream);font-weight:800}
+  .filters{display:flex;gap:8px;align-items:center}
+  .filters select{background:var(--navy-surface);color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:8px 12px;font-family:inherit;font-size:.9rem;cursor:pointer}
+  .count{color:var(--text-dim);font-size:.85rem}
+
+  .msg{padding:50px 20px;text-align:center;color:var(--text-dim)}
+
+  .card{background:var(--navy-card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;transition:border-color .15s}
+  .card:hover{border-color:var(--border-strong)}
+  .row{display:flex;align-items:flex-start;gap:14px;padding:15px 18px;cursor:pointer}
+  .row .summary{flex:1;min-width:0}
+  .row .summary .title{color:var(--cream);font-size:.98rem;line-height:1.5;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .summary-full{color:var(--gold);font-weight:600;line-height:1.55;margin-bottom:10px;word-break:break-word}
+  .row .summary .sub{color:var(--text-dim);font-size:.78rem;margin-top:5px}
+  .badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-start;flex-shrink:0;max-width:46%}
+  .badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap;background:#23344d;color:#cdd9ea}
+  .st-NEEDS_TRIAGE{background:#3a3320;color:var(--gold)}
+  .st-TRIAGED{background:#1f3a5c;color:#cfe0ff}
+  .st-READ{background:#26303f;color:#9aa6b2}
+  .st-RESOLVED{background:#1f4030;color:#6fd99b}
+  .st-TRIAGE_FAILED{background:#4a2020;color:#ef8a8a}
+  .urg-blocking{background:#4a2020;color:#ef8a8a}
+  .urg-annoying{background:#3a3320;color:var(--gold)}
+  .sev-high{background:#4a2020;color:#ef8a8a}
+  .sev-medium{background:#3a3320;color:var(--gold)}
+  .sev-low{background:#26303f;color:#9cc2d6}
+
+  .detail{display:none;border-top:1px solid var(--border);padding:16px 18px;background:var(--navy-light)}
+  .detail.open{display:block}
+  .detail .body{color:var(--text);white-space:pre-wrap;word-break:break-word;line-height:1.6;margin-bottom:12px}
+  .detail .meta{color:var(--text-dim);font-size:.8rem;margin-bottom:6px;word-break:break-word}
+  .detail .loc{color:var(--text-dim);font-size:.82rem;margin:8px 0}
+  .detail .err{color:#ef8a8a;font-size:.8rem;background:#2a1a1a;border-radius:8px;padding:7px 10px;margin:8px 0;word-break:break-word}
+  .atts{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .atts img{width:90px;height:90px;object-fit:cover;border-radius:10px;border:1px solid var(--border-strong)}
+  .tech{margin:12px 0 4px;background:var(--navy-mid,#132a46);border:1px solid var(--border);border-radius:10px;padding:10px 13px}
+  .tech-title{color:var(--gold);font-size:12px;font-weight:700;margin-bottom:7px;letter-spacing:.03em}
+  .tech-row{display:flex;gap:10px;font-size:12.5px;padding:2px 0;align-items:flex-start}
+  .tech-l{color:var(--text-dim);min-width:130px;flex-shrink:0}
+  .tech-v{color:var(--text);word-break:break-word;flex:1}
+  .actions{display:flex;gap:8px;margin-top:12px}
+  .act{padding:8px 16px;border:1px solid var(--border-strong);background:none;color:var(--text);border-radius:var(--radius-sm);cursor:pointer;font-family:inherit;font-size:.85rem}
+  .act.primary{border-color:var(--gold);color:var(--gold)}
+  .act:hover{background:var(--gold-dim)}
+</style>
+</head>
+<body>
+  <header class="hdr">
+    <span class="brand">◆ Messaging Lab</span>
+    <span class="sp"></span>
+    <span id="user-email" class="link"></span>
+    <a href="/dashboard" class="link">← לדשבורד</a>
+    <button class="btn-logout" onclick="doLogout()">התנתק</button>
+  </header>
+
+  <div class="wrap">
+    <div class="topbar">
+      <h1>מרכז דיווחים</h1>
+      <div class="filters">
+        <span id="count" class="count"></span>
+        <select id="status-filter" onchange="renderList()">
+          <option value="ALL">הכל</option>
+          <option value="NEEDS_TRIAGE">ממתין לסיווג</option>
+          <option value="TRIAGED">סווג</option>
+          <option value="READ">נקרא</option>
+          <option value="RESOLVED">טופל</option>
+          <option value="TRIAGE_FAILED">סיווג נכשל</option>
+        </select>
+      </div>
+    </div>
+    <div id="tickets-list"><div class="msg">טוען…</div></div>
+  </div>
+
+<script>
+const SUPABASE_URL = 'https://uaspcafukqvgiztzdnfu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhc3BjYWZ1a3F2Z2l6dHpkbmZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MTA1NzcsImV4cCI6MjA4NzI4NjU3N30.BOqlLF8TQ7VabhsOrSgXyoLIwHCZP8M-LRt7Ok6FbWE';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let allTickets = [];
+
+async function doLogout() { await sb.auth.signOut(); window.location.href = '/dashboard'; }
+
+const listEl = () => document.getElementById('tickets-list');
+
+(async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { window.location.href = '/dashboard'; return; }
+  if (session.user?.email) document.getElementById('user-email').textContent = session.user.email;
+
+  const { data: role } = await sb.from('user_roles').select('role').eq('user_id', session.user.id).single();
+  if (!role || role.role !== 'super_admin') {
+    listEl().innerHTML = '';
+    listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'הדף הזה זמין לסופר-אדמין בלבד.' }));
+    return;
+  }
+  await loadTickets();
+})();
+
+async function loadTickets() {
+  listEl().textContent = '';
+  listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'טוען…' }));
+  const { data, error } = await sb.from('feedback_tickets')
+    .select('*, feedback_attachments(*)')
+    .order('created_at', { ascending: false });
+  if (error) {
+    listEl().textContent = '';
+    listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'שגיאה בטעינת הדיווחים: ' + error.message }));
+    console.error('[reports] load failed:', error);
+    return;
+  }
+  // Pre-fetch signed URLs so render stays synchronous.
+  const paths = [];
+  for (const t of (data || [])) for (const a of (t.feedback_attachments || [])) paths.push(a.storage_path);
+  if (paths.length) {
+    const { data: signed, error: sErr } = await sb.storage.from('feedback-attachments').createSignedUrls(paths, 3600);
+    if (sErr) console.error('[reports] signed url error:', sErr);
+    const map = {};
+    for (const s of (signed || [])) if (s.signedUrl) map[s.path] = s.signedUrl;
+    for (const t of data) for (const a of (t.feedback_attachments || [])) a.signedUrl = map[a.storage_path] || null;
+  }
+  allTickets = data || [];
+  renderList();
+}
+
+function renderList() {
+  const filter = document.getElementById('status-filter').value;
+  const rows = filter === 'ALL' ? allTickets : allTickets.filter(t => t.status === filter);
+  const host = listEl();
+  host.textContent = '';
+  document.getElementById('count').textContent = rows.length + ' דיווחים';
+  if (!rows.length) {
+    host.appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'אין דיווחים להצגה.' }));
+    return;
+  }
+  for (const t of rows) host.appendChild(renderFeedbackTicketCard(t));
+}
+
+// Renders one ticket card (row + collapsible detail) using createElement/textContent
+// ONLY — never innerHTML. Ticket fields are attacker-controlled across tenants;
+// rendering them as text is the XSS defense for the super-admin's session.
+function renderFeedbackTicketCard(t) {
+  const STATUS = { NEEDS_TRIAGE:'חדש', TRIAGED:'סווג', READ:'נקרא', RESOLVED:'טופל', TRIAGE_FAILED:'סיווג נכשל' };
+  const CATS = { bug:'באג', UX:'חוויית משתמש', 'feature-request':'בקשת פיצ׳ר', question:'שאלה', praise:'מחמאה' };
+  const SEVS = { low:'נמוך', medium:'בינוני', high:'גבוה' };
+  const URG = { blocking:'חוסם', annoying:'מעצבן' };
+
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const row = document.createElement('div');
+  row.className = 'row';
+
+  const summary = document.createElement('div');
+  summary.className = 'summary';
+  const title = document.createElement('div');
+  title.className = 'title';
+  title.textContent = t.summary || t.body || '(ללא תוכן)';
+  summary.appendChild(title);
+  const sub = document.createElement('div');
+  sub.className = 'sub';
+  const subBits = [];
+  if (t.user_email) subBits.push(t.user_email);
+  if (t.created_at) subBits.push(new Date(t.created_at).toLocaleString('he-IL'));
+  sub.textContent = subBits.join('  ·  ');
+  summary.appendChild(sub);
+  row.appendChild(summary);
+
+  const badges = document.createElement('div');
+  badges.className = 'badges';
+  const st = document.createElement('span');
+  st.className = 'badge st-' + (t.status || '');
+  st.textContent = STATUS[t.status] || t.status || '';
+  badges.appendChild(st);
+  if (t.user_urgency) {
+    const u = document.createElement('span');
+    u.className = 'badge urg-' + t.user_urgency;
+    u.textContent = URG[t.user_urgency] || t.user_urgency;
+    badges.appendChild(u);
+  }
+  if (t.category) {
+    const c = document.createElement('span');
+    c.className = 'badge';
+    c.textContent = CATS[t.category] || t.category;
+    badges.appendChild(c);
+  }
+  if (t.severity) {
+    const s = document.createElement('span');
+    s.className = 'badge sev-' + t.severity;
+    s.textContent = SEVS[t.severity] || t.severity;
+    badges.appendChild(s);
+  }
+  row.appendChild(badges);
+  card.appendChild(row);
+
+  // detail (collapsed)
+  const detail = document.createElement('div');
+  detail.className = 'detail';
+
+  if (t.summary) {                              // full AI debug summary (row title is clamped)
+    const sm = document.createElement('div');
+    sm.className = 'summary-full';
+    sm.textContent = t.summary;
+    detail.appendChild(sm);
+  }
+
+  const body = document.createElement('div');
+  body.className = 'body';
+  body.textContent = t.body || '';
+  detail.appendChild(body);
+
+  const atts = t.feedback_attachments || [];
+  if (atts.length) {
+    const wrap = document.createElement('div');
+    wrap.className = 'atts';
+    for (const a of atts) {
+      if (!a.signedUrl) continue;
+      const link = document.createElement('a');
+      link.href = a.signedUrl; link.target = '_blank'; link.rel = 'noopener';
+      const img = document.createElement('img');
+      img.src = a.signedUrl;
+      img.alt = a.kind === 'screenshot' ? 'צילום מסך' : 'תמונה';
+      img.loading = 'lazy';
+      link.appendChild(img); wrap.appendChild(link);
+    }
+    if (wrap.children.length) detail.appendChild(wrap);
+  }
+
+  // מידע טכני — everything useful for debugging, in one block (textContent only).
+  const tech = document.createElement('div');
+  tech.className = 'tech';
+  tech.appendChild(Object.assign(document.createElement('div'), { className: 'tech-title', textContent: 'מידע טכני' }));
+  const ci = t.client_info || {};
+  function techRow(label, value) {
+    if (value == null || value === '') return;
+    const r = document.createElement('div'); r.className = 'tech-row';
+    r.appendChild(Object.assign(document.createElement('span'), { className: 'tech-l', textContent: label }));
+    r.appendChild(Object.assign(document.createElement('span'), { className: 'tech-v', textContent: String(value) }));
+    tech.appendChild(r);
+  }
+  techRow('מיקום שסומן', t.page_target);
+  techRow('כתובת הדף', t.page_url);
+  techRow('דפדפן / מערכת', ci.ua);
+  techRow('גודל חלון', ci.viewport);
+  techRow('גודל מסך', ci.screen);
+  techRow('צפיפות פיקסלים', ci.dpr);
+  techRow('שפה', ci.lang);
+  techRow('פלטפורמה', ci.platform);
+  techRow('גרסת אפליקציה', t.app_version);
+  techRow('זמן', t.created_at ? new Date(t.created_at).toLocaleString('he-IL') : '');
+  techRow('מזהה דיווח', t.id);
+  if (tech.children.length > 1) detail.appendChild(tech);
+
+  if (t.triage_error) {
+    const err = document.createElement('div');
+    err.className = 'err';
+    err.textContent = 'שגיאת סיווג: ' + t.triage_error;
+    detail.appendChild(err);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  if (t.status !== 'READ' && t.status !== 'RESOLVED') {
+    const readBtn = document.createElement('button');
+    readBtn.className = 'act';
+    readBtn.textContent = 'סמן כנקרא';
+    readBtn.addEventListener('click', (e) => { e.stopPropagation(); markFeedbackRead(t.id); });
+    actions.appendChild(readBtn);
+  }
+  if (t.status !== 'RESOLVED') {
+    const resolveBtn = document.createElement('button');
+    resolveBtn.className = 'act primary';
+    resolveBtn.textContent = 'סמן כטופל';
+    resolveBtn.addEventListener('click', (e) => { e.stopPropagation(); resolveFeedback(t.id); });
+    actions.appendChild(resolveBtn);
+  }
+  detail.appendChild(actions);
+  card.appendChild(detail);
+
+  row.addEventListener('click', () => detail.classList.toggle('open'));
+  return card;
+}
+
+async function markFeedbackRead(id) {
+  const { error } = await sb.from('feedback_tickets').update({ status: 'READ' }).eq('id', id);
+  if (error) { alert('שגיאה בעדכון'); console.error('[reports] mark read failed:', error); return; }
+  await loadTickets();
+}
+async function resolveFeedback(id) {
+  const { error } = await sb.from('feedback_tickets').update({ status: 'RESOLVED' }).eq('id', id);
+  if (error) { alert('שגיאה בעדכון'); console.error('[reports] resolve failed:', error); return; }
+  await loadTickets();
+}
+</script>
+<script src="/feedback-widget.js" defer></script>
+</body>
+</html>

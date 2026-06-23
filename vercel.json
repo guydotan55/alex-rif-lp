@@ -6,7 +6,8 @@
     { "source": "/lp/:slug", "destination": "/api/serve-lp" }
   ],
   "crons": [
-    { "path": "/api/test-monitor", "schedule": "0 6 * * *" }
+    { "path": "/api/test-monitor", "schedule": "0 6 * * *" },
+    { "path": "/api/feedback", "schedule": "0 7 * * *" }
   ],
   "headers": [
     {

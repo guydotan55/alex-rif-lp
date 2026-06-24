@@ -4214,25 +4214,45 @@ async function loadPreview() {
 async function generateLP() {
   if (!selectedProject) return;
 
-  // Regeneration warning if images exist
-  if (selectedProject.image_mode === 'with_images') {
-    const existingImages = await sb
-      .from('lp_image_content')
-      .select('id')
-      .eq('project_id', selectedProject.id)
-      .limit(1);
-    if (existingImages.data?.length > 0) {
-      if (!confirm('יצירה מחדש תחליף את התמונות הנוכחיות. להמשיך?')) return;
-    }
-  }
-
+  // Grab UI elements up front (pure reads). If the markup is missing this bails
+  // BEFORE the re-entry guard is set, so a throw here can't strand future generations.
   const btnGen = document.getElementById('btn-generate');
   const empty = document.getElementById('preview-empty');
   const progress = document.getElementById('gen-progress');
-  const progressText = progress.querySelector('.gen-progress-text');
   const wrap = document.getElementById('preview-frame-wrap');
+  const progressText = progress && progress.querySelector('.gen-progress-text');
+  if (!btnGen || !empty || !progress || !wrap || !progressText) return;
 
-  // Remove old iframe
+  // Re-entry guard: only one generation at a time. Set SYNCHRONOUSLY (before any
+  // await, incl. the with_images confirm below) so a double-click can't start a
+  // second concurrent /api/generate-lp run (double LLM cost + orphaned controller).
+  if (genController) return;
+  genController = new AbortController();
+  genTimedOut = false;
+
+  // Regeneration warning if images exist
+  if (selectedProject.image_mode === 'with_images') {
+    let existingImages;
+    try {
+      existingImages = await sb
+        .from('lp_image_content')
+        .select('id')
+        .eq('project_id', selectedProject.id)
+        .limit(1);
+    } catch (e) {
+      // Pre-check rejected (network) — release the guard so generation isn't
+      // permanently blocked, and tell the user.
+      genController = null;
+      console.error('generate-lp precheck:', e);
+      showToast('שגיאה ביצירת הדף: ' + (e.message || 'נסו שוב'), 'error');
+      return;
+    }
+    if (existingImages.data?.length > 0) {
+      if (!confirm('יצירה מחדש תחליף את התמונות הנוכחיות. להמשיך?')) { genController = null; return; }
+    }
+  }
+
+  // Remove old iframe + enter the "generating" UI state (elements were grabbed at the top).
   const oldFrame = wrap.querySelector('iframe');
   if (oldFrame) oldFrame.remove();
 
@@ -4240,10 +4260,11 @@ async function generateLP() {
   progress.classList.add('show');
   btnGen.disabled = true;
 
-  // Abort + timeout + rotating progress so the slow (20-60s) step is never a dead spinner
-  genController = new AbortController();
-  genTimedOut = false;
-  const signal = genController.signal;
+  // Abort + timeout + rotating progress so the slow (20-60s) step is never a dead spinner.
+  // genController/genTimedOut were set synchronously at the top (re-entry guard); alias to a
+  // LOCAL so the timeout + finally act on THIS run's controller regardless of the module var.
+  const controller = genController;
+  const signal = controller.signal;
   const genMessages = [
     'מבינים את התקציר...',
     'כותבים את הטקסט...',
@@ -4253,12 +4274,12 @@ async function generateLP() {
   let genMsgIdx = 0;
   progressText.textContent = genMessages[0];
   const genRotate = setInterval(() => {
-    genMsgIdx = (genMsgIdx + 1) % genMessages.length;
+    genMsgIdx = Math.min(genMsgIdx + 1, genMessages.length - 1); // clamp — never show backwards progress
     progressText.textContent = genMessages[genMsgIdx];
   }, 6000);
   const genTimeout = setTimeout(() => {
     genTimedOut = true;
-    genController.abort();
+    controller.abort();
   }, 90000);
 
   try {
@@ -4352,8 +4373,9 @@ async function generateLP() {
   } finally {
     clearInterval(genRotate);
     clearTimeout(genTimeout);
-    genController = null;
-    genTimedOut = false;
+    // Only tear down the module state if it still points at THIS run (defense in depth
+    // alongside the re-entry guard), so a stray call can't strand a live generation.
+    if (genController === controller) { genController = null; genTimedOut = false; }
     btnGen.disabled = false;
   }
 }

@@ -965,6 +965,12 @@
   }
 
   /* ── Leads Table ─────────────────────────────────────── */
+  .csv-dl-btn {
+    background: transparent; border: 1px solid var(--gold); color: var(--gold);
+    border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; font-family: inherit;
+  }
+  .csv-dl-btn:hover { background: rgba(245, 200, 66, 0.12); }
   .leads-table-wrap { overflow-x: auto; }
   .leads-table {
     width: 100%;
@@ -1658,12 +1664,13 @@
                 <div class="card-title">לידים</div>
                 <div class="card-sub" id="leads-count-label"></div>
               </div>
+              <button class="csv-dl-btn" onclick="exportProjectLeadsCsv()">&#8595; הורדה כקובץ CSV</button>
             </div>
             <div class="leads-table-wrap">
               <table class="leads-table">
-                <thead><tr><th>מייל</th><th>וריאנט</th><th>תאריך</th></tr></thead>
+                <thead><tr><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>מייל</th><th>וריאנט</th><th>תאריך</th></tr></thead>
                 <tbody id="leads-tbody">
-                  <tr><td colspan="3"><div class="loading-block"><div class="small-spin"></div> טוען...</div></td></tr>
+                  <tr><td colspan="6"><div class="loading-block"><div class="small-spin"></div> טוען...</div></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1733,10 +1740,11 @@
                   <div class="card-title">לידים מהטסט</div>
                   <div class="card-sub" id="test-leads-count-label"></div>
                 </div>
+                <button class="csv-dl-btn" onclick="exportTestLeadsCsv()">&#8595; הורדה כקובץ CSV</button>
               </div>
               <div class="leads-table-wrap">
                 <table class="leads-table">
-                  <thead><tr><th>מייל</th><th>דף נחיתה</th><th>תאריך</th></tr></thead>
+                  <thead><tr><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>מייל</th><th>דף נחיתה</th><th>תאריך</th></tr></thead>
                   <tbody id="test-leads-tbody"></tbody>
                 </table>
               </div>
@@ -2921,7 +2929,7 @@ async function selectTest(testId) {
         .in('variant_id', testVariantIds)
         .gte('created_at', testStartedAt)),
       fetchAllRows(() => sb.from('leads')
-        .select('id, email, created_at, variant_id, test_id')
+        .select('id, email, first_name, last_name, phone, metadata, created_at, variant_id, test_id')
         .in('variant_id', testVariantIds)
         .gte('created_at', testStartedAt)),
     ]);
@@ -3149,7 +3157,7 @@ function renderTestLeads() {
   const countLabel = document.getElementById('test-leads-count-label');
 
   if (!testLeads.length) {
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);padding:20px;">אין לידים עדיין</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px;">אין לידים עדיין</td></tr>';
     countLabel.textContent = '0 לידים';
     return;
   }
@@ -3162,13 +3170,100 @@ function renderTestLeads() {
     variantToName[tv.variant_id] = tv.projects?.name || 'Unknown';
   });
 
+  const dash = '—';
   tbody.innerHTML = testLeads
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .map(l => `<tr>
-      <td>${esc(l.email)}</td>
-      <td>${esc(variantToName[l.variant_id] || '—')}</td>
-      <td>${formatDate(l.created_at)}</td>
+      <td>${esc(l.first_name || dash)}</td>
+      <td>${esc(l.last_name || dash)}</td>
+      <td class="ltr">${esc(l.phone || dash)}</td>
+      <td class="ltr">${esc(l.email || dash)}</td>
+      <td>${esc(variantToName[l.variant_id] || dash)}</td>
+      <td class="ltr mono">${formatDateTime(l.created_at)}</td>
     </tr>`).join('');
+}
+
+// ── Leads → CSV export (shared by the test view and the project leads tab) ──
+// One column per fixed field (Hebrew headers) + one column per metadata key found
+// (union across rows). UTF-8 BOM so Hebrew opens correctly in Excel/Sheets.
+function csvCell(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function leadsToCsv(rows) {
+  const fixed = [
+    ['שם פרטי', 'first_name'], ['שם משפחה', 'last_name'], ['טלפון', 'phone'],
+    ['מייל', 'email'], ['דף נחיתה', 'landing_page'], ['תאריך', 'date'],
+  ];
+  const metaKeys = [];
+  const seen = {};
+  rows.forEach(r => {
+    if (r.metadata && typeof r.metadata === 'object') {
+      Object.keys(r.metadata).forEach(k => { if (!seen[k]) { seen[k] = 1; metaKeys.push(k); } });
+    }
+  });
+  metaKeys.sort();
+  const header = fixed.map(c => csvCell(c[0])).concat(metaKeys.map(csvCell)).join(',');
+  const lines = rows.map(r => {
+    const base = fixed.map(c => csvCell(r[c[1]]));
+    const meta = metaKeys.map(k => {
+      let v = r.metadata ? r.metadata[k] : undefined;
+      if (Array.isArray(v)) v = v.join('; ');
+      else if (v && typeof v === 'object') v = JSON.stringify(v);
+      return csvCell(v);
+    });
+    return base.concat(meta).join(',');
+  });
+  return '﻿' + [header].concat(lines).join('\r\n');
+}
+function downloadCsv(filename, csvText) {
+  const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function csvFileName(context) {
+  const d = new Date();
+  const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const slug = String(context || 'leads').trim().replace(/\s+/g, '-').replace(/[\/\\?%*:|"<>]/g, '').slice(0, 60) || 'leads';
+  return 'leads-' + slug + '-' + stamp + '.csv';
+}
+
+function exportTestLeadsCsv() {
+  if (!testLeads.length) { alert('אין לידים להורדה עדיין'); return; }
+  const variantToName = {};
+  testVariants.forEach(tv => { variantToName[tv.variant_id] = tv.projects?.name || 'Unknown'; });
+  const variantToLabel = {};
+  testVariants.forEach(tv => { variantToLabel[tv.variant_id] = tv.label || ''; });
+  const rows = testLeads.slice()
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .map(l => {
+      const name = variantToName[l.variant_id] || '';
+      const label = variantToLabel[l.variant_id];
+      return {
+        first_name: l.first_name || '', last_name: l.last_name || '', phone: l.phone || '',
+        email: l.email || '', landing_page: label ? (name + ' · ' + label) : name,
+        date: formatDateTime(l.created_at), metadata: l.metadata || {},
+      };
+    });
+  downloadCsv(csvFileName(selectedTest && selectedTest.name), leadsToCsv(rows));
+}
+
+function exportProjectLeadsCsv() {
+  if (!projectLeads.length) { alert('אין לידים להורדה עדיין'); return; }
+  const rows = projectLeads.map(l => {
+    const variant = projectVariants.find(v => v.id === l.variant_id);
+    const variantLabel = variant ? (variant.variant_name || variant.variant_slug) : '';
+    return {
+      first_name: l.first_name || '', last_name: l.last_name || '', phone: l.phone || '',
+      email: l.email || '', landing_page: variantLabel,
+      date: formatDateTime(l.created_at), metadata: l.metadata || {},
+    };
+  });
+  downloadCsv(csvFileName(selectedProject && selectedProject.name), leadsToCsv(rows));
 }
 
 function copyTestUrl(e) {
@@ -5087,15 +5182,15 @@ async function loadLeads() {
   if (!selectedProject) return;
 
   const tbody = document.getElementById('leads-tbody');
-  tbody.innerHTML = '<tr><td colspan="3"><div class="loading-block"><div class="small-spin"></div> טוען לידים...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6"><div class="loading-block"><div class="small-spin"></div> טוען לידים...</div></td></tr>';
 
   const { data, error } = await sb.from('leads')
-    .select('id,email,created_at,variant_id')
+    .select('id,email,first_name,last_name,phone,metadata,created_at,variant_id')
     .eq('project_id', selectedProject.id)
     .order('created_at', { ascending: false });
 
   if (error) {
-    tbody.innerHTML = '<tr><td colspan="3"><div style="padding:20px;text-align:center;color:var(--text-dim);">שגיאה בטעינת לידים</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div style="padding:20px;text-align:center;color:var(--text-dim);">שגיאה בטעינת לידים</div></td></tr>';
     console.error('leads:', error);
     return;
   }
@@ -5113,7 +5208,7 @@ function renderLeads() {
   countLabel.textContent = projectLeads.length + ' לידים';
 
   if (projectLeads.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3"><div class="leads-empty">אין לידים עדיין</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="leads-empty">אין לידים עדיין</div></td></tr>';
     pagination.innerHTML = '';
     return;
   }
@@ -5127,6 +5222,9 @@ function renderLeads() {
     const variant = projectVariants.find(v => v.id === l.variant_id);
     const variantLabel = variant ? (variant.variant_name || variant.variant_slug) : '\u2014';
     return `<tr>
+      <td>${esc(l.first_name || '\u2014')}</td>
+      <td>${esc(l.last_name || '\u2014')}</td>
+      <td class="ltr">${esc(l.phone || '\u2014')}</td>
       <td class="ltr">${esc(l.email || '\u2014')}</td>
       <td>${esc(variantLabel)}</td>
       <td class="ltr mono">${formatDateTime(l.created_at)}</td>

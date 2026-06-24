@@ -117,7 +117,15 @@ const listEl = () => document.getElementById('tickets-list');
   if (!session) { window.location.href = '/dashboard'; return; }
   if (session.user?.email) document.getElementById('user-email').textContent = session.user.email;
 
-  const { data: role } = await sb.from('user_roles').select('role').eq('user_id', session.user.id).single();
+  const { data: role, error: roleErr } = await sb.from('user_roles').select('role').eq('user_id', session.user.id).single();
+  // A transient/RLS error (anything but PGRST116 "no rows") must not become a
+  // permanent "super-admin only" lockout for a real super-admin — let them retry.
+  if (roleErr && roleErr.code !== 'PGRST116') {
+    console.error('[role-load] reports transient error:', roleErr);
+    listEl().innerHTML = '';
+    listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.' }));
+    return;
+  }
   if (!role || role.role !== 'super_admin') {
     listEl().innerHTML = '';
     listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'הדף הזה זמין לסופר-אדמין בלבד.' }));

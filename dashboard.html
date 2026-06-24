@@ -1547,6 +1547,7 @@
               <div class="gen-spinner"></div>
               <div class="gen-progress-text">מייצר את דף הנחיתה...</div>
               <div class="gen-progress-sub">התהליך עשוי לקחת 30-60 שניות</div>
+              <button class="btn-action danger" id="btn-cancel-gen" onclick="cancelGenerateLP()" style="margin-top:8px;">ביטול</button>
             </div>
           </div>
         </div>
@@ -2020,6 +2021,9 @@ const PAGE_SIZE = 20;
 let projectVariants = [];
 let selectedVariant = null;
 let compareMode = false;
+// LP-generation abort control (cancel button + 90s timeout)
+let genController = null;
+let genTimedOut = false;
 
 // ── Tests State ──────────────────────────────────────────
 let sidebarMode = 'projects'; // 'projects' or 'tests'
@@ -4210,31 +4214,73 @@ async function loadPreview() {
 async function generateLP() {
   if (!selectedProject) return;
 
-  // Regeneration warning if images exist
-  if (selectedProject.image_mode === 'with_images') {
-    const existingImages = await sb
-      .from('lp_image_content')
-      .select('id')
-      .eq('project_id', selectedProject.id)
-      .limit(1);
-    if (existingImages.data?.length > 0) {
-      if (!confirm('יצירה מחדש תחליף את התמונות הנוכחיות. להמשיך?')) return;
-    }
-  }
-
+  // Grab UI elements up front (pure reads). If the markup is missing this bails
+  // BEFORE the re-entry guard is set, so a throw here can't strand future generations.
   const btnGen = document.getElementById('btn-generate');
   const empty = document.getElementById('preview-empty');
   const progress = document.getElementById('gen-progress');
-  const progressText = progress.querySelector('.gen-progress-text');
   const wrap = document.getElementById('preview-frame-wrap');
+  const progressText = progress && progress.querySelector('.gen-progress-text');
+  if (!btnGen || !empty || !progress || !wrap || !progressText) return;
 
-  // Remove old iframe
+  // Re-entry guard: only one generation at a time. Set SYNCHRONOUSLY (before any
+  // await, incl. the with_images confirm below) so a double-click can't start a
+  // second concurrent /api/generate-lp run (double LLM cost + orphaned controller).
+  if (genController) return;
+  genController = new AbortController();
+  genTimedOut = false;
+
+  // Regeneration warning if images exist
+  if (selectedProject.image_mode === 'with_images') {
+    let existingImages;
+    try {
+      existingImages = await sb
+        .from('lp_image_content')
+        .select('id')
+        .eq('project_id', selectedProject.id)
+        .limit(1);
+    } catch (e) {
+      // Pre-check rejected (network) — release the guard so generation isn't
+      // permanently blocked, and tell the user.
+      genController = null;
+      console.error('generate-lp precheck:', e);
+      showToast('שגיאה ביצירת הדף: ' + (e.message || 'נסו שוב'), 'error');
+      return;
+    }
+    if (existingImages.data?.length > 0) {
+      if (!confirm('יצירה מחדש תחליף את התמונות הנוכחיות. להמשיך?')) { genController = null; return; }
+    }
+  }
+
+  // Remove old iframe + enter the "generating" UI state (elements were grabbed at the top).
   const oldFrame = wrap.querySelector('iframe');
   if (oldFrame) oldFrame.remove();
 
   empty.style.display = 'none';
   progress.classList.add('show');
   btnGen.disabled = true;
+
+  // Abort + timeout + rotating progress so the slow (20-60s) step is never a dead spinner.
+  // genController/genTimedOut were set synchronously at the top (re-entry guard); alias to a
+  // LOCAL so the timeout + finally act on THIS run's controller regardless of the module var.
+  const controller = genController;
+  const signal = controller.signal;
+  const genMessages = [
+    'מבינים את התקציר...',
+    'כותבים את הטקסט...',
+    'מעצבים את הדף...',
+    'כמעט שם, עוד רגע...',
+  ];
+  let genMsgIdx = 0;
+  progressText.textContent = genMessages[0];
+  const genRotate = setInterval(() => {
+    genMsgIdx = Math.min(genMsgIdx + 1, genMessages.length - 1); // clamp — never show backwards progress
+    progressText.textContent = genMessages[genMsgIdx];
+  }, 6000);
+  const genTimeout = setTimeout(() => {
+    genTimedOut = true;
+    controller.abort();
+  }, 90000);
 
   try {
     const { data: { session } } = await sb.auth.getSession();
@@ -4244,8 +4290,6 @@ async function generateLP() {
 
     // Phase 1: Resolve images (if with_images mode)
     if (selectedProject.image_mode === 'with_images') {
-      progressText.textContent = 'מחפש תמונות...';
-
       const imgRes = await fetch('/api/resolve-images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4253,6 +4297,7 @@ async function generateLP() {
           project_id: selectedProject.id,
           access_token: session.access_token
         }),
+        signal,
       });
       const imgData = await imgRes.json();
 
@@ -4263,8 +4308,6 @@ async function generateLP() {
     }
 
     // Phase 2: Generate LP
-    progressText.textContent = 'מייצר את דף הנחיתה...';
-
     const body = {
       project_id: selectedProject.id,
       variant_id: selectedVariant?.id || null,
@@ -4278,6 +4321,7 @@ async function generateLP() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!resp.ok) {
@@ -4316,11 +4360,28 @@ async function generateLP() {
   } catch (err) {
     progress.classList.remove('show');
     empty.style.display = 'flex';
-    showToast('שגיאה ביצירת הדף: ' + err.message, 'error');
+    if (err.name === 'AbortError') {
+      if (genTimedOut) {
+        showToast('נתקענו, נסו שוב — לחצו על "ייצר דף נחיתה" שוב', 'error');
+      } else {
+        showToast('היצירה בוטלה', 'success');
+      }
+    } else {
+      showToast('שגיאה ביצירת הדף: ' + err.message, 'error');
+    }
     console.error('generate-lp:', err);
   } finally {
+    clearInterval(genRotate);
+    clearTimeout(genTimeout);
+    // Only tear down the module state if it still points at THIS run (defense in depth
+    // alongside the re-entry guard), so a stray call can't strand a live generation.
+    if (genController === controller) { genController = null; genTimedOut = false; }
     btnGen.disabled = false;
   }
+}
+
+function cancelGenerateLP() {
+  if (genController) genController.abort();
 }
 
 async function togglePublish() {
@@ -4877,20 +4938,28 @@ async function saveContent() {
   }
 
   const token = (await sb.auth.getSession())?.data?.session?.access_token;
-  const resp = await fetch('/api/save-content', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      project_id: selectedProject.id,
-      variant_id: selectedVariant?.id || null,
-      access_token: token,
-      items
-    })
-  });
-  const result = await resp.json();
-  const error = resp.ok ? null : { message: result.error || 'Unknown error' };
-
-  btn.disabled = false;
+  let result, error;
+  try {
+    const resp = await fetch('/api/save-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        project_id: selectedProject.id,
+        variant_id: selectedVariant?.id || null,
+        access_token: token,
+        items
+      })
+    });
+    result = await resp.json();
+    error = resp.ok ? null : { message: result.error || 'Unknown error' };
+  } catch (e) {
+    console.error('save-content:', e);
+    errEl.textContent = 'משהו השתבש בשמירה. בדקו את החיבור לאינטרנט ונסו שוב.';
+    errEl.style.display = 'block';
+    return;
+  } finally {
+    btn.disabled = false;
+  }
 
   if (error) {
     errEl.textContent = 'שגיאה: ' + error.message;
@@ -5521,7 +5590,11 @@ async function selectDirection(containerId, index) {
         }),
       });
       const data = await res.json();
-      renderStockResults(data.results || []);
+      if (!res.ok || data.error) {
+        document.getElementById('stock-results').innerHTML = `<p style="color:var(--error);font-size:13px;">שגיאה: ${data.error || 'Unknown error'}</p>`;
+      } else {
+        renderStockResults(data.results || []);
+      }
     } finally {
       document.getElementById('stock-loading').style.display = 'none';
     }
@@ -5565,7 +5638,11 @@ async function searchStockManual() {
       }),
     });
     const data = await res.json();
-    renderStockResults(data.results || []);
+    if (!res.ok || data.error) {
+      document.getElementById('stock-results').innerHTML = `<p style="color:var(--error);font-size:13px;">שגיאה: ${data.error || 'Unknown error'}</p>`;
+    } else {
+      renderStockResults(data.results || []);
+    }
   } finally {
     document.getElementById('stock-loading').style.display = 'none';
   }

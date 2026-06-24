@@ -640,20 +640,42 @@
   }
 
   // ── DATA ──────────────────────────────────────
+  function showDataError() {
+    const funnelHtml = '<div class="empty">לא הצלחנו לטעון את הנתונים. בדקו את החיבור ונסו שוב.<br><button class="pg-btn" style="margin-top:12px" onclick="loadData()">נסו שוב</button></div>';
+    const tableHtml  = '<tr><td colspan="2"><div class="empty">לא הצלחנו לטעון את הלידים.<br><button class="pg-btn" style="margin-top:12px" onclick="loadData()">נסו שוב</button></div></td></tr>';
+    document.getElementById('funnel-cols').innerHTML    = funnelHtml;
+    document.getElementById('leads-tbody-cheb').innerHTML = tableHtml;
+    document.getElementById('leads-tbody-alex').innerHTML = tableHtml;
+    document.getElementById('leads-pages-cheb').innerHTML = '';
+    document.getElementById('leads-pages-alex').innerHTML = '';
+    document.getElementById('leads-label-cheb').textContent = '';
+    document.getElementById('leads-label-alex').textContent = '';
+  }
+
   async function loadData() {
-    const [leadsRes, eventsRes] = await Promise.all([
-      sb.from('leads').select('id,email,source,created_at').order('created_at', { ascending: false }),
-      sb.from('analytics_events').select('event_type,event_data,source,session_id,created_at')
-    ]);
+    // Re-show the spinners so a retry doesn't keep a stale error on screen.
+    document.getElementById('funnel-cols').innerHTML    = '<div class="loading"><div class="spin"></div> טוען נתונים...</div>';
+    document.getElementById('leads-tbody-cheb').innerHTML = '<tr><td colspan="2"><div class="loading"><div class="spin"></div> טוען...</div></td></tr>';
+    document.getElementById('leads-tbody-alex').innerHTML = '<tr><td colspan="2"><div class="loading"><div class="spin"></div> טוען...</div></td></tr>';
 
-    if (leadsRes.error) console.error('leads:', leadsRes.error);
-    if (eventsRes.error) console.error('events:', eventsRes.error);
+    try {
+      const [leadsRes, eventsRes] = await Promise.all([
+        sb.from('leads').select('id,email,source,created_at').order('created_at', { ascending: false }),
+        sb.from('analytics_events').select('event_type,event_data,source,session_id,created_at')
+      ]);
 
-    allLeads  = leadsRes.data  || [];
-    allEvents = eventsRes.data || [];
+      if (leadsRes.error)  throw leadsRes.error;
+      if (eventsRes.error) throw eventsRes.error;
 
-    renderFunnel();
-    renderLeads();
+      allLeads  = leadsRes.data  || [];
+      allEvents = eventsRes.data || [];
+
+      renderFunnel();
+      renderLeads();
+    } catch (err) {
+      console.error('loadData:', err);
+      showDataError();
+    }
   }
 
   // ── FUNNEL ────────────────────────────────────
@@ -817,7 +839,14 @@
   // ── SETTINGS / EMAIL ──────────────────────────
   async function loadSettings() {
     const { data, error } = await sb.from('settings').select('key,value');
-    if (error) { console.error('settings:', error); return; }
+    if (error) {
+      console.error('settings:', error);
+      ['cheb-email-err', 'alex-email-err'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = 'לא הצלחנו לטעון את תוכן המיילים. רעננו את הדף ונסו שוב.'; el.style.display = 'block'; }
+      });
+      return;
+    }
     const m = {};
     (data||[]).forEach(r => m[r.key] = r.value);
 

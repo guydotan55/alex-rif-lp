@@ -346,7 +346,9 @@
   .feature-item .remove-btn {
     position: absolute;
     top: 12px;
-    left: 12px;
+    /* Logical start corner: resolves to the right under dir=rtl, so the X stays
+       clear of the "✨ שפר" remix button that space-between pushes to the left. */
+    inset-inline-start: 12px;
     width: 28px;
     height: 28px;
     border-radius: 50%;
@@ -1866,6 +1868,12 @@ async function handleHeroUpload(file) {
   const fillEl = document.getElementById('heroUploadProgressFill');
   const statusEl = document.getElementById('heroUploadStatus');
 
+  // Clear any previous success state before re-uploading, so a failed
+  // re-upload can't masquerade as a successful one.
+  heroImageUrl = null;
+  document.getElementById('heroModeChoice').style.display = 'none';
+  document.getElementById('heroSkipHint').style.display = '';
+
   // Preview
   const reader = new FileReader();
   reader.onload = (e) => { preview.src = e.target.result; zone.classList.add('has-image'); };
@@ -1897,6 +1905,10 @@ async function handleHeroUpload(file) {
     document.getElementById('heroSkipHint').style.display = 'none';
   } catch (err) {
     console.error('Hero upload error:', err);
+    // Roll back any success state so a failed re-upload can't look like a success.
+    heroImageUrl = null;
+    document.getElementById('heroModeChoice').style.display = 'none';
+    document.getElementById('heroSkipHint').style.display = '';
     fillEl.style.width = '100%';
     statusEl.textContent = 'שגיאה בהעלאה: ' + (err.message || 'Unknown error');
     statusEl.className = 'upload-status error';
@@ -2045,6 +2057,15 @@ async function uploadToStorage(file, isQuestionnaire, progressId, fillId, status
     }
   } catch (err) {
     console.error('Upload error:', err);
+    // Roll back the stored URL so required-image validation can't pass on a dead
+    // upload, and re-show the matching image error.
+    if (isQuestionnaire) {
+      uploadedImageUrl = null;
+      document.getElementById('err-image').classList.add('visible');
+    } else {
+      briefUploadedImageUrl = null;
+      document.getElementById('err-briefImage').classList.add('visible');
+    }
     fillEl.style.width = '100%';
     const detail = err.message || err.error || err.statusCode || 'Unknown error';
     statusEl.textContent = `שגיאה בהעלאה: ${detail}`;

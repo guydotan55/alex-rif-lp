@@ -124,3 +124,54 @@ test('no pixel id => no Meta Pixel snippet at all', () => {
   assert.ok(!out.includes('fbq('), 'no fbq calls');
   assert.ok(!out.includes('connect.facebook.net'), 'no pixel library loaded');
 });
+
+// ── lead capture: contact fields + metadata catch-all + fail-loud ──────────
+// Regression for the dropped-leads bug: forms collect first_name/last_name/phone,
+// but the old code sent a non-existent `name`/`phone` shape and fired
+// lead_captured even when the insert failed — so phone submissions vanished.
+const leadScript = () => buildInjectedScript('proj-1', 'var-1', null, 'anon-key', 'https://sb.example.co', true, '');
+
+test('reads first_name / last_name / phone from the form into dedicated fields', () => {
+  const out = leadScript();
+  assert.ok(out.includes(`input[name="first_name"]`), 'reads first_name');
+  assert.ok(out.includes(`input[name="last_name"]`), 'reads last_name');
+  assert.ok(out.includes(`input[name="phone"]`) && out.includes(`input[type="tel"]`), 'reads phone (name or tel)');
+  assert.ok(out.includes('leadData.first_name'), 'maps first_name to a column');
+  assert.ok(out.includes('leadData.last_name'), 'maps last_name to a column');
+  assert.ok(out.includes('leadData.phone'), 'maps phone to a column');
+});
+
+test('no longer sends a legacy `name` field (column does not exist)', () => {
+  const out = leadScript();
+  assert.ok(!out.includes('leadData.name'), 'legacy name assignment removed');
+  assert.ok(!out.includes(`querySelector('input[name="name"]')`), 'no name selector');
+});
+
+test('sweeps any other named field into the metadata jsonb catch-all', () => {
+  const out = leadScript();
+  assert.ok(out.includes('var metadata = {}'), 'builds a metadata object');
+  assert.ok(out.includes('input[name], select[name], textarea[name]'), 'scans all named fields');
+  assert.ok(out.includes('leadData.metadata = metadata'), 'attaches metadata to the lead');
+  assert.ok(/RESERVED\s*=\s*{[^}]*first_name[^}]*}/.test(out), 'dedicated columns are excluded from metadata');
+});
+
+test('FAIL LOUD: on insert error, shows a retry message and does NOT fire lead_captured', () => {
+  const out = leadScript();
+  // The lead_captured call must come AFTER the error guard returns, so a failed
+  // insert can never reach it.
+  const errGuard = out.indexOf('if (result.error)');
+  const showErr = out.indexOf('showLeadError();'); // the CALL, not the declaration
+  const tracked = out.indexOf(`trackEvent("lead_captured"`);
+  assert.ok(errGuard !== -1, 'has an error guard on the insert result');
+  assert.ok(showErr !== -1 && showErr > errGuard, 'surfaces an error UI inside the guard');
+  assert.ok(tracked > errGuard, 'lead_captured fires only after the error guard');
+  // The error guard returns before the success path.
+  assert.ok(/if \(result\.error\) \{[\s\S]*showLeadError\(\);[\s\S]*return;[\s\S]*\}/.test(out), 'error guard returns early');
+});
+
+test('error message is human Hebrew copy, not a stack trace, and re-enables retry', () => {
+  const out = leadScript();
+  assert.ok(out.includes('אופס'), 'friendly Hebrew error copy');
+  assert.ok(out.includes('submitBtn.disabled = false'), 're-enables the submit button for retry');
+  assert.ok(out.includes('role", "alert"') || out.includes(`setAttribute("role", "alert")`), 'error is announced to assistive tech');
+});

@@ -230,9 +230,9 @@
       try {
         await ensureHtml2canvas();
         var canvas = await window.html2canvas(document.body, { useCORS: true, logging: false, scale: Math.min(window.devicePixelRatio || 1, 2) });
-        var blob = await new Promise(function (res) { canvas.toBlob(res, 'image/png'); });
+        var blob = await new Promise(function (res, rej) { canvas.toBlob(function (b) { b ? res(b) : rej(new Error('toBlob returned null')); }, 'image/png'); });
         panel.style.visibility = ''; ov.style.visibility = '';
-        if (blob) addAttachment(blob, 'screenshot');
+        addAttachment(blob, 'screenshot');
       } catch (err) {
         console.error('[feedback-widget] screenshot failed:', err);
         panel.style.visibility = ''; ov.style.visibility = '';

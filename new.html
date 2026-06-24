@@ -2571,7 +2571,14 @@ async function loginAndContinue() {
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
       // Fetch role after password login and set up UI
-      await setupUserRole(data.session.user.id);
+      const ok = await setupUserRole(data.session.user.id);
+      if (ok === false) {
+        // setupUserRole already handled the UI (denied or transient) — don't show the
+        // app over a dead/role-less session. Re-enable the button so they can retry.
+        btn.disabled = false;
+        btn.textContent = loginWithPassword ? 'התחברו' : 'שלחו לי קישור';
+        return;
+      }
       document.getElementById('loginSection').style.display = 'none';
       document.getElementById('mainContent').style.display = '';
       injectCommunitySelectors();
@@ -2630,10 +2637,19 @@ initProgress();
 
 // Fetch user role and set up community selector
 async function setupUserRole(userId) {
-  const { data: roleData } = await sb.from('user_roles')
+  const { data: roleData, error: roleErr } = await sb.from('user_roles')
     .select('role, organization_id, community_id')
     .eq('user_id', userId)
     .single();
+
+  // A transient/RLS error (anything but PGRST116 "no rows") must NOT sign a valid
+  // user out — show the login screen with a retry message and let them refresh.
+  if (roleErr && roleErr.code !== 'PGRST116') {
+    showToast('לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.');
+    document.getElementById('loginSection').style.display = '';
+    document.getElementById('mainContent').style.display = 'none';
+    return false;
+  }
 
   if (!roleData) {
     showToast('אין לך הרשאה. פנה למנהל המערכת.');

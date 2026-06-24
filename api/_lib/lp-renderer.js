@@ -319,11 +319,16 @@ window.__twemojiParse = function(node) {
       if (lastNameInput && lastNameInput.value.trim())   leadData.last_name  = lastNameInput.value.trim();
       if (phoneInput && phoneInput.value.trim())          leadData.phone     = phoneInput.value.trim();
 
-      // Sweep every OTHER named field into metadata. Skip the dedicated columns,
-      // control/hidden inputs (CSRF/honeypot/UTM noise), and disabled fields.
+      // Sweep every OTHER named field into metadata. Skip the dedicated columns —
+      // by their ACTUAL matched field name, so an email/phone matched via type=
+      // (e.g. <input type="tel" name="mobile">) isn't ALSO duplicated here — plus
+      // control/hidden inputs (CSRF/honeypot/UTM noise) and disabled fields.
       // Same-name fields (checkbox groups, multi-selects) accumulate into an array
       // so a marketer's multi-value custom field isn't silently collapsed.
       var RESERVED = { email: 1, first_name: 1, last_name: 1, phone: 1 };
+      [emailInput, firstNameInput, lastNameInput, phoneInput].forEach(function(el) {
+        if (el && el.name) RESERVED[el.name] = 1;
+      });
       var SKIP_TYPES = { hidden: 1, password: 1, file: 1, submit: 1, button: 1, reset: 1, image: 1 };
       var metadata = {};
       function addMeta(key, val) {
@@ -336,13 +341,13 @@ window.__twemojiParse = function(node) {
         if (!key || RESERVED[key] || field.disabled || SKIP_TYPES[field.type]) return;
         if (field.type === "checkbox") {
           if (!field.checked) return; // unchecked = no value, like an empty text field
-          addMeta(key, (field.value && field.value !== "on") ? field.value : true);
+          // explicit value="..." kept verbatim; a bare checkbox (default value "on") records true
+          addMeta(key, field.hasAttribute("value") ? field.value : true);
         } else if (field.type === "radio") {
           if (!field.checked) return;
           addMeta(key, field.value);
         } else if (field.tagName === "SELECT" && field.multiple) {
-          var opts = Array.prototype.map.call(field.selectedOptions || [], function(o) { return o.value; });
-          if (opts.length) metadata[key] = opts;
+          Array.prototype.forEach.call(field.selectedOptions || [], function(o) { addMeta(key, o.value); });
         } else {
           var val = (field.value || "").trim();
           if (val === "") return;
@@ -352,8 +357,10 @@ window.__twemojiParse = function(node) {
       if (Object.keys(metadata).length) leadData.metadata = metadata;
 
       // Guard against a double-submit creating two rows while the insert is in flight.
-      // button:not([type]) defaults to type=submit per spec, so match it too.
-      var submitBtn = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+      // Prefer an explicit submit control; only fall back to a typeless <button>
+      // (defaults to submit per spec) so a leading decorative button isn't disabled.
+      var submitBtn = form.querySelector('button[type="submit"], input[type="submit"]')
+                   || form.querySelector('button:not([type])');
       submitting = true;
       if (submitBtn) submitBtn.disabled = true;
 

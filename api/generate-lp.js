@@ -94,8 +94,9 @@ CRITICAL RULES:
    - input[type="text"][name="last_name"] — last name (optional; include only if a full name is wanted)
    - input[type="tel"][name="phone"] — phone number
    Keep the form short (NGO audiences are ~90% mobile): email + first name + phone is the
-   typical set. Any extra field you add is still saved (under its name) as long as it has a
-   name attribute, so always give every input a meaningful name.
+   typical set. Any other VISIBLE field you add (text, tel, select, checkbox, radio,
+   textarea) is also saved under its name, so give every input a meaningful name. Do NOT
+   rely on hidden/technical inputs for data you want stored — those are not saved.
 7. Include a hidden thank-you element: <div data-editable="thankyou_text" style="display:none;">Thank you message here</div> — place it right after the form.
 8. Add data-editable attributes to these elements so text can be edited later:
    - data-editable="hero_title" on the main hero headline

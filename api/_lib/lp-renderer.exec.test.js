@@ -19,11 +19,15 @@ function extractFormScript() {
 }
 
 // A field factory mimicking the bits of a DOM input/select the script reads.
+// hasAttribute('value') is true only when the field was given an explicit value
+// attribute (_valueAttr) — mirrors a real DOM checkbox (bare checkbox => "on", no attr).
 function field(o) {
-  return Object.assign(
+  const f = Object.assign(
     { tagName: 'INPUT', type: 'text', name: '', value: '', checked: false, disabled: false, multiple: false, selectedOptions: [] },
     o
   );
+  f.hasAttribute = (a) => (a === 'value' ? !!o._valueAttr : false);
+  return f;
 }
 
 // Run the IIFE with stubs, then return a submit() that dispatches the captured handler.
@@ -166,15 +170,39 @@ test('double-submit guard: two submits while in flight → only one leads row', 
 test('checkbox GROUP (same name) accumulates into an array, not last-wins', async () => {
   const fields = [
     field({ type: 'email', name: 'email', value: 'a@b.com' }),
-    field({ type: 'checkbox', name: 'interests', value: 'music', checked: true }),
-    field({ type: 'checkbox', name: 'interests', value: 'art', checked: true }),
-    field({ type: 'checkbox', name: 'interests', value: 'sport', checked: false }),
+    field({ type: 'checkbox', name: 'interests', value: 'music', checked: true, _valueAttr: true }),
+    field({ type: 'checkbox', name: 'interests', value: 'art', checked: true, _valueAttr: true }),
+    field({ type: 'checkbox', name: 'interests', value: 'sport', checked: false, _valueAttr: true }),
   ];
   const h = bootstrap({ fields, leadResult: { error: null } });
   h.submit();
   await h.flush();
   const row = h.leadInserts()[0].row;
   assert.deepEqual(row.metadata.interests, ['music', 'art'], 'both checked values kept; unchecked omitted');
+});
+
+test('phone matched via type="tel" under a non-"phone" name is NOT also duplicated in metadata', async () => {
+  const fields = [
+    field({ type: 'email', name: 'email', value: 'a@b.com' }),
+    field({ type: 'tel', name: 'mobile', value: '050-9999999' }), // matched by input[type=tel]
+  ];
+  const h = bootstrap({ fields, leadResult: { error: null } });
+  h.submit();
+  await h.flush();
+  const row = h.leadInserts()[0].row;
+  assert.equal(row.phone, '050-9999999', 'tel field captured into the phone column');
+  assert.ok(!row.metadata || !('mobile' in row.metadata), 'not duplicated into metadata under its own name');
+});
+
+test('explicit checkbox value="on" is preserved, not collapsed to boolean true', async () => {
+  const fields = [
+    field({ type: 'email', name: 'email', value: 'a@b.com' }),
+    field({ type: 'checkbox', name: 'plan', value: 'on', checked: true, _valueAttr: true }),
+  ];
+  const h = bootstrap({ fields, leadResult: { error: null } });
+  h.submit();
+  await h.flush();
+  assert.equal(h.leadInserts()[0].row.metadata.plan, 'on', 'explicit value="on" kept verbatim');
 });
 
 test('email-only form still works (no phone/name inputs present)', async () => {

@@ -133,9 +133,9 @@ const leadScript = () => buildInjectedScript('proj-1', 'var-1', null, 'anon-key'
 
 test('reads first_name / last_name / phone from the form into dedicated fields', () => {
   const out = leadScript();
-  assert.ok(out.includes(`querySelector('input[name="first_name"]')`), 'reads first_name');
-  assert.ok(out.includes(`querySelector('input[name="last_name"]')`), 'reads last_name');
-  assert.ok(out.includes(`querySelector('input[name="phone"]')`), 'reads phone');
+  assert.ok(out.includes(`input[name="first_name"]`), 'reads first_name');
+  assert.ok(out.includes(`input[name="last_name"]`), 'reads last_name');
+  assert.ok(out.includes(`input[name="phone"]`) && out.includes(`input[type="tel"]`), 'reads phone (name or tel)');
   assert.ok(out.includes('leadData.first_name'), 'maps first_name to a column');
   assert.ok(out.includes('leadData.last_name'), 'maps last_name to a column');
   assert.ok(out.includes('leadData.phone'), 'maps phone to a column');

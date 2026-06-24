@@ -288,8 +288,10 @@ window.__twemojiParse = function(node) {
 
   var form = document.getElementById("lp-email-form") || document.querySelector("form");
   if (form) {
+    var submitting = false; // in-flight guard — survives across submit events, works even with no submit button
     form.addEventListener("submit", function(e) {
       e.preventDefault();
+      if (submitting) return;
 
       var emailInput = form.querySelector('input[type="email"], input[name="email"]');
 
@@ -312,38 +314,54 @@ window.__twemojiParse = function(node) {
 
       var firstNameInput = form.querySelector('input[name="first_name"]');
       var lastNameInput  = form.querySelector('input[name="last_name"]');
-      var phoneInput     = form.querySelector('input[name="phone"]');
+      var phoneInput     = form.querySelector('input[name="phone"], input[type="tel"]');
       if (firstNameInput && firstNameInput.value.trim()) leadData.first_name = firstNameInput.value.trim();
       if (lastNameInput && lastNameInput.value.trim())   leadData.last_name  = lastNameInput.value.trim();
       if (phoneInput && phoneInput.value.trim())          leadData.phone     = phoneInput.value.trim();
 
+      // Sweep every OTHER named field into metadata. Skip the dedicated columns,
+      // control/hidden inputs (CSRF/honeypot/UTM noise), and disabled fields.
+      // Same-name fields (checkbox groups, multi-selects) accumulate into an array
+      // so a marketer's multi-value custom field isn't silently collapsed.
       var RESERVED = { email: 1, first_name: 1, last_name: 1, phone: 1 };
+      var SKIP_TYPES = { hidden: 1, password: 1, file: 1, submit: 1, button: 1, reset: 1, image: 1 };
       var metadata = {};
+      function addMeta(key, val) {
+        if (metadata[key] === undefined) { metadata[key] = val; return; }
+        if (!Array.isArray(metadata[key])) metadata[key] = [metadata[key]];
+        metadata[key].push(val);
+      }
       form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function(field) {
         var key = field.name;
-        if (!key || RESERVED[key]) return;
-        var val;
+        if (!key || RESERVED[key] || field.disabled || SKIP_TYPES[field.type]) return;
         if (field.type === "checkbox") {
-          val = field.checked;
+          if (!field.checked) return; // unchecked = no value, like an empty text field
+          addMeta(key, (field.value && field.value !== "on") ? field.value : true);
         } else if (field.type === "radio") {
           if (!field.checked) return;
-          val = field.value;
+          addMeta(key, field.value);
+        } else if (field.tagName === "SELECT" && field.multiple) {
+          var opts = Array.prototype.map.call(field.selectedOptions || [], function(o) { return o.value; });
+          if (opts.length) metadata[key] = opts;
         } else {
-          val = (field.value || "").trim();
+          var val = (field.value || "").trim();
           if (val === "") return;
+          addMeta(key, val);
         }
-        metadata[key] = val;
       });
       if (Object.keys(metadata).length) leadData.metadata = metadata;
 
       // Guard against a double-submit creating two rows while the insert is in flight.
-      var submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+      // button:not([type]) defaults to type=submit per spec, so match it too.
+      var submitBtn = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+      submitting = true;
       if (submitBtn) submitBtn.disabled = true;
 
       // Fail loud: if the lead does NOT persist, never pretend it did. We do not
       // fire lead_captured (that would inflate the dashboard's lead count and mask
       // the failure) and we do not show the thank-you — we surface a retry message.
       function showLeadError() {
+        submitting = false;
         if (submitBtn) submitBtn.disabled = false;
         var errEl = document.getElementById("lp-lead-error");
         if (!errEl) {

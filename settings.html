@@ -748,6 +748,7 @@ async function showSettings() {
   // A transient/RLS error (anything but PGRST116 "no rows") must NOT log a valid
   // admin out — surface it and let them retry instead of treating it as "no role".
   if (roleErr && roleErr.code !== 'PGRST116') {
+    console.error('[role-load] settings transient error:', roleErr);
     showErr('לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.');
     return;
   }

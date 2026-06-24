@@ -121,6 +121,7 @@ const listEl = () => document.getElementById('tickets-list');
   // A transient/RLS error (anything but PGRST116 "no rows") must not become a
   // permanent "super-admin only" lockout for a real super-admin — let them retry.
   if (roleErr && roleErr.code !== 'PGRST116') {
+    console.error('[role-load] reports transient error:', roleErr);
     listEl().innerHTML = '';
     listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.' }));
     return;

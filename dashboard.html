@@ -2114,10 +2114,21 @@ async function showDashboard() {
 
   // Fetch user role
   if (session?.user?.id) {
-    const { data: roleData } = await sb.from('user_roles')
+    const { data: roleData, error: roleErr } = await sb.from('user_roles')
       .select('role, organization_id, community_id, email')
       .eq('user_id', session.user.id)
       .single();
+
+    // A transient/RLS error (anything but PGRST116 "no rows") must NOT sign a valid
+    // admin out — keep the session, show the login screen with a retry message so a
+    // refresh recovers. (Same guard as settings.html/new.html/reports.html.)
+    if (roleErr && roleErr.code !== 'PGRST116') {
+      console.error('[role-load] dashboard transient error:', roleErr);
+      document.getElementById('dashboard').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+      showErr('לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.');
+      return;
+    }
 
     if (!roleData) {
       await sb.auth.signOut();

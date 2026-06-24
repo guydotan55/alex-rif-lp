@@ -2645,6 +2645,7 @@ async function setupUserRole(userId) {
   // A transient/RLS error (anything but PGRST116 "no rows") must NOT sign a valid
   // user out — show the login screen with a retry message and let them refresh.
   if (roleErr && roleErr.code !== 'PGRST116') {
+    console.error('[role-load] new.html transient error:', roleErr);
     showToast('לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.');
     document.getElementById('loginSection').style.display = '';
     document.getElementById('mainContent').style.display = 'none';

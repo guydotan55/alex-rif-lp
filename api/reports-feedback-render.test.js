@@ -26,7 +26,9 @@ function extractFn(name) {
 }
 
 // Build the render fn in a sandbox with an injected `document` (linkedom).
-const src = extractFn('renderFeedbackTicketCard');
+// Include buildTicketPayload too: renderFeedbackTicketCard's copy-button handler
+// references it (only on click), so it must be in scope to reconstruct the fn.
+const src = `${extractFn('buildTicketPayload')}\n${extractFn('renderFeedbackTicketCard')}`;
 // eslint-disable-next-line no-new-func
 const makeRender = new Function('document', `${src}\nreturn renderFeedbackTicketCard;`);
 

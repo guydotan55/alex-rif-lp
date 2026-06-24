@@ -3188,7 +3188,11 @@ function renderTestLeads() {
 // (union across rows). UTF-8 BOM so Hebrew opens correctly in Excel/Sheets.
 function csvCell(v) {
   if (v === null || v === undefined) return '';
-  const s = String(v);
+  let s = String(v);
+  // Formula-injection guard: lead name/phone/metadata is untrusted public-form input and
+  // this CSV is opened in Excel/Sheets, which evaluate a cell starting with = + - @ (or
+  // tab/CR) as a formula. Prefix with ' to neutralize (OWASP); Excel hides the leading '.
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 function leadsToCsv(rows) {
@@ -5184,18 +5188,20 @@ async function loadLeads() {
   const tbody = document.getElementById('leads-tbody');
   tbody.innerHTML = '<tr><td colspan="6"><div class="loading-block"><div class="small-spin"></div> טוען לידים...</div></td></tr>';
 
-  const { data, error } = await sb.from('leads')
-    .select('id,email,first_name,last_name,phone,metadata,created_at,variant_id')
-    .eq('project_id', selectedProject.id)
-    .order('created_at', { ascending: false });
-
-  if (error) {
+  // fetchAllRows paginates past Supabase's 1000-row default (so the CSV export truly covers
+  // ALL leads). It orders ascending, so re-sort newest-first for the table display.
+  let rows;
+  try {
+    rows = await fetchAllRows(() => sb.from('leads')
+      .select('id,email,first_name,last_name,phone,metadata,created_at,variant_id')
+      .eq('project_id', selectedProject.id));
+  } catch (error) {
     tbody.innerHTML = '<tr><td colspan="6"><div style="padding:20px;text-align:center;color:var(--text-dim);">שגיאה בטעינת לידים</div></td></tr>';
     console.error('leads:', error);
     return;
   }
 
-  projectLeads = data || [];
+  projectLeads = (rows || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   leadsPage = 1;
   renderLeads();
 }

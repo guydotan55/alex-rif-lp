@@ -45,6 +45,24 @@ test('RFC-4180: commas, quotes, and newlines are quoted/escaped', () => {
   assert.equal(csvCell(undefined), '');
 });
 
+test('formula-injection: cells starting with = + - @ (or tab/CR) are neutralized with a leading quote', () => {
+  assert.equal(csvCell('=1+1'), "'=1+1");
+  assert.equal(csvCell('+1'), "'+1");
+  assert.equal(csvCell('-5'), "'-5");
+  assert.equal(csvCell('@SUM(A1)'), "'@SUM(A1)");
+  assert.equal(csvCell('=HYPERLINK("http://evil","x")'), '"\'=HYPERLINK(""http://evil"",""x"")"', 'neutralized AND quoted (has commas/quotes)');
+  // benign values untouched, including phone numbers and plain text
+  assert.equal(csvCell('050-1234567'), '050-1234567');
+  assert.equal(csvCell('דנה'), 'דנה');
+});
+
+test('formula-injection: a malicious metadata KEY (header cell) is also neutralized', () => {
+  const csv = leadsToCsv([{ email: 'a@b.com', metadata: { '=cmd': 'x' } }]);
+  const header = csv.slice(1).split('\r\n')[0];
+  assert.ok(header.includes("'=cmd"), 'header key beginning with = is prefixed');
+  assert.ok(!/(^|,)=cmd(,|$)/.test(header), 'no raw =cmd header cell');
+});
+
 test('metadata: missing key → empty cell; array → joined with "; "', () => {
   const csv = leadsToCsv([
     { email: 'a@b.com', metadata: { interests: ['music', 'art'] } },

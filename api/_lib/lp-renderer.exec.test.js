@@ -216,3 +216,20 @@ test('email-only form still works (no phone/name inputs present)', async () => {
   assert.ok(!('metadata' in row), 'no metadata key when nothing extra to capture');
   assert.ok(h.leadCapturedFired());
 });
+
+test('oversized free-text metadata never blocks the lead (value trimmed, lead still saves)', async () => {
+  const fields = [
+    field({ type: 'email', name: 'email', value: 'a@b.com' }),
+    field({ tagName: 'TEXTAREA', type: 'textarea', name: 'story', value: 'x'.repeat(10000) }),
+  ];
+  const h = bootstrap({ fields, leadResult: { error: null } });
+  h.submit();
+  await h.flush();
+  assert.equal(h.leadInserts().length, 1, 'lead still inserted despite oversized field');
+  const row = h.leadInserts()[0].row;
+  assert.equal(row.email, 'a@b.com', 'the real lead value is preserved');
+  if (row.metadata && 'story' in row.metadata) {
+    assert.ok(row.metadata.story.length <= 2000, 'oversized value was trimmed, not sent whole');
+  }
+  assert.ok(JSON.stringify(row.metadata || {}).length <= 9000, 'metadata stays under the server cap');
+});

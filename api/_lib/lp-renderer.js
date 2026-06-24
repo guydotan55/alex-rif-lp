@@ -250,7 +250,14 @@ window.__twemojiParse = function(node) {
     };
     if (VARIANT_ID) row.variant_id = VARIANT_ID;
     if (TEST_ID) row.test_id = TEST_ID;
-    sb.from("analytics_events").insert(row).then(function() {});
+    // Analytics is best-effort (we never block the visitor on it), but a failure must
+    // not be invisible — log it so a silently-lost event (e.g. an undercounted
+    // lead_captured) is at least diagnosable. Per CLAUDE.md: fail loud, never silent.
+    sb.from("analytics_events").insert(row).then(function(result) {
+      if (result && result.error) console.error("analytics_events insert error (" + eventType + "):", result.error);
+    }, function(err) {
+      console.error("analytics_events insert failed (" + eventType + "):", err);
+    });
   }
 
   trackEvent("page_view", {
@@ -354,7 +361,17 @@ window.__twemojiParse = function(node) {
           addMeta(key, val);
         }
       });
-      if (Object.keys(metadata).length) leadData.metadata = metadata;
+      // metadata is a best-effort catch-all and the column is size-capped server-side
+      // (~20 KB). NEVER let an oversized blob block the real lead: trim long string
+      // values, and if the whole thing is still too big, drop metadata entirely and
+      // still save the lead (email/name/phone live in their own, uncapped columns).
+      if (Object.keys(metadata).length) {
+        Object.keys(metadata).forEach(function(k) {
+          if (typeof metadata[k] === "string" && metadata[k].length > 2000) metadata[k] = metadata[k].slice(0, 2000);
+        });
+        // 9000 chars stays under 20 KB even if every char is 2-byte (e.g. Hebrew).
+        if (JSON.stringify(metadata).length <= 9000) leadData.metadata = metadata;
+      }
 
       // Guard against a double-submit creating two rows while the insert is in flight.
       // Prefer an explicit submit control; only fall back to a typeless <button>

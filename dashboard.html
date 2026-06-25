@@ -1006,6 +1006,15 @@
     color: var(--text-dim);
     font-size: 12px;
   }
+  /* Custom (metadata) fields column — keep it narrow; full text shows on hover (title=). */
+  .leads-table .lead-meta {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
   .leads-count {
     padding: 10px 20px;
     font-size: 12px;
@@ -1669,9 +1678,9 @@
             </div>
             <div class="leads-table-wrap">
               <table class="leads-table">
-                <thead><tr><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>מייל</th><th>וריאנט</th><th>תאריך</th></tr></thead>
+                <thead><tr><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>מייל</th><th>וריאנט</th><th>תאריך</th><th>פרטים נוספים</th></tr></thead>
                 <tbody id="leads-tbody">
-                  <tr><td colspan="6"><div class="loading-block"><div class="small-spin"></div> טוען...</div></td></tr>
+                  <tr><td colspan="7"><div class="loading-block"><div class="small-spin"></div> טוען...</div></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1745,7 +1754,7 @@
               </div>
               <div class="leads-table-wrap">
                 <table class="leads-table">
-                  <thead><tr><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>מייל</th><th>דף נחיתה</th><th>תאריך</th></tr></thead>
+                  <thead><tr><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>מייל</th><th>דף נחיתה</th><th>תאריך</th><th>פרטים נוספים</th></tr></thead>
                   <tbody id="test-leads-tbody"></tbody>
                 </table>
               </div>
@@ -3184,7 +3193,7 @@ function renderTestLeads() {
   const countLabel = document.getElementById('test-leads-count-label');
 
   if (!testLeads.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px;">אין לידים עדיין</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:20px;">אין לידים עדיין</td></tr>';
     countLabel.textContent = '0 לידים';
     return;
   }
@@ -3207,6 +3216,7 @@ function renderTestLeads() {
       <td class="ltr">${esc(l.email || dash)}</td>
       <td>${esc(variantToName[l.variant_id] || dash)}</td>
       <td class="ltr mono">${formatDateTime(l.created_at)}</td>
+      <td class="lead-meta" title="${escAttr(formatLeadMeta(l.metadata))}">${esc(formatLeadMeta(l.metadata))}</td>
     </tr>`).join('');
 }
 
@@ -5318,7 +5328,7 @@ async function loadLeads() {
   if (!selectedProject) return;
 
   const tbody = document.getElementById('leads-tbody');
-  tbody.innerHTML = '<tr><td colspan="6"><div class="loading-block"><div class="small-spin"></div> טוען לידים...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7"><div class="loading-block"><div class="small-spin"></div> טוען לידים...</div></td></tr>';
 
   // fetchAllRows paginates past Supabase's 1000-row default (so the CSV export truly covers
   // ALL leads). It orders ascending, so re-sort newest-first for the table display.
@@ -5328,7 +5338,7 @@ async function loadLeads() {
       .select('id,email,first_name,last_name,phone,metadata,created_at,variant_id')
       .eq('project_id', selectedProject.id));
   } catch (error) {
-    tbody.innerHTML = '<tr><td colspan="6"><div style="padding:20px;text-align:center;color:var(--text-dim);">שגיאה בטעינת לידים</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div style="padding:20px;text-align:center;color:var(--text-dim);">שגיאה בטעינת לידים</div></td></tr>';
     console.error('leads:', error);
     return;
   }
@@ -5336,6 +5346,25 @@ async function loadLeads() {
   projectLeads = (rows || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   leadsPage = 1;
   renderLeads();
+}
+
+// Render a lead's custom (metadata) fields for the "פרטים נוספים" column.
+// Returns PLAIN TEXT — the caller MUST escape it (metadata is untrusted public-form
+// input). A ticked checkbox is stored as `true` and shown as ✓; arrays (multi-select
+// / checkbox groups) are comma-joined; keys are sorted for a stable order.
+function formatLeadMeta(metadata) {
+  if (!metadata || typeof metadata !== 'object') return '—';
+  const keys = Object.keys(metadata).sort();
+  if (!keys.length) return '—';
+  return keys.map(function (k) {
+    const v = metadata[k];
+    let shown;
+    if (v === true) shown = '✓';
+    else if (Array.isArray(v)) shown = v.join(', ');
+    else if (v && typeof v === 'object') shown = JSON.stringify(v);
+    else shown = String(v);
+    return k + ': ' + shown;
+  }).join(' · ');
 }
 
 function renderLeads() {
@@ -5346,7 +5375,7 @@ function renderLeads() {
   countLabel.textContent = projectLeads.length + ' לידים';
 
   if (projectLeads.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="leads-empty">אין לידים עדיין</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="leads-empty">אין לידים עדיין</div></td></tr>';
     pagination.innerHTML = '';
     return;
   }
@@ -5366,6 +5395,7 @@ function renderLeads() {
       <td class="ltr">${esc(l.email || '\u2014')}</td>
       <td>${esc(variantLabel)}</td>
       <td class="ltr mono">${formatDateTime(l.created_at)}</td>
+      <td class="lead-meta" title="${escAttr(formatLeadMeta(l.metadata))}">${esc(formatLeadMeta(l.metadata))}</td>
     </tr>`;
   }).join('');
 

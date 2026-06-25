@@ -72,18 +72,43 @@ test('a READ ticket shows the quiet "בטיפול" marker and no dot', () => {
 });
 
 test('a triage-failed ticket shows "לבדיקה ידנית" and no AI severity chip', () => {
-  const card = render({ id: '6', status: 'TRIAGE_FAILED', severity: 'high', user_urgency: 'blocking', body: 'b' });
+  const card = render({ id: '6', status: 'TRIAGE_FAILED', triage_error: 'x', user_urgency: 'blocking', body: 'b' });
   assert.ok(card.textContent.includes('לבדיקה ידנית'), 'manual-review flag');
   assert.ok(!card.textContent.includes('חומרה'), 'no AI severity label when triage failed');
   assert.ok(card.textContent.includes('דחיפות'), 'user urgency still shown');
   assert.ok(card.querySelector('.needdot'), 'still needs you');
 });
 
+test('a failed ticket KEEPS the "לבדיקה ידנית" flag even after it is marked READ', () => {
+  // durable: keyed on triage_error+no-severity, not the transient TRIAGE_FAILED status
+  const card = render({ id: 'f', status: 'READ', triage_error: 'haiku timed out', body: 'b' });
+  assert.ok(card.textContent.includes('לבדיקה ידנית'), 'manual-review cue survives being read');
+});
+
+test('a NEEDS_TRIAGE ticket (AI just has not run yet) is NOT flagged for manual review', () => {
+  const card = render({ id: 'n', status: 'NEEDS_TRIAGE', body: 'b' });
+  assert.ok(!card.textContent.includes('לבדיקה ידנית'), 'pending != failed');
+});
+
+test('an unexpected status is shown verbatim (fail loud, never silent)', () => {
+  const card = render({ id: 'u', status: 'ESCALATED', summary: 's', body: 'b' });
+  assert.ok(card.textContent.includes('ESCALATED'), 'unknown status surfaced, not hidden');
+  assert.doesNotThrow(() => render({ id: 'u2', status: null, summary: 's', body: 'b' }), 'null status does not crash');
+});
+
+test('an out-of-enum severity cannot inject extra class tokens onto the chip', () => {
+  const card = render({ id: 'x', status: 'TRIAGED', severity: 'high evil', summary: 's', body: 'b' });
+  const v = card.querySelector('.kv .v');
+  assert.ok(v, 'value element exists');
+  assert.ok(!v.classList.contains('evil'), 'no smuggled class token from an out-of-enum value');
+});
+
 // ---------- simplified status filter ----------
 
-test('the "NEW" filter groups NEEDS_TRIAGE + TRIAGED (both = "waiting for you")', () => {
+test('the "NEW" filter = every "waiting for you" status, incl. TRIAGE_FAILED (which wears the dot)', () => {
   assert.equal(matchesStatusFilter('NEEDS_TRIAGE', 'NEW'), true);
   assert.equal(matchesStatusFilter('TRIAGED', 'NEW'), true);
+  assert.equal(matchesStatusFilter('TRIAGE_FAILED', 'NEW'), true);   // wears the gold dot → must match the matching filter
   assert.equal(matchesStatusFilter('READ', 'NEW'), false);
   assert.equal(matchesStatusFilter('RESOLVED', 'NEW'), false);
 });

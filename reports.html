@@ -42,17 +42,22 @@
   .summary-full{color:var(--gold);font-weight:600;line-height:1.55;margin-bottom:10px;word-break:break-word}
   .row .summary .sub{color:var(--text-dim);font-size:.78rem;margin-top:5px}
   .badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-start;flex-shrink:0;max-width:46%}
-  .badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap;background:#23344d;color:#cdd9ea}
-  .st-NEEDS_TRIAGE{background:#3a3320;color:var(--gold)}
-  .st-TRIAGED{background:#1f3a5c;color:#cfe0ff}
-  .st-READ{background:#26303f;color:#9aa6b2}
-  .st-RESOLVED{background:#1f4030;color:#6fd99b}
-  .st-TRIAGE_FAILED{background:#4a2020;color:#ef8a8a}
-  .urg-blocking{background:#4a2020;color:#ef8a8a}
-  .urg-annoying{background:#3a3320;color:var(--gold)}
-  .sev-high{background:#4a2020;color:#ef8a8a}
-  .sev-medium{background:#3a3320;color:var(--gold)}
-  .sev-low{background:#26303f;color:#9cc2d6}
+  /* status as a cue, not a competing chip */
+  .title-row{display:flex;align-items:flex-start;gap:8px}
+  .title-row .title{flex:1;min-width:0}
+  .needdot{width:8px;height:8px;border-radius:50%;background:var(--gold);flex-shrink:0;margin-top:6px;box-shadow:0 0 0 3px rgba(245,200,66,0.15)}
+  .card.done{opacity:.55}
+  .status-q{color:var(--text-dim)}
+  .done-mark{color:#6fd99b;font-weight:600}
+  /* the two labeled chips + quiet category + manual-review flag */
+  .kv{display:inline-flex;align-items:center;gap:6px;background:#1a2c46;border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:11px;white-space:nowrap}
+  .kv .k{color:var(--text-dim);font-weight:500}
+  .kv .v{font-weight:700;color:#cdd9ea}
+  .kv .v.sev-high,.kv .v.urg-blocking{color:#ef8a8a}
+  .kv .v.sev-medium,.kv .v.urg-annoying{color:var(--gold)}
+  .kv .v.sev-low{color:#9cc2d6}
+  .cat{font-size:10.5px;color:var(--text-dim);border:1px solid var(--border);border-radius:6px;padding:2px 8px;white-space:nowrap}
+  .manual{font-size:11px;font-weight:700;color:#e6b25a;background:rgba(230,178,90,0.12);border:1px solid rgba(230,178,90,0.35);border-radius:8px;padding:4px 10px;white-space:nowrap}
 
   .detail{display:none;border-top:1px solid var(--border);padding:16px 18px;background:var(--navy-light)}
   .detail.open{display:block}
@@ -89,11 +94,10 @@
         <span id="count" class="count"></span>
         <select id="status-filter" onchange="renderList()">
           <option value="ALL">הכל</option>
-          <option value="NEEDS_TRIAGE">ממתין לסיווג</option>
-          <option value="TRIAGED">סווג</option>
-          <option value="READ">נקרא</option>
+          <option value="NEW">חדש (מחכה לך)</option>
+          <option value="READ">בטיפול</option>
           <option value="RESOLVED">טופל</option>
-          <option value="TRIAGE_FAILED">סיווג נכשל</option>
+          <option value="TRIAGE_FAILED">לבדיקה ידנית</option>
         </select>
       </div>
     </div>
@@ -172,9 +176,18 @@ async function loadTickets() {
   renderList();
 }
 
+// Maps the simplified filter value to ticket statuses. "NEW" groups the two
+// "waiting for you" states (NEEDS_TRIAGE + TRIAGED); the rest match one status.
+// Pure → unit-tested.
+function matchesStatusFilter(status, filter) {
+  if (filter === 'ALL') return true;
+  if (filter === 'NEW') return status === 'NEEDS_TRIAGE' || status === 'TRIAGED';
+  return status === filter;
+}
+
 function renderList() {
   const filter = document.getElementById('status-filter').value;
-  const rows = filter === 'ALL' ? allTickets : allTickets.filter(t => t.status === filter);
+  const rows = allTickets.filter(t => matchesStatusFilter(t.status, filter));
   const host = listEl();
   host.textContent = '';
   document.getElementById('count').textContent = rows.length + ' דיווחים';
@@ -189,7 +202,6 @@ function renderList() {
 // ONLY — never innerHTML. Ticket fields are attacker-controlled across tenants;
 // rendering them as text is the XSS defense for the super-admin's session.
 function renderFeedbackTicketCard(t) {
-  const STATUS = { NEEDS_TRIAGE:'חדש', TRIAGED:'סווג', READ:'נקרא', RESOLVED:'טופל', TRIAGE_FAILED:'סיווג נכשל' };
   const CATS = { bug:'באג', UX:'חוויית משתמש', 'feature-request':'בקשת פיצ׳ר', question:'שאלה', praise:'מחמאה' };
   const SEVS = { low:'נמוך', medium:'בינוני', high:'גבוה' };
   const URG = { blocking:'חוסם', annoying:'מעצבן' };
@@ -202,42 +214,59 @@ function renderFeedbackTicketCard(t) {
 
   const summary = document.createElement('div');
   summary.className = 'summary';
+  // title, with a gold "needs you" dot for tickets still waiting on the admin
+  const needsYou = t.status === 'NEEDS_TRIAGE' || t.status === 'TRIAGED' || t.status === 'TRIAGE_FAILED';
+  if (t.status === 'RESOLVED') card.className = 'card done';
+  const titleRow = document.createElement('div');
+  titleRow.className = 'title-row';
+  if (needsYou) {
+    const dot = document.createElement('span');
+    dot.className = 'needdot';
+    dot.title = 'מחכה לך';
+    titleRow.appendChild(dot);
+  }
   const title = document.createElement('div');
   title.className = 'title';
   title.textContent = t.summary || t.body || '(ללא תוכן)';
-  summary.appendChild(title);
+  titleRow.appendChild(title);
+  summary.appendChild(titleRow);
+
   const sub = document.createElement('div');
   sub.className = 'sub';
   const subBits = [];
   if (t.user_email) subBits.push(t.user_email);
   if (t.created_at) subBits.push(new Date(t.created_at).toLocaleString('he-IL'));
   sub.textContent = subBits.join('  ·  ');
+  // quiet status marker for the non-"new" states (the "new" ones use the dot)
+  if (t.status === 'READ' || t.status === 'RESOLVED') {
+    if (sub.textContent) sub.appendChild(document.createTextNode('  ·  '));
+    const m = document.createElement('span');
+    m.className = t.status === 'RESOLVED' ? 'done-mark' : 'status-q';
+    m.textContent = t.status === 'RESOLVED' ? '✓ טופל' : 'בטיפול';
+    sub.appendChild(m);
+  }
   summary.appendChild(sub);
   row.appendChild(summary);
 
+  // signals: two labeled chips (severity + urgency) + a quiet category tag.
   const badges = document.createElement('div');
   badges.className = 'badges';
-  const st = document.createElement('span');
-  st.className = 'badge st-' + (t.status || '');
-  st.textContent = STATUS[t.status] || t.status || '';
-  badges.appendChild(st);
+  function kvChip(kind, label, value, valClass) {
+    const c = document.createElement('span'); c.className = 'kv ' + kind;
+    c.appendChild(Object.assign(document.createElement('span'), { className: 'k', textContent: label }));
+    c.appendChild(Object.assign(document.createElement('span'), { className: 'v ' + valClass, textContent: value }));
+    return c;
+  }
+  if (t.status === 'TRIAGE_FAILED') {                 // AI couldn't classify → no severity/category
+    badges.appendChild(Object.assign(document.createElement('span'), { className: 'manual', textContent: 'לבדיקה ידנית' }));
+  } else if (t.severity) {
+    badges.appendChild(kvChip('sev', 'חומרה', SEVS[t.severity] || t.severity, 'sev-' + t.severity));
+  }
   if (t.user_urgency) {
-    const u = document.createElement('span');
-    u.className = 'badge urg-' + t.user_urgency;
-    u.textContent = URG[t.user_urgency] || t.user_urgency;
-    badges.appendChild(u);
+    badges.appendChild(kvChip('urg', 'דחיפות', URG[t.user_urgency] || t.user_urgency, 'urg-' + t.user_urgency));
   }
   if (t.category) {
-    const c = document.createElement('span');
-    c.className = 'badge';
-    c.textContent = CATS[t.category] || t.category;
-    badges.appendChild(c);
-  }
-  if (t.severity) {
-    const s = document.createElement('span');
-    s.className = 'badge sev-' + t.severity;
-    s.textContent = SEVS[t.severity] || t.severity;
-    badges.appendChild(s);
+    badges.appendChild(Object.assign(document.createElement('span'), { className: 'cat', textContent: CATS[t.category] || t.category }));
   }
   row.appendChild(badges);
   card.appendChild(row);

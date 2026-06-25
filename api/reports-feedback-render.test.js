@@ -57,9 +57,9 @@ test('body text is preserved verbatim as text content', () => {
   assert.ok(card.textContent.includes(XSS), 'payload survives as literal text');
 });
 
-test('pre-triage ticket shows the "new" status badge', () => {
+test('a pre-triage ticket shows the needs-you dot (status is a cue, not a word)', () => {
   const card = render({ id: '3', status: 'NEEDS_TRIAGE', body: 'hi' });
-  assert.ok(card.textContent.includes('חדש'));
+  assert.ok(card.querySelector('.needdot'), 'shows the needs-you dot');
 });
 
 test('resolved ticket exposes no action buttons', () => {

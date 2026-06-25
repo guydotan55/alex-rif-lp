@@ -1822,6 +1822,12 @@ async function handleBriefHeroUpload(file) {
   const fillEl = document.getElementById('briefHeroUploadProgressFill');
   const statusEl = document.getElementById('briefHeroUploadStatus');
 
+  // Clear any previous success state before re-uploading, so a failed
+  // re-upload can't masquerade as a successful one.
+  briefHeroImageUrl = null;
+  document.getElementById('briefHeroModeChoice').style.display = 'none';
+  document.getElementById('briefHeroSkipHint').style.display = '';
+
   const reader = new FileReader();
   reader.onload = (e) => { preview.src = e.target.result; zone.classList.add('has-image'); };
   reader.readAsDataURL(file);
@@ -1852,6 +1858,10 @@ async function handleBriefHeroUpload(file) {
     document.getElementById('briefHeroSkipHint').style.display = 'none';
   } catch (err) {
     console.error('Brief hero upload error:', err);
+    // Roll back any success state so a failed re-upload can't look like a success.
+    briefHeroImageUrl = null;
+    document.getElementById('briefHeroModeChoice').style.display = 'none';
+    document.getElementById('briefHeroSkipHint').style.display = '';
     fillEl.style.width = '100%';
     statusEl.textContent = 'שגיאה בהעלאה: ' + (err.message || 'Unknown error');
     statusEl.className = 'upload-status error';
@@ -1925,6 +1935,11 @@ async function handleFold2Upload(file) {
   const fillEl = document.getElementById('fold2UploadProgressFill');
   const statusEl = document.getElementById('fold2UploadStatus');
 
+  // Clear any previous success state before re-uploading, so a failed
+  // re-upload can't masquerade as a successful one.
+  fold2ImageUrl = null;
+  document.getElementById('fold2ModeChoice').style.display = 'none';
+
   // Preview
   const reader = new FileReader();
   reader.onload = (e) => { preview.src = e.target.result; zone.classList.add('has-image'); };
@@ -1955,6 +1970,9 @@ async function handleFold2Upload(file) {
     document.getElementById('fold2ModeChoice').style.display = 'block';
   } catch (err) {
     console.error('Fold2 upload error:', err);
+    // Roll back any success state so a failed re-upload can't look like a success.
+    fold2ImageUrl = null;
+    document.getElementById('fold2ModeChoice').style.display = 'none';
     fillEl.style.width = '100%';
     statusEl.textContent = 'שגיאה בהעלאה: ' + (err.message || 'Unknown error');
     statusEl.className = 'upload-status error';
@@ -1985,7 +2003,7 @@ function setupUpload(zoneId, inputId, previewId, progressId, fillId, statusId, i
     if (input.files.length) handleFile(input.files[0]);
   });
 
-  function handleFile(file) {
+  async function handleFile(file) {
     if (!file.type.startsWith('image/')) {
       showToast('נא לבחור קובץ תמונה');
       return;
@@ -2004,7 +2022,11 @@ function setupUpload(zoneId, inputId, previewId, progressId, fillId, statusId, i
     reader.readAsDataURL(file);
 
     // Upload to Supabase Storage
-    uploadToStorage(file, isQuestionnaireMode, progressId, fillId, statusId);
+    await uploadToStorage(file, isQuestionnaireMode, progressId, fillId, statusId);
+
+    // Clear the input so picking the SAME file again re-fires 'change' (lets the
+    // user retry the exact same file after a failed upload).
+    input.value = '';
   }
 }
 
@@ -2066,7 +2088,9 @@ async function uploadToStorage(file, isQuestionnaire, progressId, fillId, status
       briefUploadedImageUrl = null;
       document.getElementById('err-briefImage').classList.add('visible');
     }
-    fillEl.style.width = '100%';
+    // Reset the progress bar so it doesn't sit full-and-visible forever after a
+    // failure. Keep progressEl visible — the error status text lives inside it.
+    fillEl.style.width = '0%';
     const detail = err.message || err.error || err.statusCode || 'Unknown error';
     statusEl.textContent = `שגיאה בהעלאה: ${detail}`;
     statusEl.className = 'upload-status error';
@@ -2129,10 +2153,17 @@ async function generateSlug(name) {
   const base = transliterateToSlug(name);
 
   // Find existing slugs with same base to determine next number
-  const { data: existing } = await sb
+  const { data: existing, error: slugError } = await sb
     .from('projects')
     .select('slug')
     .like('slug', base + '%');
+
+  // A dropped error here would degrade to base+'-1' and surface a unique-constraint
+  // collision as a raw Postgres error on insert. Fail loud with a human message.
+  if (slugError) {
+    console.error('generateSlug lookup error:', slugError);
+    throw new Error('שגיאה ביצירת כתובת לדף — נסו שוב.');
+  }
 
   if (!existing || existing.length === 0) {
     return base + '-1';
@@ -2500,6 +2531,7 @@ async function remixField(btn, fieldName) {
 
   } catch (err) {
     console.error('Remix error:', err);
+    showToast('\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05D9\u05E4\u05D5\u05E8: ' + (err.message || '\u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1'));
     btn.textContent = '\u274C';
     setTimeout(() => {
       btn.textContent = '\u2728 \u05E9\u05E4\u05E8';
@@ -2519,12 +2551,23 @@ document.getElementById('brief_file').addEventListener('change', async function(
   const nameEl = document.getElementById('brief-file-name');
   nameEl.textContent = '\uD83D\uDCC4 ' + file.name;
 
+  // Clear any URL from a prior successful upload so a failed re-upload can't
+  // submit a stale brief_file_url.
+  delete this.dataset.uploadedUrl;
+
   const textarea = document.getElementById('briefText');
 
   if (file.name.endsWith('.txt')) {
     // Read text files directly
-    const text = await file.text();
-    textarea.value = (textarea.value ? textarea.value + '\n\n---\n\n' : '') + text;
+    try {
+      const text = await file.text();
+      textarea.value = (textarea.value ? textarea.value + '\n\n---\n\n' : '') + text;
+      nameEl.textContent = '✅ ' + file.name + ' נטען בהצלחה';
+    } catch (err) {
+      console.error('Brief txt read error:', err);
+      nameEl.textContent = '❌ שגיאה בקריאת הקובץ';
+      this.value = '';
+    }
   } else {
     // For PDF/DOCX, upload to Supabase Storage and store URL
     nameEl.textContent = '\u23F3 \u05DE\u05E2\u05DC\u05D4 ' + file.name + '...';
@@ -2541,6 +2584,8 @@ document.getElementById('brief_file').addEventListener('change', async function(
       nameEl.textContent = '\u2705 ' + file.name + ' \u05D4\u05D5\u05E2\u05DC\u05D4 \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4';
     } catch (err) {
       console.error('Upload error:', err);
+      // Drop any stale URL so a failed re-upload can't submit a prior success.
+      delete document.getElementById('brief_file').dataset.uploadedUrl;
       nameEl.textContent = '\u274C \u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D4\u05E2\u05DC\u05D0\u05D4: ' + err.message;
     }
   }

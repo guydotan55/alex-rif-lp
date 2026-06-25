@@ -893,7 +893,14 @@
 
   async function loadLpContent() {
     const { data, error } = await sb.from('lp_content').select('source,key,value');
-    if (error) { console.error('lp_content:', error); return; }
+    if (error) {
+      console.error('lp_content:', error);
+      ['c-cheb-err', 'c-alex-err'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = 'לא הצלחנו לטעון את תוכן הדפים. רעננו את הדף ונסו שוב.'; el.style.display = 'block'; }
+      });
+      return;
+    }
     (data||[]).forEach(row => {
       const prefix = row.source === 'cheburashka' ? 'c-cheb' : 'c-alex';
       const el = document.getElementById(prefix + '-' + row.key);

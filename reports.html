@@ -113,36 +113,48 @@ async function doLogout() { await sb.auth.signOut(); window.location.href = '/da
 const listEl = () => document.getElementById('tickets-list');
 
 (async function init() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) { window.location.href = '/dashboard'; return; }
-  if (session.user?.email) document.getElementById('user-email').textContent = session.user.email;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { window.location.href = '/dashboard'; return; }
+    if (session.user?.email) document.getElementById('user-email').textContent = session.user.email;
 
-  const { data: role, error: roleErr } = await sb.from('user_roles').select('role').eq('user_id', session.user.id).single();
-  // A transient/RLS error (anything but PGRST116 "no rows") must not become a
-  // permanent "super-admin only" lockout for a real super-admin — let them retry.
-  if (roleErr && roleErr.code !== 'PGRST116') {
-    console.error('[role-load] reports transient error:', roleErr);
+    const { data: role, error: roleErr } = await sb.from('user_roles').select('role').eq('user_id', session.user.id).single();
+    // A transient/RLS error (anything but PGRST116 "no rows") must not become a
+    // permanent "super-admin only" lockout for a real super-admin — let them retry.
+    if (roleErr && roleErr.code !== 'PGRST116') {
+      console.error('[role-load] reports transient error:', roleErr);
+      listEl().innerHTML = '';
+      listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.' }));
+      return;
+    }
+    if (!role || role.role !== 'super_admin') {
+      listEl().innerHTML = '';
+      listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'הדף הזה זמין לסופר-אדמין בלבד.' }));
+      return;
+    }
+    await loadTickets();
+  } catch (e) {
+    // A rejection here (getSession / role query / loadTickets) must never leave
+    // the page stuck on "טוען…" forever — surface a loud, retryable error.
+    console.error('[reports] init failed:', e);
     listEl().innerHTML = '';
-    listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.' }));
-    return;
+    listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'שגיאה בטעינת הדף. רעננו ונסו שוב.' }));
   }
-  if (!role || role.role !== 'super_admin') {
-    listEl().innerHTML = '';
-    listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'הדף הזה זמין לסופר-אדמין בלבד.' }));
-    return;
-  }
-  await loadTickets();
 })();
 
 async function loadTickets() {
   listEl().textContent = '';
   listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'טוען…' }));
+  // The count badge is derived from the list — clear it while (re)loading so a
+  // stale count can't linger over the spinner or survive an error below.
+  document.getElementById('count').textContent = '';
   const { data, error } = await sb.from('feedback_tickets')
     .select('*, feedback_attachments(*)')
     .order('created_at', { ascending: false });
   if (error) {
     listEl().textContent = '';
     listEl().appendChild(Object.assign(document.createElement('div'), { className: 'msg', textContent: 'שגיאה בטעינת הדיווחים: ' + error.message }));
+    document.getElementById('count').textContent = '';
     console.error('[reports] load failed:', error);
     return;
   }
@@ -250,8 +262,9 @@ function renderFeedbackTicketCard(t) {
   if (atts.length) {
     const wrap = document.createElement('div');
     wrap.className = 'atts';
+    let failed = 0;                               // attachments that exist but whose signed URL failed
     for (const a of atts) {
-      if (!a.signedUrl) continue;
+      if (!a.signedUrl) { if (a.storage_path) failed++; continue; }
       const link = document.createElement('a');
       link.href = a.signedUrl; link.target = '_blank'; link.rel = 'noopener';
       const img = document.createElement('img');
@@ -261,6 +274,15 @@ function renderFeedbackTicketCard(t) {
       link.appendChild(img); wrap.appendChild(link);
     }
     if (wrap.children.length) detail.appendChild(wrap);
+    // Don't let attachments vanish silently — tell the admin some couldn't load.
+    if (failed) {
+      const note = document.createElement('div');
+      note.className = 'err';
+      note.textContent = failed === 1
+        ? 'קובץ מצורף אחד לא נטען. רעננו ונסו שוב.'
+        : failed + ' קבצים מצורפים לא נטענו. רעננו ונסו שוב.';
+      detail.appendChild(note);
+    }
   }
 
   // מידע טכני — everything useful for debugging, in one block (textContent only).

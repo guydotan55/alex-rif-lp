@@ -2487,10 +2487,18 @@ async function toggleTestLP(checkbox) {
   const projectName = checkbox.dataset.name;
 
   if (checkbox.checked) {
-    const { data: variants } = await sb.from('project_variants')
+    const { data: variants, error } = await sb.from('project_variants')
       .select('id, variant_slug, variant_name, is_default')
       .eq('project_id', projectId)
       .eq('status', 'published');
+
+    // A query failure must not look like "no published variants" — fail loud.
+    if (error) {
+      console.error('toggleTestLP failed:', error.message);
+      checkbox.checked = false;
+      alert('טעינת הוריאנטים נכשלה. רעננו ונסו שוב.');
+      return;
+    }
 
     const defaultVariant = variants?.find(v => v.is_default) || variants?.[0];
     if (!defaultVariant) {
@@ -2729,43 +2737,51 @@ async function createTest() {
     return;
   }
 
-  const { data: test, error: testErr } = await sb.from('tests').insert({
-    name,
-    slug,
-    community_id: communityId,
-    status: 'draft',
-    created_by: user.id,
-    mode: testModalMode,
-    baseline_cvr: baselineCrPct / 100,
-    mde: mdePct / 100,
-    expected_cpc: cpc,
-    target_sample_size: targetN
-  }).select().single();
+  // In-flight guard: disable the submit button for the whole multi-step insert
+  // so a double-click can't create duplicate tests. Re-enabled in finally.
+  const submitBtn = document.getElementById('btn-create-test-submit');
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const { data: test, error: testErr } = await sb.from('tests').insert({
+      name,
+      slug,
+      community_id: communityId,
+      status: 'draft',
+      created_by: user.id,
+      mode: testModalMode,
+      baseline_cvr: baselineCrPct / 100,
+      mde: mdePct / 100,
+      expected_cpc: cpc,
+      target_sample_size: targetN
+    }).select().single();
 
-  if (testErr) {
-    console.error('Create test error:', testErr);
-    alert('שגיאה ביצירת הטסט');
-    return;
+    if (testErr) {
+      console.error('Create test error:', testErr);
+      alert('שגיאה ביצירת הטסט');
+      return;
+    }
+
+    const tvRows = testModalSelectedLPs.map((lp, i) => ({
+      test_id: test.id,
+      project_id: lp.projectId,
+      variant_id: lp.variantId,
+      weight: lp.weight,
+      label: String.fromCharCode(65 + i)
+    }));
+
+    const { error: tvErr } = await sb.from('test_variants').insert(tvRows);
+    if (tvErr) {
+      console.error('Create test variants error:', tvErr);
+      alert('שגיאה ביצירת וריאנטים לטסט');
+      return;
+    }
+
+    closeCreateTestModal();
+    await loadTests();
+    selectTest(test.id);
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
-
-  const tvRows = testModalSelectedLPs.map((lp, i) => ({
-    test_id: test.id,
-    project_id: lp.projectId,
-    variant_id: lp.variantId,
-    weight: lp.weight,
-    label: String.fromCharCode(65 + i)
-  }));
-
-  const { error: tvErr } = await sb.from('test_variants').insert(tvRows);
-  if (tvErr) {
-    console.error('Create test variants error:', tvErr);
-    alert('שגיאה ביצירת וריאנטים לטסט');
-    return;
-  }
-
-  closeCreateTestModal();
-  await loadTests();
-  selectTest(test.id);
 }
 
 async function saveTestEdits(name) {
@@ -3274,18 +3290,50 @@ function exportProjectLeadsCsv() {
   downloadCsv(csvFileName(selectedProject && selectedProject.name), leadsToCsv(rows));
 }
 
-function copyTestUrl(e) {
-  const link = document.getElementById('test-url-link');
-  navigator.clipboard.writeText(link.href);
-  const btn = e ? e.target : document.querySelector('#test-url-bar button');
+// Fallback copy for non-secure contexts where navigator.clipboard is unavailable
+// or rejects. Returns true on success.
+function _legacyCopy(text) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.insetInlineStart = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) {
+    console.error('legacy copy failed:', e);
+    return false;
+  }
+}
+
+function _showCopied(btn) {
   btn.textContent = 'הועתק!';
   setTimeout(() => btn.textContent = 'העתק', 1500);
 }
 
+function copyTestUrl(e) {
+  const link = document.getElementById('test-url-link');
+  const btn = e ? e.target : document.querySelector('#test-url-bar button');
+  navigator.clipboard.writeText(link.href).then(() => {
+    _showCopied(btn);
+  }).catch(err => {
+    console.error('copyTestUrl failed:', err);
+    if (_legacyCopy(link.href)) _showCopied(btn);
+    else showToast('לא הצלחנו להעתיק את הקישור. העתיקו ידנית.', 'error');
+  });
+}
+
 function copyText(btn, text) {
-  navigator.clipboard.writeText(text);
-  btn.textContent = 'הועתק!';
-  setTimeout(() => btn.textContent = 'העתק', 1500);
+  navigator.clipboard.writeText(text).then(() => {
+    _showCopied(btn);
+  }).catch(err => {
+    console.error('copyText failed:', err);
+    if (_legacyCopy(text)) _showCopied(btn);
+    else showToast('לא הצלחנו להעתיק. העתיקו ידנית.', 'error');
+  });
 }
 
 async function editVariantSpend(variantId, currentSpend) {
@@ -4467,11 +4515,19 @@ async function loadEditableContent() {
   const token = (await sb.auth.getSession())?.data?.session?.access_token;
   const params = new URLSearchParams({ project_id: selectedProject.id });
   if (selectedVariant) params.set('variant_id', selectedVariant.id);
-  const resp = await fetch(`/api/save-content?${params}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  const data = resp.ok ? await resp.json() : null;
-  const error = resp.ok ? null : { message: 'Failed to load content' };
+  let data, error;
+  try {
+    const resp = await fetch(`/api/save-content?${params}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    data = resp.ok ? await resp.json() : null;
+    error = resp.ok ? null : { message: 'Failed to load content' };
+  } catch (e) {
+    // A rejected fetch (network/offline) must clear the spinner, not hang on it.
+    console.error('editable_content fetch failed:', e);
+    container.innerHTML = '<div style="padding:20px;color:var(--text-dim);">טעינת התוכן נכשלה. בדקו את החיבור לאינטרנט ונסו שוב.</div>';
+    return;
+  }
 
   if (error) {
     container.innerHTML = '<div style="padding:20px;color:var(--text-dim);">שגיאה בטעינת התוכן</div>';
@@ -5730,9 +5786,13 @@ function renderAiResult(results, direction) {
   saveBtn.style.cssText = 'flex:1;justify-content:center;';
   saveBtn.textContent = '\uD83D\uDCBE שמור לספרייה';
   saveBtn.onclick = async () => {
-    await saveToLibrary(r.url, 'imagen', r.source_meta || {});
-    saveBtn.textContent = '✓ נשמר!';
-    saveBtn.disabled = true;
+    const ok = await saveToLibrary(r.url, 'imagen', r.source_meta || {});
+    if (ok) {
+      saveBtn.textContent = '✓ נשמר!';
+      saveBtn.disabled = true;
+    } else {
+      showToast('שמירת התמונה לספרייה נכשלה. נסו שוב.', 'error');
+    }
   };
   btnRow.appendChild(saveBtn);
   container.appendChild(btnRow);
@@ -5809,7 +5869,7 @@ async function applySelectedImage() {
 
 // ── Community Image Library ──────────────────────────────
 async function saveToLibrary(imageUrl, source, sourceMeta) {
-  if (!selectedProject?.community_id) return;
+  if (!selectedProject?.community_id) return false;
   const { data: { session } } = await sb.auth.getSession();
   const { error } = await sb.from('community_image_library').upsert({
     community_id: selectedProject.community_id,
@@ -5818,7 +5878,11 @@ async function saveToLibrary(imageUrl, source, sourceMeta) {
     source_meta: sourceMeta,
     added_by: session?.user?.id,
   }, { onConflict: 'community_id,image_url', ignoreDuplicates: true });
-  if (error) console.error('saveToLibrary failed:', error.message);
+  if (error) {
+    console.error('saveToLibrary failed:', error.message);
+    return false;
+  }
+  return true;
 }
 
 async function loadLibrary() {
@@ -5830,14 +5894,24 @@ async function loadLibrary() {
   empty.style.display = 'none';
   loading.style.display = 'block';
 
-  const { data: images } = await sb.from('community_image_library')
+  const { data: images, error } = await sb.from('community_image_library')
     .select('id, image_url, source, source_meta')
     .eq('community_id', selectedProject.community_id)
     .order('created_at', { ascending: false });
 
   loading.style.display = 'none';
 
+  // A query failure must not masquerade as "no images yet" — surface it loudly.
+  if (error) {
+    console.error('loadLibrary failed:', error.message);
+    empty.textContent = 'טעינת הספרייה נכשלה. רעננו ונסו שוב.';
+    empty.style.display = 'block';
+    showToast('טעינת ספריית התמונות נכשלה. נסו שוב.', 'error');
+    return;
+  }
+
   if (!images || images.length === 0) {
+    empty.textContent = 'אין תמונות שמורות — תמונות שתבחרו יישמרו כאן אוטומטית';
     empty.style.display = 'block';
     return;
   }

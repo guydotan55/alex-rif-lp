@@ -1813,6 +1813,12 @@ function setBriefHeroImageMode(mode) {
 }
 
 async function handleBriefHeroUpload(file) {
+  // Clear any previous success state up front — BEFORE the validation guards too —
+  // so an invalid OR failed re-upload can't masquerade as a successful one.
+  briefHeroImageUrl = null;
+  document.getElementById('briefHeroModeChoice').style.display = 'none';
+  document.getElementById('briefHeroSkipHint').style.display = '';
+
   if (!file.type.startsWith('image/')) { showToast('נא לבחור קובץ תמונה'); return; }
   if (file.size > 5 * 1024 * 1024) { showToast('הקובץ גדול מדי — עד 5MB'); return; }
 
@@ -1821,12 +1827,6 @@ async function handleBriefHeroUpload(file) {
   const progressEl = document.getElementById('briefHeroUploadProgress');
   const fillEl = document.getElementById('briefHeroUploadProgressFill');
   const statusEl = document.getElementById('briefHeroUploadStatus');
-
-  // Clear any previous success state before re-uploading, so a failed
-  // re-upload can't masquerade as a successful one.
-  briefHeroImageUrl = null;
-  document.getElementById('briefHeroModeChoice').style.display = 'none';
-  document.getElementById('briefHeroSkipHint').style.display = '';
 
   const reader = new FileReader();
   reader.onload = (e) => { preview.src = e.target.result; zone.classList.add('has-image'); };
@@ -1926,6 +1926,11 @@ async function handleHeroUpload(file) {
 }
 
 async function handleFold2Upload(file) {
+  // Clear any previous success state up front — BEFORE the validation guards too —
+  // so an invalid OR failed re-upload can't masquerade as a successful one.
+  fold2ImageUrl = null;
+  document.getElementById('fold2ModeChoice').style.display = 'none';
+
   if (!file.type.startsWith('image/')) { showToast('נא לבחור קובץ תמונה'); return; }
   if (file.size > 5 * 1024 * 1024) { showToast('הקובץ גדול מדי — עד 5MB'); return; }
 
@@ -1934,11 +1939,6 @@ async function handleFold2Upload(file) {
   const progressEl = document.getElementById('fold2UploadProgress');
   const fillEl = document.getElementById('fold2UploadProgressFill');
   const statusEl = document.getElementById('fold2UploadStatus');
-
-  // Clear any previous success state before re-uploading, so a failed
-  // re-upload can't masquerade as a successful one.
-  fold2ImageUrl = null;
-  document.getElementById('fold2ModeChoice').style.display = 'none';
 
   // Preview
   const reader = new FileReader();

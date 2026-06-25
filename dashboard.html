@@ -2344,6 +2344,7 @@ async function loadTests() {
 // ── Test Creation Modal ──────────────────────────────────
 let testModalSelectedLPs = []; // array of { projectId, variantId, projectName }
 let testEditMode = false; // true when editing an existing draft test
+let creatingTest = false; // in-flight lock for createTest() — blocks double-submit / duplicate tests
 let testModalMode = 'split'; // 'split', 'separate', or 'both'
 
 function setTestMode(mode) {
@@ -2687,6 +2688,7 @@ async function updatePlannerResults() {
 function _updateActivateGating() {
   const btn = document.getElementById('btn-create-test-submit');
   if (!btn) return;
+  if (creatingTest) return; // a create is in flight — don't clear the in-flight lock
   const cvr = parseFloat(document.getElementById('planner-baseline-cvr').value) / 100;
   const mde = parseFloat(document.getElementById('planner-mde').value) / 100;
   const cpc = parseFloat(document.getElementById('planner-cpc').value);
@@ -2721,27 +2723,31 @@ async function createTest() {
   const communityId = firstProject?.community_id;
   if (!communityId) { alert('שגיאה: לא נמצאה קהילה'); return; }
 
-  const { data: { user } } = await sb.auth.getUser();
-
-  const baselineCrPct = parseFloat(document.getElementById('planner-baseline-cvr').value);
-  const mdePct        = parseFloat(document.getElementById('planner-mde').value);
-  const cpc           = parseFloat(document.getElementById('planner-cpc').value);
-  if (!(baselineCrPct > 0 && mdePct > 0 && cpc > 0)) {
-    alert('נא למלא את כל שדות תכנון התקציב');
-    return;
-  }
-  const numVariants = testModalSelectedLPs.length;
-  const targetN = plannerSampleSize(baselineCrPct / 100, mdePct / 100, numVariants);
-  if (targetN === null) {
-    alert('השיפור גדול מדי עבור אחוז ההמרה הצפוי. הקטן את ה-MDE.');
-    return;
-  }
-
-  // In-flight guard: disable the submit button for the whole multi-step insert
-  // so a double-click can't create duplicate tests. Re-enabled in finally.
+  // In-flight guard, set SYNCHRONOUSLY before the first await so two rapid clicks
+  // can't both reach the insert and create duplicate tests. The boolean (not just
+  // btn.disabled) is also honored by _updateActivateGating, so derived re-gating
+  // can't clear the lock mid-insert. Always cleared in finally.
+  if (creatingTest) return;
+  creatingTest = true;
   const submitBtn = document.getElementById('btn-create-test-submit');
   if (submitBtn) submitBtn.disabled = true;
   try {
+    const { data: { user } } = await sb.auth.getUser();
+
+    const baselineCrPct = parseFloat(document.getElementById('planner-baseline-cvr').value);
+    const mdePct        = parseFloat(document.getElementById('planner-mde').value);
+    const cpc           = parseFloat(document.getElementById('planner-cpc').value);
+    if (!(baselineCrPct > 0 && mdePct > 0 && cpc > 0)) {
+      alert('נא למלא את כל שדות תכנון התקציב');
+      return;
+    }
+    const numVariants = testModalSelectedLPs.length;
+    const targetN = plannerSampleSize(baselineCrPct / 100, mdePct / 100, numVariants);
+    if (targetN === null) {
+      alert('השיפור גדול מדי עבור אחוז ההמרה הצפוי. הקטן את ה-MDE.');
+      return;
+    }
+
     const { data: test, error: testErr } = await sb.from('tests').insert({
       name,
       slug,
@@ -2780,6 +2786,7 @@ async function createTest() {
     await loadTests();
     selectTest(test.id);
   } finally {
+    creatingTest = false;
     if (submitBtn) submitBtn.disabled = false;
   }
 }

@@ -149,7 +149,9 @@
 
   .field-select {
     width: 100%;
-    padding: 12px 16px;
+    /* extra inline-start (physical-left under dir=rtl) padding reserves room for the
+       caret at background-position:left so it never overlaps the Hebrew text */
+    padding: 12px 16px 12px 36px;
     background: var(--navy);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -694,15 +696,21 @@ async function doLogin() {
   }
 
   btn.textContent = 'שולח...';
-  const { error } = await sb.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.origin + '/settings' }
-  });
-  if (error) {
-    showErr('שגיאה: ' + error.message);
+  try {
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin + '/settings' }
+    });
+    if (error) {
+      showErr('שגיאה: ' + error.message);
+      btn.disabled = false; btn.textContent = 'שלחו לי קישור';
+    } else {
+      document.getElementById('login-form-magic').innerHTML = '<p style="text-align:center;color:var(--gold);font-size:1rem;padding:16px 0;">שלחנו קישור לאימייל שלכם!<br>לחצו עליו כדי להיכנס.</p>';
+    }
+  } catch (e) {
+    // signInWithOtp rejected (network) — reset the button instead of leaving it stuck on "שולח..."
+    showErr('לא הצלחנו לשלוח את הקישור. בדקו את החיבור ונסו שוב.');
     btn.disabled = false; btn.textContent = 'שלחו לי קישור';
-  } else {
-    document.getElementById('login-form-magic').innerHTML = '<p style="text-align:center;color:var(--gold);font-size:1rem;padding:16px 0;">שלחנו קישור לאימייל שלכם!<br>לחצו עליו כדי להיכנס.</p>';
   }
 }
 
@@ -713,7 +721,8 @@ function showErr(msg) {
 }
 
 async function doLogout() {
-  await sb.auth.signOut();
+  const { error } = await sb.auth.signOut();
+  if (error) { showToast('לא הצלחנו להתנתק. נסו שוב.', 'error'); return; }
   document.getElementById('settings').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
 }
@@ -733,10 +742,18 @@ async function showSettings() {
   document.getElementById('user-email').textContent = session.user.email || '';
 
   // Fetch user role
-  const { data: roleData } = await sb.from('user_roles')
+  const { data: roleData, error: roleErr } = await sb.from('user_roles')
     .select('role, organization_id, community_id, email')
     .eq('user_id', session.user.id)
     .single();
+
+  // A transient/RLS error (anything but PGRST116 "no rows") must NOT log a valid
+  // admin out — surface it and let them retry instead of treating it as "no role".
+  if (roleErr && roleErr.code !== 'PGRST116') {
+    console.error('[role-load] settings transient error:', roleErr);
+    showErr('לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.');
+    return;
+  }
 
   if (!roleData) {
     await sb.auth.signOut();
@@ -812,6 +829,10 @@ async function loadCommunities() {
     communities = data.communities || data || [];
     renderCommunities();
   } catch (e) {
+    // Clear the stale list so derived UI (the invite-modal קהילה dropdown) can't be
+    // built from data the table just failed to load.
+    console.error('[load-communities]', e);
+    communities = [];
     wrap.innerHTML = '<div class="empty-state">שגיאה בטעינת קהילות: ' + e.message + '</div>';
   }
 }
@@ -930,6 +951,9 @@ async function loadUsers() {
     users = data.users || data || [];
     renderUsers();
   } catch (e) {
+    // Clear the stale list so the users table never shows rows the reload just failed on.
+    console.error('[load-users]', e);
+    users = [];
     wrap.innerHTML = '<div class="empty-state">שגיאה בטעינת משתמשים: ' + e.message + '</div>';
   }
 }

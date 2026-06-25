@@ -182,6 +182,7 @@ export function buildInjectedScript(projectId, variantId, testId, anonKey, supab
             action: "meta_capi",
             event_name: "CompleteRegistration",
             event_id: eventId,
+            project_id: PROJECT_ID,
             email: email,
             source_url: window.location.href,
             fbc: fbcCookie,
@@ -249,7 +250,14 @@ window.__twemojiParse = function(node) {
     };
     if (VARIANT_ID) row.variant_id = VARIANT_ID;
     if (TEST_ID) row.test_id = TEST_ID;
-    sb.from("analytics_events").insert(row).then(function() {});
+    // Analytics is best-effort (we never block the visitor on it), but a failure must
+    // not be invisible — log it so a silently-lost event (e.g. an undercounted
+    // lead_captured) is at least diagnosable. Per CLAUDE.md: fail loud, never silent.
+    sb.from("analytics_events").insert(row).then(function(result) {
+      if (result && result.error) console.error("analytics_events insert error (" + eventType + "):", result.error);
+    }, function(err) {
+      console.error("analytics_events insert failed (" + eventType + "):", err);
+    });
   }
 
   trackEvent("page_view", {
@@ -287,12 +295,12 @@ window.__twemojiParse = function(node) {
 
   var form = document.getElementById("lp-email-form") || document.querySelector("form");
   if (form) {
+    var submitting = false; // in-flight guard — survives across submit events, works even with no submit button
     form.addEventListener("submit", function(e) {
       e.preventDefault();
+      if (submitting) return;
 
       var emailInput = form.querySelector('input[type="email"], input[name="email"]');
-      var nameInput = form.querySelector('input[name="name"]');
-      var phoneInput = form.querySelector('input[name="phone"]');
 
       var email = emailInput ? emailInput.value.trim() : "";
       if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
@@ -300,6 +308,9 @@ window.__twemojiParse = function(node) {
         return;
       }
 
+      // email / first_name / last_name / phone map to dedicated columns; every
+      // OTHER named field on the form is swept into metadata (jsonb) so the
+      // customer can collect arbitrary extra details later with no schema change.
       var leadData = {
         email: email,
         project_id: PROJECT_ID,
@@ -307,12 +318,91 @@ window.__twemojiParse = function(node) {
       };
       if (VARIANT_ID) leadData.variant_id = VARIANT_ID;
       if (TEST_ID) leadData.test_id = TEST_ID;
-      if (nameInput && nameInput.value.trim()) leadData.name = nameInput.value.trim();
-      if (phoneInput && phoneInput.value.trim()) leadData.phone = phoneInput.value.trim();
+
+      var firstNameInput = form.querySelector('input[name="first_name"]');
+      var lastNameInput  = form.querySelector('input[name="last_name"]');
+      var phoneInput     = form.querySelector('input[name="phone"], input[type="tel"]');
+      if (firstNameInput && firstNameInput.value.trim()) leadData.first_name = firstNameInput.value.trim();
+      if (lastNameInput && lastNameInput.value.trim())   leadData.last_name  = lastNameInput.value.trim();
+      if (phoneInput && phoneInput.value.trim())          leadData.phone     = phoneInput.value.trim();
+
+      // Sweep every OTHER named field into metadata. Skip the dedicated columns —
+      // by their ACTUAL matched field name, so an email/phone matched via type=
+      // (e.g. <input type="tel" name="mobile">) isn't ALSO duplicated here — plus
+      // control/hidden inputs (CSRF/honeypot/UTM noise) and disabled fields.
+      // Same-name fields (checkbox groups, multi-selects) accumulate into an array
+      // so a marketer's multi-value custom field isn't silently collapsed.
+      var RESERVED = { email: 1, first_name: 1, last_name: 1, phone: 1 };
+      [emailInput, firstNameInput, lastNameInput, phoneInput].forEach(function(el) {
+        if (el && el.name) RESERVED[el.name] = 1;
+      });
+      var SKIP_TYPES = { hidden: 1, password: 1, file: 1, submit: 1, button: 1, reset: 1, image: 1 };
+      var metadata = {};
+      function addMeta(key, val) {
+        if (metadata[key] === undefined) { metadata[key] = val; return; }
+        if (!Array.isArray(metadata[key])) metadata[key] = [metadata[key]];
+        metadata[key].push(val);
+      }
+      form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function(field) {
+        var key = field.name;
+        if (!key || RESERVED[key] || field.disabled || SKIP_TYPES[field.type]) return;
+        if (field.type === "checkbox") {
+          if (!field.checked) return; // unchecked = no value, like an empty text field
+          // explicit value="..." kept verbatim; a bare checkbox (default value "on") records true
+          addMeta(key, field.hasAttribute("value") ? field.value : true);
+        } else if (field.type === "radio") {
+          if (!field.checked) return;
+          addMeta(key, field.value);
+        } else if (field.tagName === "SELECT" && field.multiple) {
+          Array.prototype.forEach.call(field.selectedOptions || [], function(o) { addMeta(key, o.value); });
+        } else {
+          var val = (field.value || "").trim();
+          if (val === "") return;
+          addMeta(key, val);
+        }
+      });
+      // metadata is a best-effort catch-all and the column is size-capped server-side
+      // (~20 KB). NEVER let an oversized blob block the real lead: trim long string
+      // values, and if the whole thing is still too big, drop metadata entirely and
+      // still save the lead (email/name/phone live in their own, uncapped columns).
+      if (Object.keys(metadata).length) {
+        Object.keys(metadata).forEach(function(k) {
+          if (typeof metadata[k] === "string" && metadata[k].length > 2000) metadata[k] = metadata[k].slice(0, 2000);
+        });
+        // 9000 chars stays under 20 KB even if every char is 2-byte (e.g. Hebrew).
+        if (JSON.stringify(metadata).length <= 9000) leadData.metadata = metadata;
+      }
+
+      // Guard against a double-submit creating two rows while the insert is in flight.
+      // Prefer an explicit submit control; only fall back to a typeless <button>
+      // (defaults to submit per spec) so a leading decorative button isn't disabled.
+      var submitBtn = form.querySelector('button[type="submit"], input[type="submit"]')
+                   || form.querySelector('button:not([type])');
+      submitting = true;
+      if (submitBtn) submitBtn.disabled = true;
+
+      // Fail loud: if the lead does NOT persist, never pretend it did. We do not
+      // fire lead_captured (that would inflate the dashboard's lead count and mask
+      // the failure) and we do not show the thank-you — we surface a retry message.
+      function showLeadError() {
+        submitting = false;
+        if (submitBtn) submitBtn.disabled = false;
+        var errEl = document.getElementById("lp-lead-error");
+        if (!errEl) {
+          errEl = document.createElement("div");
+          errEl.id = "lp-lead-error";
+          errEl.setAttribute("role", "alert");
+          errEl.style.cssText = "margin-top:12px;padding:10px 14px;border-radius:8px;background:#fdecea;color:#b71c1c;font-size:14px;text-align:center;";
+          form.appendChild(errEl);
+        }
+        errEl.textContent = "אופס, לא הצלחנו לשמור את הפרטים. נסו שוב בעוד רגע.";
+      }
 
       sb.from("leads").insert(leadData).then(function(result) {
         if (result.error) {
           console.error("Lead insert error:", result.error);
+          showLeadError();
+          return;
         }
 
         trackEvent("lead_captured", { email: email });
@@ -335,6 +425,10 @@ window.__twemojiParse = function(node) {
           form.innerHTML = '<div style="text-align:center;padding:32px 16px;"><p style="font-size:1.4em;font-weight:700;margin-bottom:8px;">Thank you!</p><p>We received your details.</p></div>';
           __twemojiParse(form);
         }
+      }, function(err) {
+        // Network / transport rejection (insert never reached the DB).
+        console.error("Lead insert failed:", err);
+        showLeadError();
       });
     });
   }
@@ -402,18 +496,23 @@ export async function fetchAndRenderVariant(projectId, variantId, testId, projec
   }
 
   const projRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(projectId)}&select=email_enabled&limit=1`,
+    `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(projectId)}&select=email_enabled,meta_pixel_id&limit=1`,
     { headers }
   );
   let emailEnabled = false;
+  let metaPixelId = META_PIXEL_ID; // per-project override below; null/empty => global
   if (projRes.ok) {
     const projs = await projRes.json();
-    emailEnabled = projs.length > 0 && projs[0].email_enabled === true;
+    if (projs.length > 0) {
+      emailEnabled = projs[0].email_enabled === true;
+      const perProject = (projs[0].meta_pixel_id || "").toString().trim();
+      if (perProject) metaPixelId = perProject;
+    }
   }
 
   const injectedScript = buildInjectedScript(
     projectId, variantId, testId,
-    SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled, META_PIXEL_ID
+    SUPABASE_ANON_KEY, SUPABASE_URL, emailEnabled, metaPixelId
   );
 
   if (html.includes("</body>")) {

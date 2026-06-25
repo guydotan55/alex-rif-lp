@@ -965,6 +965,12 @@
   }
 
   /* ── Leads Table ─────────────────────────────────────── */
+  .csv-dl-btn {
+    background: transparent; border: 1px solid var(--gold); color: var(--gold);
+    border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; font-family: inherit;
+  }
+  .csv-dl-btn:hover { background: rgba(245, 200, 66, 0.12); }
   .leads-table-wrap { overflow-x: auto; }
   .leads-table {
     width: 100%;
@@ -1541,6 +1547,7 @@
               <div class="gen-spinner"></div>
               <div class="gen-progress-text">מייצר את דף הנחיתה...</div>
               <div class="gen-progress-sub">התהליך עשוי לקחת 30-60 שניות</div>
+              <button class="btn-action danger" id="btn-cancel-gen" onclick="cancelGenerateLP()" style="margin-top:8px;">ביטול</button>
             </div>
           </div>
         </div>
@@ -1595,7 +1602,7 @@
           <div style="position:relative; max-width:200px;">
             <input type="number" id="settings-target-cpl" min="0" max="10000" step="0.5" placeholder="40" dir="ltr"
               style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;">
-            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">₪</span>
+            <span style="position:absolute; right:10px; top:8px; color:var(--text-dim); font-size:14px;">₪</span>
           </div>
           <div style="color:var(--text-dim); font-size:11px; margin-top:6px; line-height:1.5;">
             מעל זה, ליד עולה יותר ממה שהוא שווה. כלל אצבע: 1/3 עד 1/2 מהתרומה הממוצעת. למשל: תרומה ממוצעת ₪120 → CPL ₪40-60.
@@ -1658,12 +1665,13 @@
                 <div class="card-title">לידים</div>
                 <div class="card-sub" id="leads-count-label"></div>
               </div>
+              <button class="csv-dl-btn" onclick="exportProjectLeadsCsv()">&#8595; הורדה כקובץ CSV</button>
             </div>
             <div class="leads-table-wrap">
               <table class="leads-table">
-                <thead><tr><th>מייל</th><th>וריאנט</th><th>תאריך</th></tr></thead>
+                <thead><tr><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>מייל</th><th>וריאנט</th><th>תאריך</th></tr></thead>
                 <tbody id="leads-tbody">
-                  <tr><td colspan="3"><div class="loading-block"><div class="small-spin"></div> טוען...</div></td></tr>
+                  <tr><td colspan="6"><div class="loading-block"><div class="small-spin"></div> טוען...</div></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1733,10 +1741,11 @@
                   <div class="card-title">לידים מהטסט</div>
                   <div class="card-sub" id="test-leads-count-label"></div>
                 </div>
+                <button class="csv-dl-btn" onclick="exportTestLeadsCsv()">&#8595; הורדה כקובץ CSV</button>
               </div>
               <div class="leads-table-wrap">
                 <table class="leads-table">
-                  <thead><tr><th>מייל</th><th>דף נחיתה</th><th>תאריך</th></tr></thead>
+                  <thead><tr><th>שם פרטי</th><th>שם משפחה</th><th>טלפון</th><th>מייל</th><th>דף נחיתה</th><th>תאריך</th></tr></thead>
                   <tbody id="test-leads-tbody"></tbody>
                 </table>
               </div>
@@ -1907,7 +1916,7 @@
             <input type="number" id="planner-baseline-cvr" min="0.1" max="50" step="0.1" placeholder="3.0" value="3.0" dir="ltr"
               style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
               oninput="updatePlannerResults()">
-            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">%</span>
+            <span style="position:absolute; right:10px; top:8px; color:var(--text-dim); font-size:14px;">%</span>
           </div>
         </div>
         <div style="flex:1;">
@@ -1919,7 +1928,7 @@
             <input type="number" id="planner-mde" min="5" max="200" step="1" placeholder="20" value="100" dir="ltr"
               style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
               oninput="updatePlannerResults()">
-            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">%</span>
+            <span style="position:absolute; right:10px; top:8px; color:var(--text-dim); font-size:14px;">%</span>
           </div>
         </div>
         <div style="flex:1;">
@@ -1931,7 +1940,7 @@
             <input type="number" id="planner-cpc" min="0.1" max="100" step="0.1" placeholder="3.5" value="3" dir="ltr"
               style="width:100%; padding:8px 28px 8px 10px; background:var(--navy-card); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--white); font-family:'Heebo',sans-serif; font-size:14px; box-sizing:border-box; text-align:left;"
               oninput="updatePlannerResults()">
-            <span style="position:absolute; left:10px; top:8px; color:var(--text-dim); font-size:14px;">₪</span>
+            <span style="position:absolute; right:10px; top:8px; color:var(--text-dim); font-size:14px;">₪</span>
           </div>
         </div>
       </div>
@@ -2012,6 +2021,9 @@ const PAGE_SIZE = 20;
 let projectVariants = [];
 let selectedVariant = null;
 let compareMode = false;
+// LP-generation abort control (cancel button + 90s timeout)
+let genController = null;
+let genTimedOut = false;
 
 // ── Tests State ──────────────────────────────────────────
 let sidebarMode = 'projects'; // 'projects' or 'tests'
@@ -2114,10 +2126,21 @@ async function showDashboard() {
 
   // Fetch user role
   if (session?.user?.id) {
-    const { data: roleData } = await sb.from('user_roles')
+    const { data: roleData, error: roleErr } = await sb.from('user_roles')
       .select('role, organization_id, community_id, email')
       .eq('user_id', session.user.id)
       .single();
+
+    // A transient/RLS error (anything but PGRST116 "no rows") must NOT sign a valid
+    // admin out — keep the session, show the login screen with a retry message so a
+    // refresh recovers. (Same guard as settings.html/new.html/reports.html.)
+    if (roleErr && roleErr.code !== 'PGRST116') {
+      console.error('[role-load] dashboard transient error:', roleErr);
+      document.getElementById('dashboard').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+      showErr('לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.');
+      return;
+    }
 
     if (!roleData) {
       await sb.auth.signOut();
@@ -2321,6 +2344,7 @@ async function loadTests() {
 // ── Test Creation Modal ──────────────────────────────────
 let testModalSelectedLPs = []; // array of { projectId, variantId, projectName }
 let testEditMode = false; // true when editing an existing draft test
+let creatingTest = false; // in-flight lock for createTest() — blocks double-submit / duplicate tests
 let testModalMode = 'split'; // 'split', 'separate', or 'both'
 
 function setTestMode(mode) {
@@ -2464,10 +2488,18 @@ async function toggleTestLP(checkbox) {
   const projectName = checkbox.dataset.name;
 
   if (checkbox.checked) {
-    const { data: variants } = await sb.from('project_variants')
+    const { data: variants, error } = await sb.from('project_variants')
       .select('id, variant_slug, variant_name, is_default')
       .eq('project_id', projectId)
       .eq('status', 'published');
+
+    // A query failure must not look like "no published variants" — fail loud.
+    if (error) {
+      console.error('toggleTestLP failed:', error.message);
+      checkbox.checked = false;
+      alert('טעינת הוריאנטים נכשלה. רעננו ונסו שוב.');
+      return;
+    }
 
     const defaultVariant = variants?.find(v => v.is_default) || variants?.[0];
     if (!defaultVariant) {
@@ -2488,6 +2520,10 @@ async function toggleTestLP(checkbox) {
   }
 
   updateWeightControls();
+  // Selection changed → recompute budget/sample math AND re-gate the Create
+  // button. numVariants feeds _updateActivateGating(); without this call the
+  // button stays disabled after picking LPs (you can't create a test).
+  updatePlannerResults();
 }
 
 function updateWeightControls() {
@@ -2652,6 +2688,7 @@ async function updatePlannerResults() {
 function _updateActivateGating() {
   const btn = document.getElementById('btn-create-test-submit');
   if (!btn) return;
+  if (creatingTest) return; // a create is in flight — don't clear the in-flight lock
   const cvr = parseFloat(document.getElementById('planner-baseline-cvr').value) / 100;
   const mde = parseFloat(document.getElementById('planner-mde').value) / 100;
   const cpc = parseFloat(document.getElementById('planner-cpc').value);
@@ -2686,59 +2723,72 @@ async function createTest() {
   const communityId = firstProject?.community_id;
   if (!communityId) { alert('שגיאה: לא נמצאה קהילה'); return; }
 
-  const { data: { user } } = await sb.auth.getUser();
+  // In-flight guard, set SYNCHRONOUSLY before the first await so two rapid clicks
+  // can't both reach the insert and create duplicate tests. The boolean (not just
+  // btn.disabled) is also honored by _updateActivateGating, so derived re-gating
+  // can't clear the lock mid-insert. Always cleared in finally.
+  if (creatingTest) return;
+  creatingTest = true;
+  const submitBtn = document.getElementById('btn-create-test-submit');
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const { data: { user } } = await sb.auth.getUser();
 
-  const baselineCrPct = parseFloat(document.getElementById('planner-baseline-cvr').value);
-  const mdePct        = parseFloat(document.getElementById('planner-mde').value);
-  const cpc           = parseFloat(document.getElementById('planner-cpc').value);
-  if (!(baselineCrPct > 0 && mdePct > 0 && cpc > 0)) {
-    alert('נא למלא את כל שדות תכנון התקציב');
-    return;
+    const baselineCrPct = parseFloat(document.getElementById('planner-baseline-cvr').value);
+    const mdePct        = parseFloat(document.getElementById('planner-mde').value);
+    const cpc           = parseFloat(document.getElementById('planner-cpc').value);
+    if (!(baselineCrPct > 0 && mdePct > 0 && cpc > 0)) {
+      alert('נא למלא את כל שדות תכנון התקציב');
+      return;
+    }
+    const numVariants = testModalSelectedLPs.length;
+    const targetN = plannerSampleSize(baselineCrPct / 100, mdePct / 100, numVariants);
+    if (targetN === null) {
+      alert('השיפור גדול מדי עבור אחוז ההמרה הצפוי. הקטן את ה-MDE.');
+      return;
+    }
+
+    const { data: test, error: testErr } = await sb.from('tests').insert({
+      name,
+      slug,
+      community_id: communityId,
+      status: 'draft',
+      created_by: user.id,
+      mode: testModalMode,
+      baseline_cvr: baselineCrPct / 100,
+      mde: mdePct / 100,
+      expected_cpc: cpc,
+      target_sample_size: targetN
+    }).select().single();
+
+    if (testErr) {
+      console.error('Create test error:', testErr);
+      alert('שגיאה ביצירת הטסט');
+      return;
+    }
+
+    const tvRows = testModalSelectedLPs.map((lp, i) => ({
+      test_id: test.id,
+      project_id: lp.projectId,
+      variant_id: lp.variantId,
+      weight: lp.weight,
+      label: String.fromCharCode(65 + i)
+    }));
+
+    const { error: tvErr } = await sb.from('test_variants').insert(tvRows);
+    if (tvErr) {
+      console.error('Create test variants error:', tvErr);
+      alert('שגיאה ביצירת וריאנטים לטסט');
+      return;
+    }
+
+    closeCreateTestModal();
+    await loadTests();
+    selectTest(test.id);
+  } finally {
+    creatingTest = false;
+    if (submitBtn) submitBtn.disabled = false;
   }
-  const numVariants = testModalSelectedLPs.length;
-  const targetN = plannerSampleSize(baselineCrPct / 100, mdePct / 100, numVariants);
-  if (targetN === null) {
-    alert('השיפור גדול מדי עבור אחוז ההמרה הצפוי. הקטן את ה-MDE.');
-    return;
-  }
-
-  const { data: test, error: testErr } = await sb.from('tests').insert({
-    name,
-    slug,
-    community_id: communityId,
-    status: 'draft',
-    created_by: user.id,
-    mode: testModalMode,
-    baseline_cvr: baselineCrPct / 100,
-    mde: mdePct / 100,
-    expected_cpc: cpc,
-    target_sample_size: targetN
-  }).select().single();
-
-  if (testErr) {
-    console.error('Create test error:', testErr);
-    alert('שגיאה ביצירת הטסט');
-    return;
-  }
-
-  const tvRows = testModalSelectedLPs.map((lp, i) => ({
-    test_id: test.id,
-    project_id: lp.projectId,
-    variant_id: lp.variantId,
-    weight: lp.weight,
-    label: String.fromCharCode(65 + i)
-  }));
-
-  const { error: tvErr } = await sb.from('test_variants').insert(tvRows);
-  if (tvErr) {
-    console.error('Create test variants error:', tvErr);
-    alert('שגיאה ביצירת וריאנטים לטסט');
-    return;
-  }
-
-  closeCreateTestModal();
-  await loadTests();
-  selectTest(test.id);
 }
 
 async function saveTestEdits(name) {
@@ -2906,7 +2956,7 @@ async function selectTest(testId) {
         .in('variant_id', testVariantIds)
         .gte('created_at', testStartedAt)),
       fetchAllRows(() => sb.from('leads')
-        .select('id, email, created_at, variant_id, test_id')
+        .select('id, email, first_name, last_name, phone, metadata, created_at, variant_id, test_id')
         .in('variant_id', testVariantIds)
         .gte('created_at', testStartedAt)),
     ]);
@@ -3134,7 +3184,7 @@ function renderTestLeads() {
   const countLabel = document.getElementById('test-leads-count-label');
 
   if (!testLeads.length) {
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);padding:20px;">אין לידים עדיין</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px;">אין לידים עדיין</td></tr>';
     countLabel.textContent = '0 לידים';
     return;
   }
@@ -3147,27 +3197,150 @@ function renderTestLeads() {
     variantToName[tv.variant_id] = tv.projects?.name || 'Unknown';
   });
 
+  const dash = '—';
   tbody.innerHTML = testLeads
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .map(l => `<tr>
-      <td>${esc(l.email)}</td>
-      <td>${esc(variantToName[l.variant_id] || '—')}</td>
-      <td>${formatDate(l.created_at)}</td>
+      <td>${esc(l.first_name || dash)}</td>
+      <td>${esc(l.last_name || dash)}</td>
+      <td class="ltr">${esc(l.phone || dash)}</td>
+      <td class="ltr">${esc(l.email || dash)}</td>
+      <td>${esc(variantToName[l.variant_id] || dash)}</td>
+      <td class="ltr mono">${formatDateTime(l.created_at)}</td>
     </tr>`).join('');
+}
+
+// ── Leads → CSV export (shared by the test view and the project leads tab) ──
+// One column per fixed field (Hebrew headers) + one column per metadata key found
+// (union across rows). UTF-8 BOM so Hebrew opens correctly in Excel/Sheets.
+function csvCell(v) {
+  if (v === null || v === undefined) return '';
+  let s = String(v);
+  // Formula-injection guard: lead name/phone/metadata is untrusted public-form input and
+  // this CSV is opened in Excel/Sheets, which evaluate a cell starting with = + - @ (or
+  // tab/CR) as a formula. Prefix with ' to neutralize (OWASP); Excel hides the leading '.
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function leadsToCsv(rows) {
+  const fixed = [
+    ['שם פרטי', 'first_name'], ['שם משפחה', 'last_name'], ['טלפון', 'phone'],
+    ['מייל', 'email'], ['דף נחיתה', 'landing_page'], ['תאריך', 'date'],
+  ];
+  const metaKeys = [];
+  const seen = {};
+  rows.forEach(r => {
+    if (r.metadata && typeof r.metadata === 'object') {
+      Object.keys(r.metadata).forEach(k => { if (!seen[k]) { seen[k] = 1; metaKeys.push(k); } });
+    }
+  });
+  metaKeys.sort();
+  const header = fixed.map(c => csvCell(c[0])).concat(metaKeys.map(csvCell)).join(',');
+  const lines = rows.map(r => {
+    const base = fixed.map(c => csvCell(r[c[1]]));
+    const meta = metaKeys.map(k => {
+      let v = r.metadata ? r.metadata[k] : undefined;
+      if (Array.isArray(v)) v = v.join('; ');
+      else if (v && typeof v === 'object') v = JSON.stringify(v);
+      return csvCell(v);
+    });
+    return base.concat(meta).join(',');
+  });
+  return '﻿' + [header].concat(lines).join('\r\n');
+}
+function downloadCsv(filename, csvText) {
+  const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function csvFileName(context) {
+  const d = new Date();
+  const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const slug = String(context || 'leads').trim().replace(/\s+/g, '-').replace(/[\/\\?%*:|"<>]/g, '').slice(0, 60) || 'leads';
+  return 'leads-' + slug + '-' + stamp + '.csv';
+}
+
+function exportTestLeadsCsv() {
+  if (!testLeads.length) { alert('אין לידים להורדה עדיין'); return; }
+  const variantToName = {};
+  testVariants.forEach(tv => { variantToName[tv.variant_id] = tv.projects?.name || 'Unknown'; });
+  const variantToLabel = {};
+  testVariants.forEach(tv => { variantToLabel[tv.variant_id] = tv.label || ''; });
+  const rows = testLeads.slice()
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .map(l => {
+      const name = variantToName[l.variant_id] || '';
+      const label = variantToLabel[l.variant_id];
+      return {
+        first_name: l.first_name || '', last_name: l.last_name || '', phone: l.phone || '',
+        email: l.email || '', landing_page: label ? (name + ' · ' + label) : name,
+        date: formatDateTime(l.created_at), metadata: l.metadata || {},
+      };
+    });
+  downloadCsv(csvFileName(selectedTest && selectedTest.name), leadsToCsv(rows));
+}
+
+function exportProjectLeadsCsv() {
+  if (!projectLeads.length) { alert('אין לידים להורדה עדיין'); return; }
+  const rows = projectLeads.map(l => {
+    const variant = projectVariants.find(v => v.id === l.variant_id);
+    const variantLabel = variant ? (variant.variant_name || variant.variant_slug) : '';
+    return {
+      first_name: l.first_name || '', last_name: l.last_name || '', phone: l.phone || '',
+      email: l.email || '', landing_page: variantLabel,
+      date: formatDateTime(l.created_at), metadata: l.metadata || {},
+    };
+  });
+  downloadCsv(csvFileName(selectedProject && selectedProject.name), leadsToCsv(rows));
+}
+
+// Fallback copy for non-secure contexts where navigator.clipboard is unavailable
+// or rejects. Returns true on success.
+function _legacyCopy(text) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.insetInlineStart = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) {
+    console.error('legacy copy failed:', e);
+    return false;
+  }
+}
+
+function _showCopied(btn) {
+  btn.textContent = 'הועתק!';
+  setTimeout(() => btn.textContent = 'העתק', 1500);
 }
 
 function copyTestUrl(e) {
   const link = document.getElementById('test-url-link');
-  navigator.clipboard.writeText(link.href);
   const btn = e ? e.target : document.querySelector('#test-url-bar button');
-  btn.textContent = 'הועתק!';
-  setTimeout(() => btn.textContent = 'העתק', 1500);
+  navigator.clipboard.writeText(link.href).then(() => {
+    _showCopied(btn);
+  }).catch(err => {
+    console.error('copyTestUrl failed:', err);
+    if (_legacyCopy(link.href)) _showCopied(btn);
+    else showToast('לא הצלחנו להעתיק את הקישור. העתיקו ידנית.', 'error');
+  });
 }
 
 function copyText(btn, text) {
-  navigator.clipboard.writeText(text);
-  btn.textContent = 'הועתק!';
-  setTimeout(() => btn.textContent = 'העתק', 1500);
+  navigator.clipboard.writeText(text).then(() => {
+    _showCopied(btn);
+  }).catch(err => {
+    console.error('copyText failed:', err);
+    if (_legacyCopy(text)) _showCopied(btn);
+    else showToast('לא הצלחנו להעתיק. העתיקו ידנית.', 'error');
+  });
 }
 
 async function editVariantSpend(variantId, currentSpend) {
@@ -4096,31 +4269,73 @@ async function loadPreview() {
 async function generateLP() {
   if (!selectedProject) return;
 
-  // Regeneration warning if images exist
-  if (selectedProject.image_mode === 'with_images') {
-    const existingImages = await sb
-      .from('lp_image_content')
-      .select('id')
-      .eq('project_id', selectedProject.id)
-      .limit(1);
-    if (existingImages.data?.length > 0) {
-      if (!confirm('יצירה מחדש תחליף את התמונות הנוכחיות. להמשיך?')) return;
-    }
-  }
-
+  // Grab UI elements up front (pure reads). If the markup is missing this bails
+  // BEFORE the re-entry guard is set, so a throw here can't strand future generations.
   const btnGen = document.getElementById('btn-generate');
   const empty = document.getElementById('preview-empty');
   const progress = document.getElementById('gen-progress');
-  const progressText = progress.querySelector('.gen-progress-text');
   const wrap = document.getElementById('preview-frame-wrap');
+  const progressText = progress && progress.querySelector('.gen-progress-text');
+  if (!btnGen || !empty || !progress || !wrap || !progressText) return;
 
-  // Remove old iframe
+  // Re-entry guard: only one generation at a time. Set SYNCHRONOUSLY (before any
+  // await, incl. the with_images confirm below) so a double-click can't start a
+  // second concurrent /api/generate-lp run (double LLM cost + orphaned controller).
+  if (genController) return;
+  genController = new AbortController();
+  genTimedOut = false;
+
+  // Regeneration warning if images exist
+  if (selectedProject.image_mode === 'with_images') {
+    let existingImages;
+    try {
+      existingImages = await sb
+        .from('lp_image_content')
+        .select('id')
+        .eq('project_id', selectedProject.id)
+        .limit(1);
+    } catch (e) {
+      // Pre-check rejected (network) — release the guard so generation isn't
+      // permanently blocked, and tell the user.
+      genController = null;
+      console.error('generate-lp precheck:', e);
+      showToast('שגיאה ביצירת הדף: ' + (e.message || 'נסו שוב'), 'error');
+      return;
+    }
+    if (existingImages.data?.length > 0) {
+      if (!confirm('יצירה מחדש תחליף את התמונות הנוכחיות. להמשיך?')) { genController = null; return; }
+    }
+  }
+
+  // Remove old iframe + enter the "generating" UI state (elements were grabbed at the top).
   const oldFrame = wrap.querySelector('iframe');
   if (oldFrame) oldFrame.remove();
 
   empty.style.display = 'none';
   progress.classList.add('show');
   btnGen.disabled = true;
+
+  // Abort + timeout + rotating progress so the slow (20-60s) step is never a dead spinner.
+  // genController/genTimedOut were set synchronously at the top (re-entry guard); alias to a
+  // LOCAL so the timeout + finally act on THIS run's controller regardless of the module var.
+  const controller = genController;
+  const signal = controller.signal;
+  const genMessages = [
+    'מבינים את התקציר...',
+    'כותבים את הטקסט...',
+    'מעצבים את הדף...',
+    'כמעט שם, עוד רגע...',
+  ];
+  let genMsgIdx = 0;
+  progressText.textContent = genMessages[0];
+  const genRotate = setInterval(() => {
+    genMsgIdx = Math.min(genMsgIdx + 1, genMessages.length - 1); // clamp — never show backwards progress
+    progressText.textContent = genMessages[genMsgIdx];
+  }, 6000);
+  const genTimeout = setTimeout(() => {
+    genTimedOut = true;
+    controller.abort();
+  }, 90000);
 
   try {
     const { data: { session } } = await sb.auth.getSession();
@@ -4130,8 +4345,6 @@ async function generateLP() {
 
     // Phase 1: Resolve images (if with_images mode)
     if (selectedProject.image_mode === 'with_images') {
-      progressText.textContent = 'מחפש תמונות...';
-
       const imgRes = await fetch('/api/resolve-images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4139,6 +4352,7 @@ async function generateLP() {
           project_id: selectedProject.id,
           access_token: session.access_token
         }),
+        signal,
       });
       const imgData = await imgRes.json();
 
@@ -4149,8 +4363,6 @@ async function generateLP() {
     }
 
     // Phase 2: Generate LP
-    progressText.textContent = 'מייצר את דף הנחיתה...';
-
     const body = {
       project_id: selectedProject.id,
       variant_id: selectedVariant?.id || null,
@@ -4164,6 +4376,7 @@ async function generateLP() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!resp.ok) {
@@ -4202,11 +4415,28 @@ async function generateLP() {
   } catch (err) {
     progress.classList.remove('show');
     empty.style.display = 'flex';
-    showToast('שגיאה ביצירת הדף: ' + err.message, 'error');
+    if (err.name === 'AbortError') {
+      if (genTimedOut) {
+        showToast('נתקענו, נסו שוב — לחצו על "ייצר דף נחיתה" שוב', 'error');
+      } else {
+        showToast('היצירה בוטלה', 'success');
+      }
+    } else {
+      showToast('שגיאה ביצירת הדף: ' + err.message, 'error');
+    }
     console.error('generate-lp:', err);
   } finally {
+    clearInterval(genRotate);
+    clearTimeout(genTimeout);
+    // Only tear down the module state if it still points at THIS run (defense in depth
+    // alongside the re-entry guard), so a stray call can't strand a live generation.
+    if (genController === controller) { genController = null; genTimedOut = false; }
     btnGen.disabled = false;
   }
+}
+
+function cancelGenerateLP() {
+  if (genController) genController.abort();
 }
 
 async function togglePublish() {
@@ -4292,11 +4522,19 @@ async function loadEditableContent() {
   const token = (await sb.auth.getSession())?.data?.session?.access_token;
   const params = new URLSearchParams({ project_id: selectedProject.id });
   if (selectedVariant) params.set('variant_id', selectedVariant.id);
-  const resp = await fetch(`/api/save-content?${params}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  const data = resp.ok ? await resp.json() : null;
-  const error = resp.ok ? null : { message: 'Failed to load content' };
+  let data, error;
+  try {
+    const resp = await fetch(`/api/save-content?${params}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    data = resp.ok ? await resp.json() : null;
+    error = resp.ok ? null : { message: 'Failed to load content' };
+  } catch (e) {
+    // A rejected fetch (network/offline) must clear the spinner, not hang on it.
+    console.error('editable_content fetch failed:', e);
+    container.innerHTML = '<div style="padding:20px;color:var(--text-dim);">טעינת התוכן נכשלה. בדקו את החיבור לאינטרנט ונסו שוב.</div>';
+    return;
+  }
 
   if (error) {
     container.innerHTML = '<div style="padding:20px;color:var(--text-dim);">שגיאה בטעינת התוכן</div>';
@@ -4763,20 +5001,28 @@ async function saveContent() {
   }
 
   const token = (await sb.auth.getSession())?.data?.session?.access_token;
-  const resp = await fetch('/api/save-content', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      project_id: selectedProject.id,
-      variant_id: selectedVariant?.id || null,
-      access_token: token,
-      items
-    })
-  });
-  const result = await resp.json();
-  const error = resp.ok ? null : { message: result.error || 'Unknown error' };
-
-  btn.disabled = false;
+  let result, error;
+  try {
+    const resp = await fetch('/api/save-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        project_id: selectedProject.id,
+        variant_id: selectedVariant?.id || null,
+        access_token: token,
+        items
+      })
+    });
+    result = await resp.json();
+    error = resp.ok ? null : { message: result.error || 'Unknown error' };
+  } catch (e) {
+    console.error('save-content:', e);
+    errEl.textContent = 'משהו השתבש בשמירה. בדקו את החיבור לאינטרנט ונסו שוב.';
+    errEl.style.display = 'block';
+    return;
+  } finally {
+    btn.disabled = false;
+  }
 
   if (error) {
     errEl.textContent = 'שגיאה: ' + error.message;
@@ -5072,20 +5318,22 @@ async function loadLeads() {
   if (!selectedProject) return;
 
   const tbody = document.getElementById('leads-tbody');
-  tbody.innerHTML = '<tr><td colspan="3"><div class="loading-block"><div class="small-spin"></div> טוען לידים...</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6"><div class="loading-block"><div class="small-spin"></div> טוען לידים...</div></td></tr>';
 
-  const { data, error } = await sb.from('leads')
-    .select('id,email,created_at,variant_id')
-    .eq('project_id', selectedProject.id)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    tbody.innerHTML = '<tr><td colspan="3"><div style="padding:20px;text-align:center;color:var(--text-dim);">שגיאה בטעינת לידים</div></td></tr>';
+  // fetchAllRows paginates past Supabase's 1000-row default (so the CSV export truly covers
+  // ALL leads). It orders ascending, so re-sort newest-first for the table display.
+  let rows;
+  try {
+    rows = await fetchAllRows(() => sb.from('leads')
+      .select('id,email,first_name,last_name,phone,metadata,created_at,variant_id')
+      .eq('project_id', selectedProject.id));
+  } catch (error) {
+    tbody.innerHTML = '<tr><td colspan="6"><div style="padding:20px;text-align:center;color:var(--text-dim);">שגיאה בטעינת לידים</div></td></tr>';
     console.error('leads:', error);
     return;
   }
 
-  projectLeads = data || [];
+  projectLeads = (rows || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   leadsPage = 1;
   renderLeads();
 }
@@ -5098,7 +5346,7 @@ function renderLeads() {
   countLabel.textContent = projectLeads.length + ' לידים';
 
   if (projectLeads.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3"><div class="leads-empty">אין לידים עדיין</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="leads-empty">אין לידים עדיין</div></td></tr>';
     pagination.innerHTML = '';
     return;
   }
@@ -5112,6 +5360,9 @@ function renderLeads() {
     const variant = projectVariants.find(v => v.id === l.variant_id);
     const variantLabel = variant ? (variant.variant_name || variant.variant_slug) : '\u2014';
     return `<tr>
+      <td>${esc(l.first_name || '\u2014')}</td>
+      <td>${esc(l.last_name || '\u2014')}</td>
+      <td class="ltr">${esc(l.phone || '\u2014')}</td>
       <td class="ltr">${esc(l.email || '\u2014')}</td>
       <td>${esc(variantLabel)}</td>
       <td class="ltr mono">${formatDateTime(l.created_at)}</td>
@@ -5402,7 +5653,11 @@ async function selectDirection(containerId, index) {
         }),
       });
       const data = await res.json();
-      renderStockResults(data.results || []);
+      if (!res.ok || data.error) {
+        document.getElementById('stock-results').innerHTML = `<p style="color:var(--error);font-size:13px;">שגיאה: ${data.error || 'Unknown error'}</p>`;
+      } else {
+        renderStockResults(data.results || []);
+      }
     } finally {
       document.getElementById('stock-loading').style.display = 'none';
     }
@@ -5446,7 +5701,11 @@ async function searchStockManual() {
       }),
     });
     const data = await res.json();
-    renderStockResults(data.results || []);
+    if (!res.ok || data.error) {
+      document.getElementById('stock-results').innerHTML = `<p style="color:var(--error);font-size:13px;">שגיאה: ${data.error || 'Unknown error'}</p>`;
+    } else {
+      renderStockResults(data.results || []);
+    }
   } finally {
     document.getElementById('stock-loading').style.display = 'none';
   }
@@ -5534,9 +5793,13 @@ function renderAiResult(results, direction) {
   saveBtn.style.cssText = 'flex:1;justify-content:center;';
   saveBtn.textContent = '\uD83D\uDCBE שמור לספרייה';
   saveBtn.onclick = async () => {
-    await saveToLibrary(r.url, 'imagen', r.source_meta || {});
-    saveBtn.textContent = '✓ נשמר!';
-    saveBtn.disabled = true;
+    const ok = await saveToLibrary(r.url, 'imagen', r.source_meta || {});
+    if (ok) {
+      saveBtn.textContent = '✓ נשמר!';
+      saveBtn.disabled = true;
+    } else {
+      showToast('שמירת התמונה לספרייה נכשלה. נסו שוב.', 'error');
+    }
   };
   btnRow.appendChild(saveBtn);
   container.appendChild(btnRow);
@@ -5613,7 +5876,7 @@ async function applySelectedImage() {
 
 // ── Community Image Library ──────────────────────────────
 async function saveToLibrary(imageUrl, source, sourceMeta) {
-  if (!selectedProject?.community_id) return;
+  if (!selectedProject?.community_id) return false;
   const { data: { session } } = await sb.auth.getSession();
   const { error } = await sb.from('community_image_library').upsert({
     community_id: selectedProject.community_id,
@@ -5622,7 +5885,11 @@ async function saveToLibrary(imageUrl, source, sourceMeta) {
     source_meta: sourceMeta,
     added_by: session?.user?.id,
   }, { onConflict: 'community_id,image_url', ignoreDuplicates: true });
-  if (error) console.error('saveToLibrary failed:', error.message);
+  if (error) {
+    console.error('saveToLibrary failed:', error.message);
+    return false;
+  }
+  return true;
 }
 
 async function loadLibrary() {
@@ -5634,14 +5901,24 @@ async function loadLibrary() {
   empty.style.display = 'none';
   loading.style.display = 'block';
 
-  const { data: images } = await sb.from('community_image_library')
+  const { data: images, error } = await sb.from('community_image_library')
     .select('id, image_url, source, source_meta')
     .eq('community_id', selectedProject.community_id)
     .order('created_at', { ascending: false });
 
   loading.style.display = 'none';
 
+  // A query failure must not masquerade as "no images yet" — surface it loudly.
+  if (error) {
+    console.error('loadLibrary failed:', error.message);
+    empty.textContent = 'טעינת הספרייה נכשלה. רעננו ונסו שוב.';
+    empty.style.display = 'block';
+    showToast('טעינת ספריית התמונות נכשלה. נסו שוב.', 'error');
+    return;
+  }
+
   if (!images || images.length === 0) {
+    empty.textContent = 'אין תמונות שמורות — תמונות שתבחרו יישמרו כאן אוטומטית';
     empty.style.display = 'block';
     return;
   }

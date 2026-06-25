@@ -116,6 +116,7 @@
     var urgency = null;             // 'blocking' | 'annoying'
     var pageTarget = null;          // short description of the clicked element
     var attachments = [];           // [{ blob, kind, url }]
+    var submitting = false;         // in-flight submit guard (block double-submit / mid-submit close races)
 
     // toast
     var toast = el('div', { className: 'fbw-toast' }); document.body.appendChild(toast);
@@ -191,7 +192,11 @@
 
     // ---- behavior ----
     function open() { ov.classList.add('fbw-show'); panel.classList.add('fbw-show'); setTimeout(function () { ta.focus(); }, 30); syncSend(); }
-    function close() { ov.classList.remove('fbw-show'); panel.classList.remove('fbw-show'); send.disabled = false; sendLabel.textContent = COPY.send; syncSend(); }
+    function close() {
+      ov.classList.remove('fbw-show'); panel.classList.remove('fbw-show');
+      if (submitting) return; // a submit is in flight — leave the spinner/disabled state to submit()'s finally
+      send.disabled = false; sendLabel.textContent = COPY.send; planeIcon.className = ''; planeIcon.textContent = '➤'; syncSend();
+    }
     function syncSend() { send.disabled = ta.value.trim().length === 0 && attachments.length === 0; }
 
     fab.addEventListener('click', open);
@@ -230,9 +235,9 @@
       try {
         await ensureHtml2canvas();
         var canvas = await window.html2canvas(document.body, { useCORS: true, logging: false, scale: Math.min(window.devicePixelRatio || 1, 2) });
-        var blob = await new Promise(function (res) { canvas.toBlob(res, 'image/png'); });
+        var blob = await new Promise(function (res, rej) { canvas.toBlob(function (b) { b ? res(b) : rej(new Error('toBlob returned null')); }, 'image/png'); });
         panel.style.visibility = ''; ov.style.visibility = '';
-        if (blob) addAttachment(blob, 'screenshot');
+        addAttachment(blob, 'screenshot');
       } catch (err) {
         console.error('[feedback-widget] screenshot failed:', err);
         panel.style.visibility = ''; ov.style.visibility = '';
@@ -242,8 +247,12 @@
     function ensureHtml2canvas() {
       if (window.html2canvas) return Promise.resolve();
       return new Promise(function (res, rej) {
+        var done = false;
+        var to = setTimeout(function () { if (!done) { done = true; rej(new Error('html2canvas load timed out')); } }, 10000);
         var s = el('script', { src: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js' });
-        s.onload = res; s.onerror = rej; document.head.appendChild(s);
+        s.onload = function () { if (!done) { done = true; clearTimeout(to); res(); } };
+        s.onerror = function () { if (!done) { done = true; clearTimeout(to); rej(new Error('html2canvas failed to load')); } };
+        document.head.appendChild(s);
       });
     }
 
@@ -345,8 +354,10 @@
     // submit
     send.addEventListener('click', function () { submit(); });
     async function submit() {
+      if (submitting) return; // already sending — block double-submit
       var text = ta.value.trim();
       if (!text && attachments.length === 0) return;
+      submitting = true;
       send.disabled = true; sendLabel.textContent = COPY.sending;
       planeIcon.className = 'fbw-spin'; planeIcon.textContent = '';
       try {
@@ -365,11 +376,13 @@
           }),
         });
         if (!res.ok) { var d = await res.text().catch(function () { return ''; }); throw new Error('submit ' + res.status + ' ' + d); }
-        resetForm(); close(); flash('ok', COPY.success);
+        submitting = false; resetForm(); close(); flash('ok', COPY.success);
       } catch (err) {
         console.error('[feedback-widget] submit failed:', err);
         send.disabled = false; sendLabel.textContent = COPY.send; planeIcon.className = ''; planeIcon.textContent = '➤';
         flash('err', COPY.error);
+      } finally {
+        submitting = false;
       }
     }
 

@@ -20,14 +20,60 @@ function sha256(value) {
   return crypto.createHash("sha256").update(value.toLowerCase().trim()).digest("hex");
 }
 
+// Resolve which pixel + CAPI token to use for a given project.
+// Default = global env pixel/token (current behavior, e.g. Lipaz Ela).
+// A project with its own meta_pixel_id uses the server-only token from
+// meta_capi_tokens. If that token is missing, we flag it so the caller can
+// skip — firing to the global pixel instead would pollute the wrong dataset.
+async function resolveMetaTarget(projectId) {
+  let pixelId = META_PIXEL_ID || "";
+  let token = META_CAPI_TOKEN || "";
+  if (!projectId) return { pixelId, token };
+
+  const sbHeaders = {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+  };
+  const projRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(projectId)}&select=meta_pixel_id&limit=1`,
+    { headers: sbHeaders }
+  );
+  if (!projRes.ok) return { pixelId, token };
+  const rows = await projRes.json();
+  const perProject = rows.length ? (rows[0].meta_pixel_id || "").toString().trim() : "";
+  if (!perProject || perProject === pixelId) return { pixelId, token };
+
+  const tokRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/meta_capi_tokens?pixel_id=eq.${encodeURIComponent(perProject)}&select=token&limit=1`,
+    { headers: sbHeaders }
+  );
+  const toks = tokRes.ok ? await tokRes.json() : [];
+  const perToken = toks.length ? (toks[0].token || "") : "";
+  return { pixelId: perProject, token: perToken, perProjectMissingToken: !perToken };
+}
+
 async function handleMetaCapi(req, res) {
-  if (!META_PIXEL_ID || !META_CAPI_TOKEN) {
-    return res.status(200).json({ skipped: true, reason: "Meta CAPI not configured" });
-  }
-  const { event_name, event_id, email, source_url, fbc, fbp } = req.body || {};
+  const { event_name, event_id, email, source_url, fbc, fbp, project_id } = req.body || {};
   if (!event_name || !event_id) {
     return res.status(400).json({ error: "Missing event_name or event_id" });
   }
+
+  let target;
+  try {
+    target = await resolveMetaTarget(project_id);
+  } catch (err) {
+    console.error("Meta CAPI target resolve error:", err);
+    return res.status(200).json({ sent: false, error: String(err.message) });
+  }
+  if (target.perProjectMissingToken) {
+    console.error("Meta CAPI: project", project_id, "uses pixel", target.pixelId,
+      "but no CAPI token is stored — skipping to avoid firing to the wrong dataset.");
+    return res.status(200).json({ skipped: true, reason: "No CAPI token for project pixel" });
+  }
+  if (!target.pixelId || !target.token) {
+    return res.status(200).json({ skipped: true, reason: "Meta CAPI not configured" });
+  }
+
   const userData = {};
   if (email) userData.em = [sha256(email)];
   if (fbc) userData.fbc = fbc;
@@ -50,11 +96,11 @@ async function handleMetaCapi(req, res) {
 
   try {
     const capiRes = await fetch(
-      `https://graph.facebook.com/v21.0/${META_PIXEL_ID}/events`,
+      `https://graph.facebook.com/v21.0/${target.pixelId}/events`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: [eventData], access_token: META_CAPI_TOKEN }),
+        body: JSON.stringify({ data: [eventData], access_token: target.token }),
       }
     );
     const capiData = await capiRes.json();

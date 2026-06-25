@@ -346,7 +346,9 @@
   .feature-item .remove-btn {
     position: absolute;
     top: 12px;
-    left: 12px;
+    /* Logical start corner: resolves to the right under dir=rtl, so the X stays
+       clear of the "✨ שפר" remix button that space-between pushes to the left. */
+    inset-inline-start: 12px;
     width: 28px;
     height: 28px;
     border-radius: 50%;
@@ -1811,6 +1813,12 @@ function setBriefHeroImageMode(mode) {
 }
 
 async function handleBriefHeroUpload(file) {
+  // Clear any previous success state up front — BEFORE the validation guards too —
+  // so an invalid OR failed re-upload can't masquerade as a successful one.
+  briefHeroImageUrl = null;
+  document.getElementById('briefHeroModeChoice').style.display = 'none';
+  document.getElementById('briefHeroSkipHint').style.display = '';
+
   if (!file.type.startsWith('image/')) { showToast('נא לבחור קובץ תמונה'); return; }
   if (file.size > 5 * 1024 * 1024) { showToast('הקובץ גדול מדי — עד 5MB'); return; }
 
@@ -1850,6 +1858,10 @@ async function handleBriefHeroUpload(file) {
     document.getElementById('briefHeroSkipHint').style.display = 'none';
   } catch (err) {
     console.error('Brief hero upload error:', err);
+    // Roll back any success state so a failed re-upload can't look like a success.
+    briefHeroImageUrl = null;
+    document.getElementById('briefHeroModeChoice').style.display = 'none';
+    document.getElementById('briefHeroSkipHint').style.display = '';
     fillEl.style.width = '100%';
     statusEl.textContent = 'שגיאה בהעלאה: ' + (err.message || 'Unknown error');
     statusEl.className = 'upload-status error';
@@ -1865,6 +1877,12 @@ async function handleHeroUpload(file) {
   const progressEl = document.getElementById('heroUploadProgress');
   const fillEl = document.getElementById('heroUploadProgressFill');
   const statusEl = document.getElementById('heroUploadStatus');
+
+  // Clear any previous success state before re-uploading, so a failed
+  // re-upload can't masquerade as a successful one.
+  heroImageUrl = null;
+  document.getElementById('heroModeChoice').style.display = 'none';
+  document.getElementById('heroSkipHint').style.display = '';
 
   // Preview
   const reader = new FileReader();
@@ -1897,6 +1915,10 @@ async function handleHeroUpload(file) {
     document.getElementById('heroSkipHint').style.display = 'none';
   } catch (err) {
     console.error('Hero upload error:', err);
+    // Roll back any success state so a failed re-upload can't look like a success.
+    heroImageUrl = null;
+    document.getElementById('heroModeChoice').style.display = 'none';
+    document.getElementById('heroSkipHint').style.display = '';
     fillEl.style.width = '100%';
     statusEl.textContent = 'שגיאה בהעלאה: ' + (err.message || 'Unknown error');
     statusEl.className = 'upload-status error';
@@ -1904,6 +1926,11 @@ async function handleHeroUpload(file) {
 }
 
 async function handleFold2Upload(file) {
+  // Clear any previous success state up front — BEFORE the validation guards too —
+  // so an invalid OR failed re-upload can't masquerade as a successful one.
+  fold2ImageUrl = null;
+  document.getElementById('fold2ModeChoice').style.display = 'none';
+
   if (!file.type.startsWith('image/')) { showToast('נא לבחור קובץ תמונה'); return; }
   if (file.size > 5 * 1024 * 1024) { showToast('הקובץ גדול מדי — עד 5MB'); return; }
 
@@ -1943,6 +1970,9 @@ async function handleFold2Upload(file) {
     document.getElementById('fold2ModeChoice').style.display = 'block';
   } catch (err) {
     console.error('Fold2 upload error:', err);
+    // Roll back any success state so a failed re-upload can't look like a success.
+    fold2ImageUrl = null;
+    document.getElementById('fold2ModeChoice').style.display = 'none';
     fillEl.style.width = '100%';
     statusEl.textContent = 'שגיאה בהעלאה: ' + (err.message || 'Unknown error');
     statusEl.className = 'upload-status error';
@@ -1973,7 +2003,7 @@ function setupUpload(zoneId, inputId, previewId, progressId, fillId, statusId, i
     if (input.files.length) handleFile(input.files[0]);
   });
 
-  function handleFile(file) {
+  async function handleFile(file) {
     if (!file.type.startsWith('image/')) {
       showToast('נא לבחור קובץ תמונה');
       return;
@@ -1992,7 +2022,11 @@ function setupUpload(zoneId, inputId, previewId, progressId, fillId, statusId, i
     reader.readAsDataURL(file);
 
     // Upload to Supabase Storage
-    uploadToStorage(file, isQuestionnaireMode, progressId, fillId, statusId);
+    await uploadToStorage(file, isQuestionnaireMode, progressId, fillId, statusId);
+
+    // Clear the input so picking the SAME file again re-fires 'change' (lets the
+    // user retry the exact same file after a failed upload).
+    input.value = '';
   }
 }
 
@@ -2045,7 +2079,18 @@ async function uploadToStorage(file, isQuestionnaire, progressId, fillId, status
     }
   } catch (err) {
     console.error('Upload error:', err);
-    fillEl.style.width = '100%';
+    // Roll back the stored URL so required-image validation can't pass on a dead
+    // upload, and re-show the matching image error.
+    if (isQuestionnaire) {
+      uploadedImageUrl = null;
+      document.getElementById('err-image').classList.add('visible');
+    } else {
+      briefUploadedImageUrl = null;
+      document.getElementById('err-briefImage').classList.add('visible');
+    }
+    // Reset the progress bar so it doesn't sit full-and-visible forever after a
+    // failure. Keep progressEl visible — the error status text lives inside it.
+    fillEl.style.width = '0%';
     const detail = err.message || err.error || err.statusCode || 'Unknown error';
     statusEl.textContent = `שגיאה בהעלאה: ${detail}`;
     statusEl.className = 'upload-status error';
@@ -2108,10 +2153,17 @@ async function generateSlug(name) {
   const base = transliterateToSlug(name);
 
   // Find existing slugs with same base to determine next number
-  const { data: existing } = await sb
+  const { data: existing, error: slugError } = await sb
     .from('projects')
     .select('slug')
     .like('slug', base + '%');
+
+  // A dropped error here would degrade to base+'-1' and surface a unique-constraint
+  // collision as a raw Postgres error on insert. Fail loud with a human message.
+  if (slugError) {
+    console.error('generateSlug lookup error:', slugError);
+    throw new Error('שגיאה ביצירת כתובת לדף — נסו שוב.');
+  }
 
   if (!existing || existing.length === 0) {
     return base + '-1';
@@ -2479,6 +2531,7 @@ async function remixField(btn, fieldName) {
 
   } catch (err) {
     console.error('Remix error:', err);
+    showToast('\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05D9\u05E4\u05D5\u05E8: ' + (err.message || '\u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1'));
     btn.textContent = '\u274C';
     setTimeout(() => {
       btn.textContent = '\u2728 \u05E9\u05E4\u05E8';
@@ -2498,12 +2551,23 @@ document.getElementById('brief_file').addEventListener('change', async function(
   const nameEl = document.getElementById('brief-file-name');
   nameEl.textContent = '\uD83D\uDCC4 ' + file.name;
 
+  // Clear any URL from a prior successful upload so a failed re-upload can't
+  // submit a stale brief_file_url.
+  delete this.dataset.uploadedUrl;
+
   const textarea = document.getElementById('briefText');
 
   if (file.name.endsWith('.txt')) {
     // Read text files directly
-    const text = await file.text();
-    textarea.value = (textarea.value ? textarea.value + '\n\n---\n\n' : '') + text;
+    try {
+      const text = await file.text();
+      textarea.value = (textarea.value ? textarea.value + '\n\n---\n\n' : '') + text;
+      nameEl.textContent = '✅ ' + file.name + ' נטען בהצלחה';
+    } catch (err) {
+      console.error('Brief txt read error:', err);
+      nameEl.textContent = '❌ שגיאה בקריאת הקובץ';
+      this.value = '';
+    }
   } else {
     // For PDF/DOCX, upload to Supabase Storage and store URL
     nameEl.textContent = '\u23F3 \u05DE\u05E2\u05DC\u05D4 ' + file.name + '...';
@@ -2520,6 +2584,8 @@ document.getElementById('brief_file').addEventListener('change', async function(
       nameEl.textContent = '\u2705 ' + file.name + ' \u05D4\u05D5\u05E2\u05DC\u05D4 \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4';
     } catch (err) {
       console.error('Upload error:', err);
+      // Drop any stale URL so a failed re-upload can't submit a prior success.
+      delete document.getElementById('brief_file').dataset.uploadedUrl;
       nameEl.textContent = '\u274C \u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D4\u05E2\u05DC\u05D0\u05D4: ' + err.message;
     }
   }
@@ -2571,7 +2637,14 @@ async function loginAndContinue() {
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
       // Fetch role after password login and set up UI
-      await setupUserRole(data.session.user.id);
+      const ok = await setupUserRole(data.session.user.id);
+      if (ok === false) {
+        // setupUserRole already handled the UI (denied or transient) — don't show the
+        // app over a dead/role-less session. Re-enable the button so they can retry.
+        btn.disabled = false;
+        btn.textContent = loginWithPassword ? 'התחברו' : 'שלחו לי קישור';
+        return;
+      }
       document.getElementById('loginSection').style.display = 'none';
       document.getElementById('mainContent').style.display = '';
       injectCommunitySelectors();
@@ -2630,10 +2703,20 @@ initProgress();
 
 // Fetch user role and set up community selector
 async function setupUserRole(userId) {
-  const { data: roleData } = await sb.from('user_roles')
+  const { data: roleData, error: roleErr } = await sb.from('user_roles')
     .select('role, organization_id, community_id')
     .eq('user_id', userId)
     .single();
+
+  // A transient/RLS error (anything but PGRST116 "no rows") must NOT sign a valid
+  // user out — show the login screen with a retry message and let them refresh.
+  if (roleErr && roleErr.code !== 'PGRST116') {
+    console.error('[role-load] new.html transient error:', roleErr);
+    showToast('לא הצלחנו לטעון את ההרשאות שלכם כרגע. רעננו את הדף ונסו שוב.');
+    document.getElementById('loginSection').style.display = '';
+    document.getElementById('mainContent').style.display = 'none';
+    return false;
+  }
 
   if (!roleData) {
     showToast('אין לך הרשאה. פנה למנהל המערכת.');

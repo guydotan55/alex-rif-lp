@@ -149,7 +149,9 @@
 
   .field-select {
     width: 100%;
-    padding: 12px 16px;
+    /* extra inline-start (physical-left under dir=rtl) padding reserves room for the
+       caret at background-position:left so it never overlaps the Hebrew text */
+    padding: 12px 16px 12px 36px;
     background: var(--navy);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -827,6 +829,10 @@ async function loadCommunities() {
     communities = data.communities || data || [];
     renderCommunities();
   } catch (e) {
+    // Clear the stale list so derived UI (the invite-modal קהילה dropdown) can't be
+    // built from data the table just failed to load.
+    console.error('[load-communities]', e);
+    communities = [];
     wrap.innerHTML = '<div class="empty-state">שגיאה בטעינת קהילות: ' + e.message + '</div>';
   }
 }
@@ -945,6 +951,9 @@ async function loadUsers() {
     users = data.users || data || [];
     renderUsers();
   } catch (e) {
+    // Clear the stale list so the users table never shows rows the reload just failed on.
+    console.error('[load-users]', e);
+    users = [];
     wrap.innerHTML = '<div class="empty-state">שגיאה בטעינת משתמשים: ' + e.message + '</div>';
   }
 }

@@ -6,3 +6,9 @@ docs/
 .claude/
 .claude-flow/
 .playwright-mcp/
+
+# customer-reports/: only *-live.html is published. The un-suffixed files are the
+# editable sources (they carry the in-browser editor toolbar) and must stay off
+# the public site. Listed by exact path — .vercelignore negation is not relied on.
+customer-reports/kyly-halperin-2026-07-09.html
+customer-reports/lipaz-ela-2026-05-06.html

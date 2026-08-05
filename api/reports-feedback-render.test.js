@@ -26,7 +26,9 @@ function extractFn(name) {
 }
 
 // Build the render fn in a sandbox with an injected `document` (linkedom).
-const src = extractFn('renderFeedbackTicketCard');
+// Include buildTicketPayload too: renderFeedbackTicketCard's copy-button handler
+// references it (only on click), so it must be in scope to reconstruct the fn.
+const src = `${extractFn('buildTicketPayload')}\n${extractFn('renderFeedbackTicketCard')}`;
 // eslint-disable-next-line no-new-func
 const makeRender = new Function('document', `${src}\nreturn renderFeedbackTicketCard;`);
 
@@ -67,9 +69,9 @@ test('resolved ticket exposes no action buttons', () => {
   assert.equal(card.querySelectorAll('button').length, 0);
 });
 
-test('open ticket exposes mark-read + resolve buttons', () => {
+test('open ticket exposes copy + mark-read + resolve buttons', () => {
   const card = render({ id: '5', status: 'TRIAGED', body: 'x', summary: 's' });
-  assert.equal(card.querySelectorAll('button').length, 2);
+  assert.equal(card.querySelectorAll('button').length, 3);   // + copy-to-Claude-Code
 });
 
 test('malicious page_target renders inert as text', () => {

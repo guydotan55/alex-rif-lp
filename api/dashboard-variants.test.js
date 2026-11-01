@@ -91,6 +91,8 @@ test('variant errors use every exact Hebrew string and status fallback', () => {
   assert.equal(message('not_found', 401), 'פג תוקף ההתחברות — התחברו מחדש');
   assert.equal(message(undefined, 403), 'אין לכם גישה לפרויקט הזה. פנו למנהל/ת');
   assert.equal(message('wrong_project', 403), errorMessages.wrong_project);
+  for (const code of ['missing_fields', 'server_error']) assert.equal(message(code, 403), 'משהו השתבש. נסו שוב בעוד רגע');
+  assert.equal(message('unknown', 403), 'אין לכם גישה לפרויקט הזה. פנו למנהל/ת');
   for (const code of ['missing_fields', 'server_error', 'network', undefined]) {
     assert.equal(message(code), 'משהו השתבש. נסו שוב בעוד רגע');
     assert.match(message(code), /[֐-׿]/);
@@ -360,4 +362,30 @@ test('delete expiry sends once and a network rejection restores the draft', asyn
   assert.equal(context.pendingDelete, null);
   assert.ok(context.projectVariants.some(v => v.id === 'draft'));
   assert.equal(toasts[0][0], 'משהו השתבש. נסו שוב בעוד רגע');
+});
+
+test('every inline dashboard script parses', () => {
+  const { document } = parseHTML(dash);
+  const scripts = [...document.querySelectorAll('script:not([src])')];
+  assert.ok(scripts.length);
+  for (const script of scripts) assert.doesNotThrow(() => new Function(script.textContent));
+});
+test('project switch during post-duplicate reload does not reopen Edit-text in the other project', async () => {
+  const { document } = parseHTML('<button id="btn-duplicate-variant"></button><div id="edit-fields"></div>');
+  let finishSelection;
+  const tabs = [];
+  const context = { document, console, dupInFlight: false, selectedProject: { id: 'p1' }, selectedVariant: { id: 'src', generated_html: '<p>x</p>' }, projectVariants: [],
+    guardUnsaved: () => true, renderVariantBar: () => {}, variantErrorMessage: fn('variantErrorMessage'),
+    sb: { auth: { getSession: async () => ({ data: { session: { access_token: 'ok' } } }) } },
+    fetch: async () => ({ ok: true, json: async () => ({ variant: { id: 'copy' } }) }),
+    selectVariant: id => { context.selectedVariant = { id }; return new Promise(resolve => { finishSelection = resolve; }); },
+    switchTab: name => tabs.push(name), showToast: () => {},
+  };
+  const pending = fn('duplicateVariant', context)();
+  await new Promise(setImmediate);
+  context.selectedProject = { id: 'p2' };
+  // selectProject is still fetching its list, so selectedVariant still holds the old copy.
+  finishSelection();
+  await pending;
+  assert.deepEqual(tabs, []);
 });

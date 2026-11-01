@@ -5501,6 +5501,8 @@ function variantErrorMessage(code, status) {
     empty_source: 'אין עדיין מה לשכפל — קודם צריך ליצור את הדף',
     slug_exhausted: 'הרבה אנשים משכפלים עכשיו. נסו שוב בעוד כמה שניות',
     copy_failed: 'השכפול לא הצליח. שום דבר לא השתנה — אפשר לנסות שוב',
+    missing_fields: 'משהו השתבש. נסו שוב בעוד רגע',
+    server_error: 'משהו השתבש. נסו שוב בעוד רגע',
   };
   if (Object.hasOwn(messages, code)) return messages[code];
   if (status === 403) return 'אין לכם גישה לפרויקט הזה. פנו למנהל/ת';
@@ -5724,7 +5726,7 @@ async function duplicateVariant() {
     if (selectedProject?.id !== projectId) return;
     projectVariants.push(body.variant);
     await selectVariant(body.variant.id);
-    if (selectedVariant?.id === body.variant.id) {
+    if (selectedProject?.id === projectId && selectedVariant?.id === body.variant.id) {
       switchTab('edit', document.querySelector('[data-tab="edit"]'));
       showToast('נוצר עותק! עכשיו שנו בו דבר אחד בלבד', 'success');
     }

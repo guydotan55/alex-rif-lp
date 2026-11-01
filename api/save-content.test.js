@@ -126,6 +126,7 @@ test('write-back CROSS-TENANT: variant belongs to another project -> 403, NO PAT
 
 test('regular content save (items) still works and does NOT trigger write-back', async () => {
   await withFetch(authOkRouter((url, opts) => {
+    if (url.includes('project_variants')) return { json: [{ project_id: 'p1' }] };
     if (url.includes('lp_editable_content') && opts.method === 'POST') return { ok: true };
     if (url.includes('lp_editable_content')) return { json: [{ key: 'hero_title', value: 'x' }] };
     return {};
@@ -139,3 +140,26 @@ test('regular content save (items) still works and does NOT trigger write-back',
     assert.equal(variantPatches.length, 0, 'no generated_html write on a normal item save');
   });
 });
+
+for (const [label, rows, status, code] of [
+  ['foreign variant', [{ project_id: 'OTHER' }], 403, 'wrong_project'],
+  ['unknown variant', [], 404, 'not_found'],
+  ['happy path still upserts', [{ project_id: 'p1' }], 200, undefined],
+]) {
+  test(`items POST ${label}`, async () => {
+    await withFetch(authOkRouter((url) => {
+      if (url.includes('project_variants?id=eq.v1')) return { json: rows };
+      return {};
+    }), async (calls) => {
+      const res = mockRes();
+      await handler({ method: 'POST', headers: { authorization: 'Bearer ok' }, body: {
+        project_id: 'p1', variant_id: 'v1', items: [{ key: 'hero_title', value: 'x' }],
+      } }, res);
+      assert.equal(res.statusCode, status);
+      assert.equal(res.body.error, code);
+      const writes = calls.filter(c => c.url.includes('lp_editable_content') && c.method === 'POST');
+      assert.equal(writes.length, status === 200 ? 1 : 0);
+      if (status === 200) assert.ok(writes[0].url.endsWith('on_conflict=variant_id,key'));
+    });
+  });
+}

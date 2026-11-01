@@ -1499,6 +1499,8 @@
 
         <button class="mobile-sidebar-toggle" onclick="toggleSidebar()" style="margin:12px 16px 0;">&#9776; הפרויקטים שלי</button>
 
+        <div class="variant-bar" id="variant-bar" style="display:none;"></div>
+
         <!-- Tabs -->
         <div class="tabs-bar">
           <button class="tab-btn active" data-tab="preview" onclick="switchTab('preview', this)">
@@ -1523,7 +1525,6 @@
 
         <!-- Tab: Preview -->
         <div class="tab-pane active" id="tab-preview">
-          <div class="variant-bar" id="variant-bar" style="display:none;"></div>
           <div class="preview-toolbar" id="preview-toolbar">
             <button class="btn-action" id="btn-generate" onclick="generateLP()">
               &#9881; ייצר דף נחיתה
@@ -2020,6 +2021,7 @@ let leadsPage = 1;
 const PAGE_SIZE = 20;
 let projectVariants = [];
 let selectedVariant = null;
+let editLoadSeq = 0, imgLoadSeq = 0;
 let compareMode = false;
 // LP-generation abort control (cancel button + 90s timeout)
 let genController = null;
@@ -3751,16 +3753,19 @@ function switchTab(name, btn) {
   document.querySelectorAll('#project-detail .tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   if (btn) btn.classList.add('active');
+  updateVariantBarVisibility();
   if (name === 'images') loadImageSlots();
 }
 
 // ── Image Slots Tab ─────────────────────────────────────
 async function loadImageSlots() {
+  const vid = selectedVariant?.id;
+  const seq = ++imgLoadSeq;
   if (!selectedProject) return;
   const container = document.getElementById('image-slots-list');
   container.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">טוען תמונות...</div>';
 
-  const variantId = selectedVariant?.id;
+  const variantId = vid;
   if (!variantId) {
     container.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">אין וריאנט נבחר</div>';
     return;
@@ -3770,6 +3775,7 @@ async function loadImageSlots() {
   const { data: images } = await sb.from('lp_image_content')
     .select('slot, image_url, source, enabled, display_size, display_shape')
     .eq('variant_id', variantId);
+  if (seq !== imgLoadSeq || selectedVariant?.id !== vid) return;
 
   const slots = [
     { key: 'hero', label: 'תמונת Hero', desc: 'התמונה הראשית בראש העמוד' },
@@ -4514,24 +4520,30 @@ function copyPublishedUrl() {
 
 // ── Edit Text Tab ────────────────────────────────────────
 async function loadEditableContent() {
+  const vid = selectedVariant?.id;
+  const seq = ++editLoadSeq;
   if (!selectedProject) return;
 
   const container = document.getElementById('edit-fields');
   container.innerHTML = '<div class="loading-block"><div class="small-spin"></div> טוען תוכן...</div>';
 
   const token = (await sb.auth.getSession())?.data?.session?.access_token;
+  if (seq !== editLoadSeq || selectedVariant?.id !== vid) return;
   const params = new URLSearchParams({ project_id: selectedProject.id });
-  if (selectedVariant) params.set('variant_id', selectedVariant.id);
+  if (vid) params.set('variant_id', vid);
   let data, error;
   try {
     const resp = await fetch(`/api/save-content?${params}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
+    if (seq !== editLoadSeq || selectedVariant?.id !== vid) return;
     data = resp.ok ? await resp.json() : null;
+    if (seq !== editLoadSeq || selectedVariant?.id !== vid) return;
     error = resp.ok ? null : { message: 'Failed to load content' };
   } catch (e) {
     // A rejected fetch (network/offline) must clear the spinner, not hang on it.
     console.error('editable_content fetch failed:', e);
+    if (seq !== editLoadSeq || selectedVariant?.id !== vid) return;
     container.innerHTML = '<div style="padding:20px;color:var(--text-dim);">טעינת התוכן נכשלה. בדקו את החיבור לאינטרנט ונסו שוב.</div>';
     return;
   }
@@ -4736,18 +4748,19 @@ async function loadEditableContent() {
 
     // Save backfilled items to DB
     if (newItems.length > 0) {
-      newItems.forEach(item => projectContent.push({ ...item, project_id: selectedProject.id, variant_id: selectedVariant?.id }));
+      newItems.forEach(item => projectContent.push({ ...item, project_id: selectedProject.id, variant_id: vid }));
       const saveToken = (await sb.auth.getSession())?.data?.session?.access_token;
+      if (seq !== editLoadSeq || selectedVariant?.id !== vid) return;
       fetch('/api/save-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${saveToken}` },
         body: JSON.stringify({
           project_id: selectedProject.id,
-          variant_id: selectedVariant?.id || null,
+          variant_id: vid || null,
           access_token: saveToken,
           items: newItems
         })
-      }).catch(() => {});
+      }).catch(e => console.error('backfill save failed:', e));
     }
   }
 
@@ -5397,6 +5410,16 @@ function pageRange(cur, tot) {
 }
 
 // ── Variant Management ───────────────────────────────────
+function variantDisplayLabel(v) {
+  return v.is_default && (!v.variant_name || v.variant_name === 'Default')
+    ? 'הדף הראשי' : v.variant_name || v.variant_slug;
+}
+
+function updateVariantBarVisibility() {
+  const emailActive = document.getElementById('tab-email').classList.contains('active');
+  document.getElementById('variant-bar').style.display = projectVariants.length && !emailActive ? 'flex' : 'none';
+}
+
 function renderVariantBar() {
   const bar = document.getElementById('variant-bar');
   if (!projectVariants || projectVariants.length === 0) {
@@ -5404,10 +5427,10 @@ function renderVariantBar() {
     return;
   }
 
-  bar.style.display = 'flex';
+  updateVariantBarVisibility();
   bar.innerHTML = projectVariants.map(v => {
     const isActive = selectedVariant?.id === v.id;
-    const label = v.variant_name || v.variant_slug;
+    const label = variantDisplayLabel(v);
     const statusDot = v.status === 'published'
       ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;margin-inline-start:4px;"></span>'
       : '';
@@ -5422,7 +5445,8 @@ async function selectVariant(variantId) {
     loadPreview(),
     loadEditableContent(),
     loadAnalytics(),
-    loadLeads()
+    loadLeads(),
+    ...(document.getElementById('tab-images').classList.contains('active') ? [loadImageSlots()] : [])
   ]);
 }
 
@@ -5481,9 +5505,7 @@ async function showAddVariantModal() {
     }
   }
 
-  selectedVariant = data;
-  renderVariantBar();
-  loadPreview();
+  await selectVariant(data.id);
   showToast('וריאנט חדש נוצר!', 'success');
 }
 

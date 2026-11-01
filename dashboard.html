@@ -2070,6 +2070,7 @@ let editDirty = false;
 let dupInFlight = false;
 let renameState = null;
 let pendingDelete = null;
+const deletingVariantIds = new Set();
 let deleteStaging = false;
 let compareMode = false;
 // LP-generation abort control (cancel button + 90s timeout)
@@ -5553,7 +5554,7 @@ function renderVariantBar() {
 }
 
 function filterPending(list) {
-  return list.filter(v => v.id !== pendingDelete?.variant.id);
+  return list.filter(v => v.id !== pendingDelete?.variant.id && !deletingVariantIds.has(v.id));
 }
 
 async function stageDeleteVariant() {
@@ -5607,9 +5608,11 @@ function flushPendingDelete({ keepalive = false } = {}) {
   if (!pendingDelete) return;
   const pending = pendingDelete;
   pendingDelete = null;
+  deletingVariantIds.add(pending.variant.id);
   clearTimeout(pending.timer);
   document.getElementById('undo-toast').style.display = 'none';
   const restore = (body, status) => {
+    deletingVariantIds.delete(pending.variant.id);
     if (selectedProject?.id === pending.projectId) {
       if (!projectVariants.some(v => v.id === pending.variant.id)) projectVariants.splice(pending.index, 0, pending.variant);
       renderVariantBar();

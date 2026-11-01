@@ -238,7 +238,7 @@ test('rename with no returned rows reverts and shows exact Hebrew failure', asyn
 });
 
 test('pending delete is filtered out of refetched lists', () => {
-  const context = { pendingDelete: { variant: { id: 'gone' } } };
+  const context = { pendingDelete: { variant: { id: 'gone' } }, deletingVariantIds: new Set() };
   const filter = fn('filterPending', context);
   assert.deepEqual(filter([{ id: 'keep' }, { id: 'gone' }]).map(v => v.id), ['keep']);
   context.pendingDelete = null;
@@ -258,7 +258,7 @@ function deletionContext() {
   const variant = { id: 'draft', status: 'draft', is_default: false };
   const requests = [], toasts = [], timers = [];
   const context = { document, console, selectedProject: { id: 'p1' }, selectedVariant: variant, projectVariants: [original, variant],
-    pendingDelete: null, deleteStaging: false, guardUnsaved: () => true, variantErrorMessage: fn('variantErrorMessage'),
+    pendingDelete: null, deletingVariantIds: new Set(), deleteStaging: false, guardUnsaved: () => true, variantErrorMessage: fn('variantErrorMessage'),
     renderVariantBar: () => {}, showToast: (...args) => toasts.push(args),
     setTimeout: callback => { timers.push(callback); return timers.length; }, clearTimeout: () => {},
     sb: { auth: { getSession: async () => ({ data: { session: { access_token: 'captured' } } }) } },
@@ -307,6 +307,7 @@ test('flush keepalive sends synchronously with captured project and token exactl
   assert.equal(context.pendingDelete, null);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].keepalive, true);
+  assert.equal(context.deletingVariantIds.has('draft'), true);
   assert.deepEqual(JSON.parse(requests[0].body), { action: 'delete-draft-variant', project_id: 'p1', variant_id: 'draft', access_token: 'captured' });
   context.flushPendingDelete();
   assert.equal(requests.length, 1);
@@ -388,4 +389,51 @@ test('project switch during post-duplicate reload does not reopen Edit-text in t
   finishSelection();
   await pending;
   assert.deepEqual(tabs, []);
+});
+
+
+test('filterPending excludes flushed delete ids after pendingDelete is cleared', () => {
+  const context = { pendingDelete: null, deletingVariantIds: new Set(['gone']) };
+  const filter = fn('filterPending', context);
+  assert.deepEqual(filter([{ id: 'keep' }, { id: 'gone' }]).map(v => v.id), ['keep']);
+  context.pendingDelete = { variant: { id: 'pending' } };
+  assert.deepEqual(filter([{ id: 'keep' }, { id: 'gone' }, { id: 'pending' }]).map(v => v.id), ['keep']);
+});
+test('flush marks a deleting id before fetch and failure removes it', () => {
+  assert.match(dash, /const deletingVariantIds = new Set\(\);/);
+  const body = extractFn('flushPendingDelete');
+  const mark = body.indexOf('deletingVariantIds.add(pending.variant.id)');
+  assert.ok(mark >= 0 && mark < body.indexOf("fetch('/api/admin'"));
+  assert.match(body, /deletingVariantIds\.delete\(pending\.variant\.id\)/);
+});
+test('refetch during deletion and after success keeps the deleted draft hidden', async () => {
+  const { context } = deletionContext();
+  await fn('stageDeleteVariant', context)();
+  let resolveFetch;
+  context.fetch = () => new Promise(resolve => { resolveFetch = resolve; });
+  const flushed = context.flushPendingDelete();
+  assert.equal(context.pendingDelete, null);
+  const filter = fn('filterPending', context);
+  assert.equal(filter([{ id: 'draft' }]).length, 0);
+  resolveFetch({ ok: true });
+  await flushed;
+  assert.equal(context.deletingVariantIds.has('draft'), true);
+  assert.equal(filter([{ id: 'draft' }]).length, 0);
+});
+for (const mode of ['refusal', 'rejected fetch', 'thrown fetch']) test(`delete ${mode} clears deleting id before restoring`, async () => {
+  const { context } = deletionContext();
+  await fn('stageDeleteVariant', context)();
+  let markedAtFetch = false, clearedAtRestore = false;
+  context.fetch = () => {
+    markedAtFetch = context.deletingVariantIds.has('draft');
+    if (mode === 'thrown fetch') throw new Error('offline');
+    if (mode === 'rejected fetch') return Promise.reject(new Error('offline'));
+    return Promise.resolve({ ok: false, status: 409, json: async () => ({ error: 'has_data' }) });
+  };
+  context.renderVariantBar = () => { clearedAtRestore = !context.deletingVariantIds.has('draft'); };
+  await context.flushPendingDelete();
+  assert.equal(markedAtFetch, true);
+  assert.equal(clearedAtRestore, true);
+  assert.equal(context.deletingVariantIds.has('draft'), false);
+  assert.ok(context.projectVariants.some(v => v.id === 'draft'));
 });

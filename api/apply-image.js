@@ -16,7 +16,8 @@ function isAllowedImageUrl(url) {
     const parsed = new URL(url);
     if (parsed.hostname.endsWith(".supabase.co")) return true;
     return ALLOWED_IMAGE_HOSTS.includes(parsed.hostname);
-  } catch {
+  } catch (err) {
+    console.error("Invalid image URL:", err);
     return false;
   }
 }
@@ -91,6 +92,19 @@ export default async function handler(req, res) {
     const hasAccess = await canAccessProject(user.id, project_id);
     if (!hasAccess) return res.status(403).json({ error: "You do not have access to this project" });
 
+    const ownershipRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${encodeURIComponent(variant_id)}&select=project_id&limit=1`,
+      { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+    );
+    if (!ownershipRes.ok) {
+      console.error("apply-image ownership lookup failed:", ownershipRes.status);
+      return res.status(500).json({ error: "server_error" });
+    }
+    const owners = await ownershipRes.json();
+    if (!Array.isArray(owners)) throw new Error('Invalid variant lookup response');
+    if (!owners.length) return res.status(404).json({ error: "not_found" });
+    if (owners[0].project_id !== project_id) return res.status(403).json({ error: "wrong_project" });
+
     // Cache image to storage
     const cachedUrl = await ensureCached(image_url, source, source_meta || {});
 
@@ -158,6 +172,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, cached_url: cachedUrl });
   } catch (err) {
     console.error("apply-image error:", err);
-    return res.status(500).json({ error: "Failed to apply image" });
+    return res.status(500).json({ error: "server_error" });
   }
 }

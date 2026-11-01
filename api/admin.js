@@ -11,6 +11,10 @@
 //   { action: "delete-community", id }            — admin+
 //   { action: "invite-user", email, role, community_id? }  — admin+
 
+//   { action: "duplicate-variant", project_id, source_variant_id } — project access
+//   { action: "delete-draft-variant", project_id, variant_id } — project access
+
+import { duplicateVariant, deleteDraftVariant } from "./_lib/variant-ops.js";
 import { authenticateAndAuthorize, hasMinRole } from "./_lib/auth-helper.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -32,6 +36,10 @@ export default async function handler(req, res) {
   const { action } = req.body || {};
 
   switch (action) {
+    case "duplicate-variant":
+      return handleDuplicateVariant(req, res);
+    case "delete-draft-variant":
+      return handleDeleteDraftVariant(req, res);
     case "check-email":
       return handleCheckEmail(req, res);
     case "list-users":
@@ -457,5 +465,33 @@ async function handleInviteUser(req, res) {
   } catch (err) {
     console.error("invite-user error:", err);
     return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+async function handleDuplicateVariant(req, res) {
+  const { project_id, source_variant_id } = req.body || {};
+  if (!project_id || !source_variant_id) return res.status(400).json({ error: "missing_fields" });
+  try {
+    const auth = await authenticateAndAuthorize(req, res, { projectId: project_id });
+    if (!auth) return;
+    const r = await duplicateVariant({ projectId: project_id, sourceVariantId: source_variant_id });
+    return res.status(r.status).json(r.body);
+  } catch (err) {
+    console.error("duplicate-variant error:", err);
+    return res.status(500).json({ error: "server_error" });
+  }
+}
+
+async function handleDeleteDraftVariant(req, res) {
+  const { project_id, variant_id } = req.body || {};
+  if (!project_id || !variant_id) return res.status(400).json({ error: "missing_fields" });
+  try {
+    const auth = await authenticateAndAuthorize(req, res, { projectId: project_id });
+    if (!auth) return;
+    const r = await deleteDraftVariant({ projectId: project_id, variantId: variant_id });
+    return res.status(r.status).json(r.body);
+  } catch (err) {
+    console.error("delete-draft-variant error:", err);
+    return res.status(500).json({ error: "server_error" });
   }
 }

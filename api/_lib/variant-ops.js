@@ -13,10 +13,11 @@ export function pickSlug(existingSlugs, { random = false, rng = Math.random } = 
 export function pickName(source, existingNames) {
   const base = source.is_default && (!source.variant_name || source.variant_name === 'Default')
     ? 'הדף הראשי' : source.variant_name || source.variant_slug;
+  const basePoints = Array.from(base);
   const taken = new Set(existingNames);
   for (let n = 1; ; n++) {
     const suffix = ` – עותק${n === 1 ? '' : ` ${n}`}`;
-    const candidate = base.slice(0, 40 - suffix.length).trimEnd() + suffix;
+    const candidate = basePoints.slice(0, 40 - Array.from(suffix).length).join('').trimEnd() + suffix;
     if (!taken.has(candidate)) return candidate;
   }
 }

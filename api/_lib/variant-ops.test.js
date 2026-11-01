@@ -21,8 +21,29 @@ for (const [source, names, expected] of [
 
 test('pickName truncates the base, preserving the suffix', () => {
   const name = pickName({ variant_name: 'א'.repeat(60) }, []);
-  assert.ok(name.length <= 40);
+  assert.ok(Array.from(name).length <= 40);
   assert.ok(name.endsWith(' – עותק'));
+});
+
+test('pickName preserves an emoji straddling the old UTF-16 cut point', () => {
+  const suffix = ' – עותק';
+  const base = 'א'.repeat(40 - Array.from(suffix).length - 1) + '😀' + 'ב'.repeat(20);
+  const name = pickName({ variant_name: base }, []);
+  assert.doesNotThrow(() => encodeURIComponent(name));
+  assert.equal(decodeURIComponent(encodeURIComponent(name)), name);
+  assert.ok(name.endsWith('😀' + suffix));
+  assert.equal(Array.from(name).length, 40);
+});
+
+test('pickName counts emoji as code points for both plain and numbered suffixes', () => {
+  const source = { variant_name: '😀'.repeat(60) };
+  const first = pickName(source, []);
+  const second = pickName(source, [first]);
+  for (const [name, suffix] of [[first, ' – עותק'], [second, ' – עותק 2']]) {
+    assert.equal(name, '😀'.repeat(40 - Array.from(suffix).length) + suffix);
+    assert.equal(Array.from(name).length, 40);
+    assert.doesNotThrow(() => encodeURIComponent(name));
+  }
 });
 
 process.env.SUPABASE_URL = 'https://sb.test.co';

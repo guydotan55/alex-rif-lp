@@ -1178,6 +1178,31 @@
   }
   .btn-add-variant:disabled { opacity: 0.5; cursor: default; }
   .btn-add-variant:hover { background: rgba(245, 200, 66, 0.2); }
+  #undo-toast {
+    position: fixed;
+    bottom: 76px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    max-width: calc(100vw - 32px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--navy-card);
+    color: var(--text);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+  }
+  #undo-toast button, .variant-delete-btn {
+    font: inherit;
+    color: var(--text-dim);
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  #undo-toast button { color: var(--gold); }
+  .variant-delete-btn { font-size: 12px; padding: 5px; }
   .variant-rename-btn {
     border: 0;
     background: transparent;
@@ -1998,6 +2023,7 @@
 
 <!-- Toast notification -->
 <div class="toast" id="toast"></div>
+<div id="undo-toast" role="status" style="display:none"><span>הטיוטה נמחקה</span><button onclick="undoDeleteVariant()">ביטול</button></div>
 
 <script>
 // ── Supabase Config ───────────────────────────────────────
@@ -2043,6 +2069,8 @@ let editLoadSeq = 0, imgLoadSeq = 0;
 let editDirty = false;
 let dupInFlight = false;
 let renameState = null;
+let pendingDelete = null;
+let deleteStaging = false;
 let compareMode = false;
 // LP-generation abort control (cancel button + 90s timeout)
 let genController = null;
@@ -2489,7 +2517,7 @@ async function showEditTestModal() {
       projectId: tv.project_id,
       variantId: tv.variant_id,
       projectName: tv.projects?.name || 'Unknown',
-      variants: variants || [],
+      variants: filterPending(variants || []),
       weight: tv.weight
     });
   }
@@ -2529,7 +2557,8 @@ async function toggleTestLP(checkbox) {
       return;
     }
 
-    const defaultVariant = variants?.find(v => v.is_default) || variants?.[0];
+    const availableVariants = filterPending(variants || []);
+    const defaultVariant = availableVariants.find(v => v.is_default) || availableVariants[0];
     if (!defaultVariant) {
       checkbox.checked = false;
       alert('לפרויקט זה אין וריאנטים מפורסמים');
@@ -2540,7 +2569,7 @@ async function toggleTestLP(checkbox) {
       projectId,
       variantId: defaultVariant.id,
       projectName,
-      variants: variants || [],
+      variants: availableVariants,
       weight: 1
     });
   } else {
@@ -3729,6 +3758,7 @@ function formatDateTime(d) {
 }
 
 async function selectProject(id) {
+  flushPendingDelete();
   selectedProject = projects.find(p => p.id === id);
   if (!selectedProject) return;
 
@@ -3755,7 +3785,7 @@ async function selectProject(id) {
     .eq('project_id', id)
     .order('created_at');
 
-  projectVariants = variants || [];
+  projectVariants = filterPending(variants || []);
 
   // Auto-select default variant, or first one
   selectedVariant = projectVariants.find(v => v.is_default) || projectVariants[0] || null;
@@ -5515,10 +5545,102 @@ function renderVariantBar() {
     const statusDot = v.status === 'published'
       ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;margin-inline-start:4px;"></span>'
       : '';
-    return `<button class="variant-pill ${isActive ? 'active' : ''}" onclick="onVariantPillClick('${v.id}')">${esc(label)}${statusDot}</button>${isActive ? '<button class="variant-rename-btn" onclick="startRenameVariant()" title="שינוי שם">✎</button>' : ''}`;
+    return `<button class="variant-pill ${isActive ? 'active' : ''}" onclick="onVariantPillClick('${v.id}')">${esc(label)}${statusDot}</button>${isActive ? '<button class="variant-rename-btn" onclick="startRenameVariant()" title="שינוי שם">✎</button>' : ''}${isActive && v.status === 'draft' && !v.is_default ? '<button class="variant-delete-btn" onclick="stageDeleteVariant()">מחיקת טיוטה</button>' : ''}`;
   }).join('') + `<button class="btn-add-variant" onclick="showAddVariantModal()">+ וריאנט</button>
     <button class="btn-add-variant" id="btn-duplicate-variant" onclick="duplicateVariant()" title="יוצר עותק מדויק של הדף הזה, כדי לשנות בו דבר אחד ולבדוק מה עובד יותר טוב" ${!selectedVariant?.generated_html?.trim() || dupInFlight ? 'disabled' : ''}>${dupInFlight ? 'משכפל…' : 'שכפול'}</button>`;
 }
+
+function filterPending(list) {
+  return list.filter(v => v.id !== pendingDelete?.variant.id);
+}
+
+async function stageDeleteVariant() {
+  if (deleteStaging || !guardUnsaved()) return;
+  deleteStaging = true;
+  const target = selectedVariant;
+  if (!target || target.is_default || target.status !== 'draft') {
+    deleteStaging = false;
+    return;
+  }
+  let staged = null;
+  try {
+    if (pendingDelete) flushPendingDelete();
+    const projectId = selectedProject.id;
+    const token = (await sb.auth.getSession())?.data?.session?.access_token;
+    if (selectedVariant?.id !== target.id || selectedProject?.id !== projectId) return;
+    const defaultVariant = projectVariants.find(v => v.is_default);
+    const index = projectVariants.findIndex(v => v.id === target.id);
+    if (!defaultVariant || index < 0) return;
+    projectVariants.splice(index, 1);
+    staged = { variant: target, index, prevSelectedId: target.id, projectId, token, timer: null };
+    pendingDelete = staged;
+    await selectVariant(defaultVariant.id);
+    if (pendingDelete !== staged || selectedProject?.id !== projectId) return;
+    document.getElementById('undo-toast').style.display = 'flex';
+    staged.timer = setTimeout(() => flushPendingDelete(), 6000);
+  } catch (err) {
+    console.error('stage delete variant failed:', err);
+    if (staged && pendingDelete === staged) undoDeleteVariant();
+    showToast(variantErrorMessage(), 'error');
+  } finally {
+    deleteStaging = false;
+  }
+}
+
+function undoDeleteVariant() {
+  if (!pendingDelete) return;
+  const pending = pendingDelete;
+  pendingDelete = null;
+  clearTimeout(pending.timer);
+  document.getElementById('undo-toast').style.display = 'none';
+  if (selectedProject?.id !== pending.projectId) return;
+  if (!projectVariants.some(v => v.id === pending.variant.id)) projectVariants.splice(pending.index, 0, pending.variant);
+  selectVariant(pending.prevSelectedId).catch(err => {
+    console.error('undo variant selection failed:', err);
+    showToast(variantErrorMessage(), 'error');
+  });
+}
+
+function flushPendingDelete({ keepalive = false } = {}) {
+  if (!pendingDelete) return;
+  const pending = pendingDelete;
+  pendingDelete = null;
+  clearTimeout(pending.timer);
+  document.getElementById('undo-toast').style.display = 'none';
+  const restore = (body, status) => {
+    if (selectedProject?.id === pending.projectId) {
+      if (!projectVariants.some(v => v.id === pending.variant.id)) projectVariants.splice(pending.index, 0, pending.variant);
+      renderVariantBar();
+    }
+    showToast(variantErrorMessage(body?.error, status), 'error');
+  };
+  try {
+    const request = fetch('/api/admin', {
+      method: 'POST', keepalive, headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete-draft-variant', project_id: pending.projectId, variant_id: pending.variant.id, access_token: pending.token }),
+    });
+    if (keepalive) {
+      request.then(response => {
+        if (!response.ok) console.error('pagehide delete variant refused:', pending.variant.id, response.status);
+      }).catch(err => console.error('pagehide delete variant failed:', pending.variant.id, err));
+      return;
+    }
+    return request.then(async response => {
+      if (response.ok) return;
+      const body = await response.json();
+      console.error('delete-draft-variant refused:', response.status, body);
+      restore(body, response.status);
+    }).catch(err => {
+      console.error('delete-draft-variant failed:', err);
+      restore();
+    });
+  } catch (err) {
+    console.error('delete-draft-variant request failed:', err);
+    if (!keepalive) restore();
+  }
+}
+
+window.addEventListener('pagehide', () => flushPendingDelete({ keepalive: true }));
 
 function normalizeVariantName(raw) {
   const name = raw.trim();

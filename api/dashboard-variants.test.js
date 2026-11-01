@@ -234,3 +234,130 @@ test('rename with no returned rows reverts and shows exact Hebrew failure', asyn
   assert.equal(variant.variant_name, 'old');
   assert.equal(toasts[0][0], 'לא הצלחנו לשנות את השם. נסו שוב');
 });
+
+test('pending delete is filtered out of refetched lists', () => {
+  const context = { pendingDelete: { variant: { id: 'gone' } } };
+  const filter = fn('filterPending', context);
+  assert.deepEqual(filter([{ id: 'keep' }, { id: 'gone' }]).map(v => v.id), ['keep']);
+  context.pendingDelete = null;
+  assert.equal(filter([{ id: 'gone' }]).length, 1);
+});
+test('delete uses a dedicated undo toast and flushes on project switch and pagehide', () => {
+  assert.match(dash, /id="undo-toast"/);
+  assert.match(dash, /pagehide['"],\s*\(\) => flushPendingDelete\(\{ keepalive: true \}\)/);
+  const body = extractFn('flushPendingDelete');
+  assert.ok(body.indexOf('pendingDelete = null') < body.indexOf("fetch('/api/admin'"));
+  assert.match(extractFn('selectProject'), /flushPendingDelete\(/);
+  assert.match(extractFn('selectProject'), /filterPending\(/);
+});
+function deletionContext() {
+  const { document } = parseHTML('<div id="undo-toast" style="display:none"></div>');
+  const original = { id: 'default', is_default: true, status: 'published' };
+  const variant = { id: 'draft', status: 'draft', is_default: false };
+  const requests = [], toasts = [], timers = [];
+  const context = { document, console, selectedProject: { id: 'p1' }, selectedVariant: variant, projectVariants: [original, variant],
+    pendingDelete: null, deleteStaging: false, guardUnsaved: () => true, variantErrorMessage: fn('variantErrorMessage'),
+    renderVariantBar: () => {}, showToast: (...args) => toasts.push(args),
+    setTimeout: callback => { timers.push(callback); return timers.length; }, clearTimeout: () => {},
+    sb: { auth: { getSession: async () => ({ data: { session: { access_token: 'captured' } } }) } },
+    selectVariant: async id => { context.selectedVariant = context.projectVariants.find(v => v.id === id); },
+    fetch: (_url, opts) => { requests.push(opts); return Promise.resolve({ ok: true, json: async () => ({ ok: true }) }); },
+  };
+  context.flushPendingDelete = fn('flushPendingDelete', context);
+  context.undoDeleteVariant = fn('undoDeleteVariant', context);
+  return { context, requests, toasts, timers, variant };
+}
+test('stage then undo restores selection and position without any network request', async () => {
+  const { context, requests, variant, timers } = deletionContext();
+  await fn('stageDeleteVariant', context)();
+  assert.equal(context.pendingDelete.variant.id, 'draft');
+  assert.equal(context.pendingDelete.token, 'captured');
+  assert.equal(context.projectVariants.length, 1);
+  assert.equal(context.selectedVariant.id, 'default');
+  await context.undoDeleteVariant();
+  assert.equal(context.pendingDelete, null);
+  assert.equal(context.projectVariants[1], variant);
+  assert.equal(context.selectedVariant.id, 'draft');
+  timers[0]();
+  assert.equal(requests.length, 0);
+});
+test('delete staging blocks re-entry and abandons a changed selection after session await', async () => {
+  const { context, requests } = deletionContext();
+  let resolveSession;
+  context.sb.auth.getSession = () => new Promise(resolve => { resolveSession = resolve; });
+  const stage = fn('stageDeleteVariant', context);
+  const first = stage();
+  assert.equal(context.deleteStaging, true);
+  await stage();
+  context.selectedVariant = context.projectVariants[0];
+  resolveSession({ data: { session: { access_token: 'ok' } } });
+  await first;
+  assert.equal(context.deleteStaging, false);
+  assert.equal(context.pendingDelete, null);
+  assert.equal(context.projectVariants.length, 2);
+  assert.equal(requests.length, 0);
+});
+test('flush keepalive sends synchronously with captured project and token exactly once', async () => {
+  const { context, requests } = deletionContext();
+  await fn('stageDeleteVariant', context)();
+  context.selectedProject = { id: 'other' };
+  context.flushPendingDelete({ keepalive: true });
+  assert.equal(context.pendingDelete, null);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].keepalive, true);
+  assert.deepEqual(JSON.parse(requests[0].body), { action: 'delete-draft-variant', project_id: 'p1', variant_id: 'draft', access_token: 'captured' });
+  context.flushPendingDelete();
+  assert.equal(requests.length, 1);
+});
+for (const sameProject of [true, false]) test(`delete refusal restores only in matching project (${sameProject})`, async () => {
+  const { context, toasts } = deletionContext();
+  await fn('stageDeleteVariant', context)();
+  context.fetch = async () => ({ ok: false, status: 409, json: async () => ({ error: 'has_data' }) });
+  // The extracted function resolves fetch from this context at call time.
+  if (!sameProject) { context.selectedProject = { id: 'other' }; context.projectVariants = []; }
+  await context.flushPendingDelete();
+  assert.equal(context.projectVariants.some(v => v.id === 'draft'), sameProject);
+  assert.equal(toasts[0][0], errorMessages.has_data);
+});
+
+test('delete control appears only on the active non-default draft', () => {
+  const { document } = parseHTML('<div id="variant-bar"></div>');
+  const variant = { id: 'v1', variant_name: 'name', status: 'draft', is_default: false };
+  const context = { document, projectVariants: [variant], selectedVariant: variant, renameState: null, dupInFlight: false,
+    updateVariantBarVisibility: () => {}, variantDisplayLabel: fn('variantDisplayLabel'), esc: s => s,
+  };
+  const render = fn('renderVariantBar', context);
+  render();
+  assert.equal(document.querySelector('.variant-delete-btn').textContent, 'מחיקת טיוטה');
+  variant.is_default = true;
+  render();
+  assert.equal(document.querySelector('.variant-delete-btn'), null);
+  variant.is_default = false;
+  variant.status = 'published';
+  render();
+  assert.equal(document.querySelector('.variant-delete-btn'), null);
+});
+test('starting another delete flushes the first and gives the second its own undo window', async () => {
+  const { context, requests } = deletionContext();
+  const stage = fn('stageDeleteVariant', context);
+  await stage();
+  const second = { id: 'draft2', status: 'draft', is_default: false };
+  context.projectVariants.push(second);
+  context.selectedVariant = second;
+  await stage();
+  assert.equal(requests.length, 1);
+  assert.equal(JSON.parse(requests[0].body).variant_id, 'draft');
+  assert.equal(context.pendingDelete.variant.id, 'draft2');
+  await context.undoDeleteVariant();
+  assert.equal(context.selectedVariant.id, 'draft2');
+  assert.equal(requests.length, 1);
+});
+test('delete expiry sends once and a network rejection restores the draft', async () => {
+  const { context, timers, toasts } = deletionContext();
+  await fn('stageDeleteVariant', context)();
+  context.fetch = async () => { throw new Error('offline'); };
+  await timers[0]();
+  assert.equal(context.pendingDelete, null);
+  assert.ok(context.projectVariants.some(v => v.id === 'draft'));
+  assert.equal(toasts[0][0], 'משהו השתבש. נסו שוב בעוד רגע');
+});

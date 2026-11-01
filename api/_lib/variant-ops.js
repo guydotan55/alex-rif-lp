@@ -105,3 +105,30 @@ export async function duplicateVariant({ projectId, sourceVariantId, sleep = ms 
     return failure(500, 'server_error');
   }
 }
+
+export async function deleteDraftVariant({ projectId, variantId }) {
+  const request = variantClient();
+  const id = encodeURIComponent(variantId);
+  try {
+    const [variant] = await readRows(request, `project_variants?id=eq.${id}&select=id,project_id,status,is_default&limit=1`);
+    if (!variant) return failure(404, 'not_found');
+    if (variant.project_id !== projectId) return failure(403, 'wrong_project');
+    if (variant.is_default) return failure(409, 'is_default');
+    if (variant.status !== 'draft') return failure(409, 'not_draft');
+    for (const table of ['leads', 'analytics_events', 'test_variants']) {
+      const rows = await readRows(request, `${table}?variant_id=eq.${id}&select=id&limit=1`);
+      if (rows.length) return failure(409, 'has_data');
+    }
+    const response = await request(`project_variants?id=eq.${id}&project_id=eq.${encodeURIComponent(projectId)}&status=eq.draft&is_default=eq.false`, {
+      method: 'DELETE', headers: { Prefer: 'return=representation' },
+    });
+    if (!response.ok) throw new Error(`Variant delete failed: ${response.status}`);
+    const deleted = await response.json();
+    if (!Array.isArray(deleted)) throw new Error('Invalid delete response');
+    if (!deleted.length) return failure(409, 'not_draft');
+    return { status: 200, body: { ok: true } };
+  } catch (err) {
+    console.error('deleteDraftVariant error:', err);
+    return failure(500, 'server_error');
+  }
+}

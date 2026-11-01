@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickSlug, pickName, duplicateVariant } from './variant-ops.js';
+import { pickSlug, pickName, duplicateVariant, deleteDraftVariant } from './variant-ops.js';
 
 const letters = [...'abcdefghijklmnopqrstuvwxyz'];
 for (const [slugs, opts, expected] of [
@@ -128,3 +128,55 @@ for (const mode of ['image', 'text', 'rejected fetch', 'rollback fails']) test(`
     });
   } finally { console.error = orig; }
 });
+
+const draft = { id: 'v1', project_id: 'p1', status: 'draft', is_default: false };
+function deleteRouter(url, opts) {
+  if (url.includes('/project_variants')) return { json: [draft] };
+  return { json: [] };
+}
+const deleteDraft = () => deleteDraftVariant({ projectId: 'p1', variantId: 'v1' });
+for (const [label, row, error, status] of [
+  ['missing', null, 'not_found', 404],
+  ['foreign', { ...draft, project_id: 'OTHER' }, 'wrong_project', 403],
+  ['default', { ...draft, is_default: true }, 'is_default', 409],
+  ['published', { ...draft, status: 'published' }, 'not_draft', 409],
+]) test(`delete refuses ${label}`, async () => {
+  await withFetch(() => ({ json: row ? [row] : [] }), async calls => {
+    assert.deepEqual(await deleteDraft(), { status, body: { error } });
+    assert.equal(calls.filter(c => c.method === 'DELETE').length, 0);
+  });
+});
+for (const table of ['leads', 'analytics_events', 'test_variants']) test(`delete refuses rows in ${table}`, async () => {
+  await withFetch((url, opts) => url.includes(`/${table}?`) ? { json: [{ id: 'data' }] } : deleteRouter(url, opts), async calls => {
+    assert.deepEqual(await deleteDraft(), { status: 409, body: { error: 'has_data' } });
+    assert.equal(calls.filter(c => c.method === 'DELETE').length, 0);
+  });
+});
+test('clean draft deletes conditionally with representation', async () => {
+  await withFetch(deleteRouter, async calls => {
+    assert.deepEqual(await deleteDraft(), { status: 200, body: { ok: true } });
+    const deletes = calls.filter(c => c.method === 'DELETE');
+    assert.equal(deletes.length, 1);
+    for (const part of ['id=eq.v1', 'project_id=eq.p1', 'status=eq.draft', 'is_default=eq.false']) assert.ok(deletes[0].url.includes(part));
+    assert.equal(deletes[0].opts.headers.Prefer, 'return=representation');
+  });
+});
+test('draft published between check and delete is refused', async () => {
+  await withFetch((url, opts) => opts.method === 'DELETE' ? { json: [] } : deleteRouter(url, opts), async () => {
+    assert.deepEqual(await deleteDraft(), { status: 409, body: { error: 'not_draft' } });
+  });
+});
+for (const [table, mode] of [['test_variants', 'non-ok'], ['leads', 'object'], ['analytics_events', 'reject'], ['project_variants', 'non-ok'], ['project_variants', 'object']]) {
+  test(`delete fails closed for ${table} ${mode}`, async () => {
+    await withFetch((url, opts) => {
+      if (url.includes(`/${table}?`)) {
+        if (mode === 'reject') throw new Error('network');
+        return mode === 'non-ok' ? { ok: false, status: 500 } : { json: { error: 'bad response' } };
+      }
+      return deleteRouter(url, opts);
+    }, async calls => {
+      assert.deepEqual(await deleteDraft(), { status: 500, body: { error: 'server_error' } });
+      assert.equal(calls.filter(c => c.method === 'DELETE').length, 0);
+    });
+  });
+}

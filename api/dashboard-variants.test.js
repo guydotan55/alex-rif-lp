@@ -184,3 +184,53 @@ test('duplicate response after a project switch does not enter the new project',
   await pending;
   assert.equal(context.projectVariants.length, 0);
 });
+
+test('rename normalization trims and enforces 1..40 characters', () => {
+  const normalize = fn('normalizeVariantName');
+  assert.equal(normalize('  א  '), 'א');
+  assert.equal(normalize(''), null);
+  assert.equal(normalize('א'.repeat(41)), null);
+  assert.equal(normalize('א'.repeat(40)), 'א'.repeat(40));
+});
+test('rename control is a sibling of active pill and clears state before awaiting', () => {
+  const { document } = parseHTML('<div id="variant-bar"></div>');
+  const variant = { id: 'v1', variant_name: 'name', status: 'draft' };
+  fn('renderVariantBar', { document, projectVariants: [variant], selectedVariant: variant, renameState: null, dupInFlight: false,
+    updateVariantBarVisibility: () => {}, variantDisplayLabel: fn('variantDisplayLabel'), esc: s => s,
+  })();
+  const pencil = document.querySelector('.variant-rename-btn');
+  assert.ok(pencil);
+  assert.equal(pencil.parentElement.id, 'variant-bar');
+  assert.equal(pencil.previousElementSibling.classList.contains('variant-pill'), true);
+  const body = extractFn('endRenameVariant');
+  assert.ok(body.indexOf('renameState = null') < body.indexOf('await'));
+  assert.match(body, /\.select\(\)/);
+});
+test('rename Enter then blur saves once; Escape then blur never saves', async () => {
+  for (const commit of [true, false]) {
+    const { document } = parseHTML('<input id="variant-rename-input" value="new">');
+    let writes = 0;
+    const variant = { id: 'v1', variant_name: 'old' };
+    const context = { document, console, renameState: { id: 'v1', original: 'old' }, selectedVariant: variant, projectVariants: [variant],
+      normalizeVariantName: fn('normalizeVariantName'), renderVariantBar: () => {}, showToast: () => {},
+      sb: { from: () => ({ update: () => { writes++; return { eq: () => ({ select: async () => ({ data: [{ id: 'v1' }], error: null }) }) }; } }) },
+    };
+    const end = fn('endRenameVariant', context);
+    const first = end(commit);
+    await end(true);
+    await first;
+    assert.equal(writes, commit ? 1 : 0);
+    assert.equal(variant.variant_name, commit ? 'new' : 'old');
+  }
+});
+test('rename with no returned rows reverts and shows exact Hebrew failure', async () => {
+  const { document } = parseHTML('<input id="variant-rename-input" value="new">');
+  const toasts = [], variant = { id: 'v1', variant_name: 'old' };
+  const context = { document, console, renameState: { id: 'v1', original: 'old' }, selectedVariant: variant, projectVariants: [variant],
+    normalizeVariantName: fn('normalizeVariantName'), renderVariantBar: () => {}, showToast: (...args) => toasts.push(args),
+    sb: { from: () => ({ update: () => ({ eq: () => ({ select: async () => ({ data: [], error: null }) }) }) }) },
+  };
+  await fn('endRenameVariant', context)(true);
+  assert.equal(variant.variant_name, 'old');
+  assert.equal(toasts[0][0], 'לא הצלחנו לשנות את השם. נסו שוב');
+});

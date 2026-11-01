@@ -1178,6 +1178,22 @@
   }
   .btn-add-variant:disabled { opacity: 0.5; cursor: default; }
   .btn-add-variant:hover { background: rgba(245, 200, 66, 0.2); }
+  .variant-rename-btn {
+    border: 0;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 5px;
+  }
+  .variant-rename-input {
+    font: inherit;
+    color: var(--text);
+    background: var(--navy);
+    border: 1px solid var(--gold);
+    border-radius: 12px;
+    padding: 5px 10px;
+    max-width: 220px;
+  }
   .variant-compare-container {
     display: flex;
     gap: 16px;
@@ -2026,6 +2042,7 @@ let selectedVariant = null;
 let editLoadSeq = 0, imgLoadSeq = 0;
 let editDirty = false;
 let dupInFlight = false;
+let renameState = null;
 let compareMode = false;
 // LP-generation abort control (cancel button + 90s timeout)
 let genController = null;
@@ -5484,6 +5501,7 @@ function updateVariantBarVisibility() {
 }
 
 function renderVariantBar() {
+  if (renameState) { endRenameVariant(false); return; }
   const bar = document.getElementById('variant-bar');
   if (!projectVariants || projectVariants.length === 0) {
     bar.style.display = 'none';
@@ -5497,9 +5515,64 @@ function renderVariantBar() {
     const statusDot = v.status === 'published'
       ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;margin-inline-start:4px;"></span>'
       : '';
-    return `<button class="variant-pill ${isActive ? 'active' : ''}" onclick="onVariantPillClick('${v.id}')">${esc(label)}${statusDot}</button>`;
+    return `<button class="variant-pill ${isActive ? 'active' : ''}" onclick="onVariantPillClick('${v.id}')">${esc(label)}${statusDot}</button>${isActive ? '<button class="variant-rename-btn" onclick="startRenameVariant()" title="שינוי שם">✎</button>' : ''}`;
   }).join('') + `<button class="btn-add-variant" onclick="showAddVariantModal()">+ וריאנט</button>
     <button class="btn-add-variant" id="btn-duplicate-variant" onclick="duplicateVariant()" title="יוצר עותק מדויק של הדף הזה, כדי לשנות בו דבר אחד ולבדוק מה עובד יותר טוב" ${!selectedVariant?.generated_html?.trim() || dupInFlight ? 'disabled' : ''}>${dupInFlight ? 'משכפל…' : 'שכפול'}</button>`;
+}
+
+function normalizeVariantName(raw) {
+  const name = raw.trim();
+  return name.length >= 1 && name.length <= 40 ? name : null;
+}
+
+function startRenameVariant() {
+  if (!selectedVariant || renameState) return;
+  const pill = document.querySelector('#variant-bar .variant-pill.active');
+  if (!pill) return;
+  const input = document.createElement('input');
+  input.id = 'variant-rename-input';
+  input.className = 'variant-rename-input';
+  input.maxLength = 40;
+  input.value = variantDisplayLabel(selectedVariant);
+  renameState = { id: selectedVariant.id, original: input.value };
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); endRenameVariant(true); }
+    if (event.key === 'Escape') { event.preventDefault(); endRenameVariant(false); }
+  });
+  input.addEventListener('blur', () => endRenameVariant(true));
+  pill.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+async function endRenameVariant(commit) {
+  if (!renameState) return;
+  const state = renameState;
+  const raw = document.getElementById('variant-rename-input')?.value || '';
+  renameState = null;
+  try {
+    if (!commit) return;
+    const variant_name = normalizeVariantName(raw);
+    if (!variant_name) {
+      showToast('השם צריך להיות באורך 1 עד 40 תווים', 'error');
+      return;
+    }
+    if (variant_name === state.original) return;
+    const { data, error } = await sb.from('project_variants').update({ variant_name }).eq('id', state.id).select();
+    if (error || !data?.length) {
+      console.error('rename variant failed:', error || 'No variant returned');
+      showToast('לא הצלחנו לשנות את השם. נסו שוב', 'error');
+      return;
+    }
+    const variant = projectVariants.find(v => v.id === state.id);
+    if (variant) variant.variant_name = variant_name;
+    if (selectedVariant?.id === state.id) selectedVariant.variant_name = variant_name;
+  } catch (err) {
+    console.error('rename variant error:', err);
+    showToast('לא הצלחנו לשנות את השם. נסו שוב', 'error');
+  } finally {
+    renderVariantBar();
+  }
 }
 
 async function duplicateVariant() {
@@ -5544,6 +5617,7 @@ async function duplicateVariant() {
 }
 
 async function selectVariant(variantId) {
+  if (renameState) endRenameVariant(false);
   selectedVariant = projectVariants.find(v => v.id === variantId) || null;
   renderVariantBar();
   await Promise.all([

@@ -1176,6 +1176,7 @@
     gap: 4px;
     white-space: nowrap;
   }
+  .btn-add-variant:disabled { opacity: 0.5; cursor: default; }
   .btn-add-variant:hover { background: rgba(245, 200, 66, 0.2); }
   .variant-compare-container {
     display: flex;
@@ -2024,6 +2025,7 @@ let projectVariants = [];
 let selectedVariant = null;
 let editLoadSeq = 0, imgLoadSeq = 0;
 let editDirty = false;
+let dupInFlight = false;
 let compareMode = false;
 // LP-generation abort control (cancel button + 90s timeout)
 let genController = null;
@@ -4839,6 +4841,7 @@ async function loadEditableContent() {
   }
 
   container.innerHTML = html;
+  container.querySelectorAll('input, textarea').forEach(el => { el.disabled = dupInFlight; });
 }
 
 // Render the event-details editor: each row pairs an emoji input (event_*_icon)
@@ -5004,6 +5007,7 @@ function prettifyKey(key) {
 }
 
 function clearEditField(key) {
+  if (dupInFlight) return;
   const el = document.querySelector(`[data-key="${key}"]`);
   if (!el) return;
   el.value = '';
@@ -5494,7 +5498,49 @@ function renderVariantBar() {
       ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;margin-inline-start:4px;"></span>'
       : '';
     return `<button class="variant-pill ${isActive ? 'active' : ''}" onclick="onVariantPillClick('${v.id}')">${esc(label)}${statusDot}</button>`;
-  }).join('') + `<button class="btn-add-variant" onclick="showAddVariantModal()">+ וריאנט</button>`;
+  }).join('') + `<button class="btn-add-variant" onclick="showAddVariantModal()">+ וריאנט</button>
+    <button class="btn-add-variant" id="btn-duplicate-variant" onclick="duplicateVariant()" title="יוצר עותק מדויק של הדף הזה, כדי לשנות בו דבר אחד ולבדוק מה עובד יותר טוב" ${!selectedVariant?.generated_html?.trim() || dupInFlight ? 'disabled' : ''}>${dupInFlight ? 'משכפל…' : 'שכפול'}</button>`;
+}
+
+async function duplicateVariant() {
+  if (dupInFlight || !guardUnsaved()) return;
+  if (!selectedProject || !selectedVariant?.generated_html?.trim()) return;
+  dupInFlight = true;
+  const projectId = selectedProject.id;
+  const sourceVariantId = selectedVariant.id;
+  const button = document.getElementById('btn-duplicate-variant');
+  if (button) {
+    button.textContent = 'משכפל…';
+    button.disabled = true;
+  }
+  document.querySelectorAll('#edit-fields input, #edit-fields textarea').forEach(el => { el.disabled = true; });
+  try {
+    const token = (await sb.auth.getSession())?.data?.session?.access_token;
+    const response = await fetch('/api/admin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'duplicate-variant', project_id: projectId, source_variant_id: sourceVariantId }),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      console.error('duplicate-variant failed:', response.status, body);
+      showToast(variantErrorMessage(body?.error, response.status), 'error');
+      return;
+    }
+    if (selectedProject?.id !== projectId) return;
+    projectVariants.push(body.variant);
+    await selectVariant(body.variant.id);
+    if (selectedVariant?.id === body.variant.id) {
+      switchTab('edit', document.querySelector('[data-tab="edit"]'));
+      showToast('נוצר עותק! עכשיו שנו בו דבר אחד בלבד', 'success');
+    }
+  } catch (err) {
+    console.error('duplicate-variant error:', err);
+    showToast(variantErrorMessage(), 'error');
+  } finally {
+    dupInFlight = false;
+    document.querySelectorAll('#edit-fields input, #edit-fields textarea').forEach(el => { el.disabled = false; });
+    renderVariantBar();
+  }
 }
 
 async function selectVariant(variantId) {

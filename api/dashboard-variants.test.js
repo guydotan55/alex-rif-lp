@@ -38,7 +38,7 @@ test('late Edit-text load A cannot replace newer B fields or content', async () 
   const { document } = parseHTML('<div id="edit-fields"></div>');
   const resolvers = {};
   const context = {
-    document, URLSearchParams, console, editLoadSeq: 0, selectedProject: { id: 'p1' }, selectedVariant: { id: 'A' }, projectContent: [], pendingHealedHtml: null,
+    document, URLSearchParams, console, editLoadSeq: 0, selectedProject: { id: 'p1' }, selectedVariant: { id: 'A' }, projectContent: [], pendingHealedHtml: null, dupInFlight: false,
     sb: { auth: { getSession: async () => ({ data: { session: { access_token: 'ok' } } }) } },
     fetch: url => new Promise(resolve => { resolvers[new URL('https://local/' + url).searchParams.get('variant_id')] = resolve; }),
     renderEditField: item => `<input value="${item.value}">`,
@@ -133,4 +133,54 @@ test('publish with zero returned variants changes neither local nor project stat
   assert.deepEqual(calls, ['project_variants']);
   assert.equal(toasts[0][0], errorMessages.not_found);
   assert.equal(btn.disabled, false);
+});
+
+test('duplicate action has synchronous re-entry guard and opens Edit-text', () => {
+  assert.match(extractFn('renderVariantBar'), /btn-duplicate-variant/);
+  const body = extractFn('duplicateVariant');
+  assert.ok(body.indexOf('dupInFlight = true') < body.indexOf('await'));
+  assert.match(body, /'duplicate-variant'/);
+  assert.match(body, /switchTab\('edit'/);
+});
+test('duplicate locks typing, rejects re-entry, then selects copy', async () => {
+  const { document } = parseHTML('<button id="btn-duplicate-variant"></button><div id="edit-fields"><input><textarea></textarea></div><button data-tab="edit"></button>');
+  let resolveSession;
+  const calls = [], tabs = [], toasts = [];
+  const context = { document, console, dupInFlight: false, selectedProject: { id: 'p1' }, selectedVariant: { id: 'src', generated_html: '<p>x</p>' }, projectVariants: [],
+    guardUnsaved: () => true, renderVariantBar: () => {}, variantErrorMessage: fn('variantErrorMessage'),
+    sb: { auth: { getSession: () => new Promise(resolve => { resolveSession = resolve; }) } },
+    fetch: async (_url, opts) => { calls.push(JSON.parse(opts.body)); return { ok: true, json: async () => ({ variant: { id: 'copy' } }) }; },
+    selectVariant: async id => { context.selectedVariant = { id }; }, switchTab: tab => tabs.push(tab), showToast: (...args) => toasts.push(args),
+  };
+  const duplicate = fn('duplicateVariant', context);
+  const first = duplicate();
+  assert.equal(context.dupInFlight, true);
+  assert.ok(document.querySelector('input').disabled);
+  await duplicate();
+  resolveSession({ data: { session: { access_token: 'ok' } } });
+  await first;
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].source_variant_id, 'src');
+  assert.equal(context.selectedVariant.id, 'copy');
+  assert.deepEqual(tabs, ['edit']);
+  assert.equal(toasts[0][0], 'נוצר עותק! עכשיו שנו בו דבר אחד בלבד');
+  assert.equal(context.dupInFlight, false);
+  assert.equal(document.querySelector('input').disabled, false);
+});
+test('duplicate response after a project switch does not enter the new project', async () => {
+  const { document } = parseHTML('<button id="btn-duplicate-variant"></button><div id="edit-fields"></div>');
+  let resolveFetch;
+  const context = { document, console, dupInFlight: false, selectedProject: { id: 'p1' }, selectedVariant: { id: 'src', generated_html: '<p>x</p>' }, projectVariants: [],
+    guardUnsaved: () => true, renderVariantBar: () => {}, variantErrorMessage: fn('variantErrorMessage'),
+    sb: { auth: { getSession: async () => ({ data: { session: { access_token: 'ok' } } }) } },
+    fetch: () => new Promise(resolve => { resolveFetch = resolve; }),
+    selectVariant: () => assert.fail('must not select across projects'), switchTab: () => assert.fail('must not switch tabs'), showToast: () => {},
+  };
+  const pending = fn('duplicateVariant', context)();
+  await new Promise(setImmediate);
+  context.selectedProject = { id: 'p2' };
+  context.projectVariants = [];
+  resolveFetch({ ok: true, json: async () => ({ variant: { id: 'copy' } }) });
+  await pending;
+  assert.equal(context.projectVariants.length, 0);
 });

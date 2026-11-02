@@ -112,6 +112,21 @@ export default async function handler(req, res) {
     const auth = await authenticateAndAuthorize(req, res, { projectId: project_id });
     if (!auth) return;
 
+    try {
+      const variantRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/project_variants?id=eq.${encodeURIComponent(variant_id)}&select=project_id&limit=1`,
+        { headers: SB_HEADERS }
+      );
+      if (!variantRes.ok) throw new Error(`Variant lookup failed: ${variantRes.status}`);
+      const variants = await variantRes.json();
+      if (!Array.isArray(variants)) throw new Error('Invalid variant lookup response');
+      if (!variants.length) return res.status(404).json({ error: "not_found" });
+      if (variants[0].project_id !== project_id) return res.status(403).json({ error: "wrong_project" });
+    } catch (err) {
+      console.error("save-content ownership error:", err);
+      return res.status(500).json({ error: "server_error" });
+    }
+
     // Build upsert rows
     const rows = items.map(({ key, value }) => ({
       project_id,

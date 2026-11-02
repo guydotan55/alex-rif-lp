@@ -1176,7 +1176,49 @@
     gap: 4px;
     white-space: nowrap;
   }
+  .btn-add-variant:disabled { opacity: 0.5; cursor: default; }
   .btn-add-variant:hover { background: rgba(245, 200, 66, 0.2); }
+  #undo-toast {
+    position: fixed;
+    bottom: 76px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    max-width: calc(100vw - 32px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--navy-card);
+    color: var(--text);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+  }
+  #undo-toast button, .variant-delete-btn {
+    font: inherit;
+    color: var(--text-dim);
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  #undo-toast button { color: var(--gold); }
+  .variant-delete-btn { font-size: 12px; padding: 5px; }
+  .variant-rename-btn {
+    border: 0;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 5px;
+  }
+  .variant-rename-input {
+    font: inherit;
+    color: var(--text);
+    background: var(--navy);
+    border: 1px solid var(--gold);
+    border-radius: 12px;
+    padding: 5px 10px;
+    max-width: 220px;
+  }
   .variant-compare-container {
     display: flex;
     gap: 16px;
@@ -1499,6 +1541,8 @@
 
         <button class="mobile-sidebar-toggle" onclick="toggleSidebar()" style="margin:12px 16px 0;">&#9776; הפרויקטים שלי</button>
 
+        <div class="variant-bar" id="variant-bar" style="display:none;"></div>
+
         <!-- Tabs -->
         <div class="tabs-bar">
           <button class="tab-btn active" data-tab="preview" onclick="switchTab('preview', this)">
@@ -1523,7 +1567,6 @@
 
         <!-- Tab: Preview -->
         <div class="tab-pane active" id="tab-preview">
-          <div class="variant-bar" id="variant-bar" style="display:none;"></div>
           <div class="preview-toolbar" id="preview-toolbar">
             <button class="btn-action" id="btn-generate" onclick="generateLP()">
               &#9881; ייצר דף נחיתה
@@ -1581,6 +1624,7 @@
             </div>
             <div class="save-bar">
               <button class="btn-action" id="btn-save-content" onclick="saveContent()">&#128190; שמור שינויים</button>
+              <button class="btn-action" id="btn-discard-content" onclick="loadEditableContent()" style="display:none">ביטול שינויים</button>
               <div class="ok-msg" id="save-content-ok" style="margin-top:0;display:none">נשמר בהצלחה!</div>
               <div class="err-msg" id="save-content-err" style="margin-top:0;display:none"></div>
             </div>
@@ -1979,6 +2023,7 @@
 
 <!-- Toast notification -->
 <div class="toast" id="toast"></div>
+<div id="undo-toast" role="status" style="display:none"><span>הטיוטה נמחקה</span><button onclick="undoDeleteVariant()">ביטול</button></div>
 
 <script>
 // ── Supabase Config ───────────────────────────────────────
@@ -2020,6 +2065,13 @@ let leadsPage = 1;
 const PAGE_SIZE = 20;
 let projectVariants = [];
 let selectedVariant = null;
+let editLoadSeq = 0, imgLoadSeq = 0;
+let editDirty = false;
+let dupInFlight = false;
+let renameState = null;
+let pendingDelete = null;
+const deletingVariantIds = new Set();
+let deleteStaging = false;
 let compareMode = false;
 // LP-generation abort control (cancel button + 90s timeout)
 let genController = null;
@@ -2032,6 +2084,11 @@ let selectedTest = null;
 let testVariants = [];
 let testEvents = [];
 let testLeads = [];
+
+document.getElementById('edit-fields').addEventListener('input', () => {
+  editDirty = true;
+  document.getElementById('btn-discard-content').style.display = '';
+});
 
 // ── Auth ──────────────────────────────────────────────────
 async function doLogin() {
@@ -2461,7 +2518,7 @@ async function showEditTestModal() {
       projectId: tv.project_id,
       variantId: tv.variant_id,
       projectName: tv.projects?.name || 'Unknown',
-      variants: variants || [],
+      variants: filterPending(variants || []),
       weight: tv.weight
     });
   }
@@ -2501,7 +2558,8 @@ async function toggleTestLP(checkbox) {
       return;
     }
 
-    const defaultVariant = variants?.find(v => v.is_default) || variants?.[0];
+    const availableVariants = filterPending(variants || []);
+    const defaultVariant = availableVariants.find(v => v.is_default) || availableVariants[0];
     if (!defaultVariant) {
       checkbox.checked = false;
       alert('לפרויקט זה אין וריאנטים מפורסמים');
@@ -2512,7 +2570,7 @@ async function toggleTestLP(checkbox) {
       projectId,
       variantId: defaultVariant.id,
       projectName,
-      variants: variants || [],
+      variants: availableVariants,
       weight: 1
     });
   } else {
@@ -3701,6 +3759,7 @@ function formatDateTime(d) {
 }
 
 async function selectProject(id) {
+  flushPendingDelete();
   selectedProject = projects.find(p => p.id === id);
   if (!selectedProject) return;
 
@@ -3727,7 +3786,7 @@ async function selectProject(id) {
     .eq('project_id', id)
     .order('created_at');
 
-  projectVariants = variants || [];
+  projectVariants = filterPending(variants || []);
 
   // Auto-select default variant, or first one
   selectedVariant = projectVariants.find(v => v.is_default) || projectVariants[0] || null;
@@ -3751,16 +3810,19 @@ function switchTab(name, btn) {
   document.querySelectorAll('#project-detail .tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   if (btn) btn.classList.add('active');
+  updateVariantBarVisibility();
   if (name === 'images') loadImageSlots();
 }
 
 // ── Image Slots Tab ─────────────────────────────────────
 async function loadImageSlots() {
+  const vid = selectedVariant?.id;
+  const seq = ++imgLoadSeq;
   if (!selectedProject) return;
   const container = document.getElementById('image-slots-list');
   container.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">טוען תמונות...</div>';
 
-  const variantId = selectedVariant?.id;
+  const variantId = vid;
   if (!variantId) {
     container.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">אין וריאנט נבחר</div>';
     return;
@@ -3770,6 +3832,7 @@ async function loadImageSlots() {
   const { data: images } = await sb.from('lp_image_content')
     .select('slot, image_url, source, enabled, display_size, display_shape')
     .eq('variant_id', variantId);
+  if (seq !== imgLoadSeq || selectedVariant?.id !== vid) return;
 
   const slots = [
     { key: 'hero', label: 'תמונת Hero', desc: 'התמונה הראשית בראש העמוד' },
@@ -4445,17 +4508,20 @@ async function togglePublish() {
   const btnPub = document.getElementById('btn-publish');
   btnPub.disabled = true;
 
+  try {
   if (selectedVariant) {
     // Publish/unpublish the variant
     const isPublished = selectedVariant.status === 'published';
     const newStatus = isPublished ? 'draft' : 'published';
 
-    const { error } = await sb.from('project_variants')
+    const { data, error } = await sb.from('project_variants')
       .update({ status: newStatus })
-      .eq('id', selectedVariant.id);
+      .eq('id', selectedVariant.id).select();
 
-    if (error) {
-      showToast('שגיאה: ' + error.message, 'error');
+    if (error || !data?.length) {
+      console.error('publish variant failed:', error || 'No variant returned');
+      const code = !error || error.status === 404 || JSON.stringify(error).includes('23503') ? 'not_found' : error.code;
+      showToast(variantErrorMessage(code, error?.status), 'error');
       btnPub.disabled = false;
       return;
     }
@@ -4477,7 +4543,8 @@ async function togglePublish() {
     const newStatus = isPublished ? 'draft' : 'published';
     const { error } = await sb.from('projects').update({ status: newStatus }).eq('id', selectedProject.id);
     if (error) {
-      showToast('שגיאה: ' + error.message, 'error');
+      console.error('publish project failed:', error);
+      showToast(variantErrorMessage(error.status === 404 || JSON.stringify(error).includes('23503') ? 'not_found' : error.code, error.status), 'error');
       btnPub.disabled = false;
       return;
     }
@@ -4493,6 +4560,12 @@ async function togglePublish() {
 
   const published = selectedVariant ? selectedVariant.status === 'published' : selectedProject.status === 'published';
   showToast(published ? 'הדף פורסם בהצלחה!' : 'הפרסום בוטל.', 'success');
+  } catch (err) {
+    console.error('togglePublish failed:', err);
+    showToast(variantErrorMessage(), 'error');
+  } finally {
+    btnPub.disabled = false;
+  }
 }
 
 function copyPublishedUrl() {
@@ -4514,24 +4587,33 @@ function copyPublishedUrl() {
 
 // ── Edit Text Tab ────────────────────────────────────────
 async function loadEditableContent() {
+  editDirty = false;
+  const discard = document.getElementById('btn-discard-content');
+  if (discard) discard.style.display = 'none';
+  const vid = selectedVariant?.id;
+  const seq = ++editLoadSeq;
   if (!selectedProject) return;
 
   const container = document.getElementById('edit-fields');
   container.innerHTML = '<div class="loading-block"><div class="small-spin"></div> טוען תוכן...</div>';
 
   const token = (await sb.auth.getSession())?.data?.session?.access_token;
+  if (seq !== editLoadSeq || selectedVariant?.id !== vid) return;
   const params = new URLSearchParams({ project_id: selectedProject.id });
-  if (selectedVariant) params.set('variant_id', selectedVariant.id);
+  if (vid) params.set('variant_id', vid);
   let data, error;
   try {
     const resp = await fetch(`/api/save-content?${params}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
+    if (seq !== editLoadSeq || selectedVariant?.id !== vid) return;
     data = resp.ok ? await resp.json() : null;
+    if (seq !== editLoadSeq || selectedVariant?.id !== vid) return;
     error = resp.ok ? null : { message: 'Failed to load content' };
   } catch (e) {
     // A rejected fetch (network/offline) must clear the spinner, not hang on it.
     console.error('editable_content fetch failed:', e);
+    if (seq !== editLoadSeq || selectedVariant?.id !== vid) return;
     container.innerHTML = '<div style="padding:20px;color:var(--text-dim);">טעינת התוכן נכשלה. בדקו את החיבור לאינטרנט ונסו שוב.</div>';
     return;
   }
@@ -4736,18 +4818,19 @@ async function loadEditableContent() {
 
     // Save backfilled items to DB
     if (newItems.length > 0) {
-      newItems.forEach(item => projectContent.push({ ...item, project_id: selectedProject.id, variant_id: selectedVariant?.id }));
+      newItems.forEach(item => projectContent.push({ ...item, project_id: selectedProject.id, variant_id: vid }));
       const saveToken = (await sb.auth.getSession())?.data?.session?.access_token;
+      if (seq !== editLoadSeq || selectedVariant?.id !== vid) return;
       fetch('/api/save-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${saveToken}` },
         body: JSON.stringify({
           project_id: selectedProject.id,
-          variant_id: selectedVariant?.id || null,
+          variant_id: vid || null,
           access_token: saveToken,
           items: newItems
         })
-      }).catch(() => {});
+      }).catch(e => console.error('backfill save failed:', e));
     }
   }
 
@@ -4806,6 +4889,7 @@ async function loadEditableContent() {
   }
 
   container.innerHTML = html;
+  container.querySelectorAll('input, textarea').forEach(el => { el.disabled = dupInFlight; });
 }
 
 // Render the event-details editor: each row pairs an emoji input (event_*_icon)
@@ -4971,9 +5055,12 @@ function prettifyKey(key) {
 }
 
 function clearEditField(key) {
+  if (dupInFlight) return;
   const el = document.querySelector(`[data-key="${key}"]`);
   if (!el) return;
   el.value = '';
+  editDirty = true;
+  document.getElementById('btn-discard-content').style.display = '';
   el.focus();
   // Remove the clear button since field is now empty
   const btn = el.closest('.edit-field')?.querySelector('.btn-clear-field');
@@ -5000,9 +5087,9 @@ async function saveContent() {
     return;
   }
 
-  const token = (await sb.auth.getSession())?.data?.session?.access_token;
-  let result, error;
+  let token, result, error;
   try {
+    token = (await sb.auth.getSession())?.data?.session?.access_token;
     const resp = await fetch('/api/save-content', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -5014,10 +5101,10 @@ async function saveContent() {
       })
     });
     result = await resp.json();
-    error = resp.ok ? null : { message: result.error || 'Unknown error' };
+    error = resp.ok ? null : { ...result, status: resp.status };
   } catch (e) {
     console.error('save-content:', e);
-    errEl.textContent = 'משהו השתבש בשמירה. בדקו את החיבור לאינטרנט ונסו שוב.';
+    errEl.textContent = variantErrorMessage();
     errEl.style.display = 'block';
     return;
   } finally {
@@ -5025,7 +5112,9 @@ async function saveContent() {
   }
 
   if (error) {
-    errEl.textContent = 'שגיאה: ' + error.message;
+    console.error('save-content failed:', error);
+    const code = error.status === 404 || JSON.stringify(error).includes('23503') ? 'not_found' : error.error;
+    errEl.textContent = variantErrorMessage(code, error.status);
     errEl.style.display = 'block';
     return;
   }
@@ -5049,13 +5138,18 @@ async function saveContent() {
         selectedVariant.generated_html = pendingHealedHtml;
         pendingHealedHtml = null;
       } else {
-        console.error('healed-html write-back failed:', wbResp.status);
+        const detail = await wbResp.json();
+        console.error('healed-html write-back failed:', wbResp.status, detail);
+        showToast(variantErrorMessage(wbResp.status === 404 || JSON.stringify(detail).includes('23503') ? 'not_found' : detail.error, wbResp.status), 'error');
       }
     } catch (e) {
       console.error('healed-html write-back error:', e);
+      showToast(variantErrorMessage(), 'error');
     }
   }
 
+  editDirty = false;
+  document.getElementById('btn-discard-content').style.display = 'none';
   okEl.style.display = 'block';
   setTimeout(() => okEl.style.display = 'none', 3500);
   const savedCount = result.saved_count || 0;
@@ -5397,36 +5491,273 @@ function pageRange(cur, tot) {
 }
 
 // ── Variant Management ───────────────────────────────────
+function variantErrorMessage(code, status) {
+  if (status === 401) return 'פג תוקף ההתחברות — התחברו מחדש';
+  const messages = {
+    not_found: 'הדף הזה נמחק — רעננו את העמוד',
+    has_data: 'אי אפשר למחוק — לדף הזה כבר יש נתונים',
+    not_draft: 'הדף הזה כבר מפורסם, אז אי אפשר למחוק אותו',
+    is_default: 'את הדף הראשי אי אפשר למחוק',
+    wrong_project: 'אין לכם גישה לדף הזה',
+    empty_source: 'אין עדיין מה לשכפל — קודם צריך ליצור את הדף',
+    slug_exhausted: 'הרבה אנשים משכפלים עכשיו. נסו שוב בעוד כמה שניות',
+    copy_failed: 'השכפול לא הצליח. שום דבר לא השתנה — אפשר לנסות שוב',
+    missing_fields: 'משהו השתבש. נסו שוב בעוד רגע',
+    server_error: 'משהו השתבש. נסו שוב בעוד רגע',
+  };
+  if (Object.hasOwn(messages, code)) return messages[code];
+  if (status === 403) return 'אין לכם גישה לפרויקט הזה. פנו למנהל/ת';
+  return 'משהו השתבש. נסו שוב בעוד רגע';
+}
+
+function guardUnsaved() {
+  if (editDirty) {
+    showToast('יש שינויים שלא נשמרו — שמרו או בטלו אותם קודם', 'error');
+    return false;
+  }
+  return true;
+}
+
+function onVariantPillClick(id) {
+  if (!guardUnsaved()) return;
+  selectVariant(id);
+}
+
+function variantDisplayLabel(v) {
+  return v.is_default && (!v.variant_name || v.variant_name === 'Default')
+    ? 'הדף הראשי' : v.variant_name || v.variant_slug;
+}
+
+function updateVariantBarVisibility() {
+  const emailActive = document.getElementById('tab-email').classList.contains('active');
+  document.getElementById('variant-bar').style.display = projectVariants.length && !emailActive ? 'flex' : 'none';
+}
+
 function renderVariantBar() {
+  if (renameState) { endRenameVariant(false); return; }
   const bar = document.getElementById('variant-bar');
   if (!projectVariants || projectVariants.length === 0) {
     bar.style.display = 'none';
     return;
   }
 
-  bar.style.display = 'flex';
+  updateVariantBarVisibility();
   bar.innerHTML = projectVariants.map(v => {
     const isActive = selectedVariant?.id === v.id;
-    const label = v.variant_name || v.variant_slug;
+    const label = variantDisplayLabel(v);
     const statusDot = v.status === 'published'
       ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;margin-inline-start:4px;"></span>'
       : '';
-    return `<button class="variant-pill ${isActive ? 'active' : ''}" onclick="selectVariant('${v.id}')">${esc(label)}${statusDot}</button>`;
-  }).join('') + `<button class="btn-add-variant" onclick="showAddVariantModal()">+ וריאנט</button>`;
+    return `<button class="variant-pill ${isActive ? 'active' : ''}" onclick="onVariantPillClick('${v.id}')">${esc(label)}${statusDot}</button>${isActive ? '<button class="variant-rename-btn" onclick="startRenameVariant()" title="שינוי שם">✎</button>' : ''}${isActive && v.status === 'draft' && !v.is_default ? '<button class="variant-delete-btn" onclick="stageDeleteVariant()">מחיקת טיוטה</button>' : ''}`;
+  }).join('') + `<button class="btn-add-variant" onclick="showAddVariantModal()">+ וריאנט</button>
+    <button class="btn-add-variant" id="btn-duplicate-variant" onclick="duplicateVariant()" title="יוצר עותק מדויק של הדף הזה, כדי לשנות בו דבר אחד ולבדוק מה עובד יותר טוב" ${!selectedVariant?.generated_html?.trim() || dupInFlight ? 'disabled' : ''}>${dupInFlight ? 'משכפל…' : 'שכפול'}</button>`;
+}
+
+function filterPending(list) {
+  return list.filter(v => v.id !== pendingDelete?.variant.id && !deletingVariantIds.has(v.id));
+}
+
+async function stageDeleteVariant() {
+  if (deleteStaging || !guardUnsaved()) return;
+  deleteStaging = true;
+  const target = selectedVariant;
+  if (!target || target.is_default || target.status !== 'draft') {
+    deleteStaging = false;
+    return;
+  }
+  let staged = null;
+  try {
+    if (pendingDelete) flushPendingDelete();
+    const projectId = selectedProject.id;
+    const token = (await sb.auth.getSession())?.data?.session?.access_token;
+    if (selectedVariant?.id !== target.id || selectedProject?.id !== projectId) return;
+    const defaultVariant = projectVariants.find(v => v.is_default);
+    const index = projectVariants.findIndex(v => v.id === target.id);
+    if (!defaultVariant || index < 0) return;
+    projectVariants.splice(index, 1);
+    staged = { variant: target, index, prevSelectedId: target.id, projectId, token, timer: null };
+    pendingDelete = staged;
+    await selectVariant(defaultVariant.id);
+    if (pendingDelete !== staged || selectedProject?.id !== projectId) return;
+    document.getElementById('undo-toast').style.display = 'flex';
+    staged.timer = setTimeout(() => flushPendingDelete(), 6000);
+  } catch (err) {
+    console.error('stage delete variant failed:', err);
+    if (staged && pendingDelete === staged) undoDeleteVariant();
+    showToast(variantErrorMessage(), 'error');
+  } finally {
+    deleteStaging = false;
+  }
+}
+
+function undoDeleteVariant() {
+  if (!pendingDelete) return;
+  const pending = pendingDelete;
+  pendingDelete = null;
+  clearTimeout(pending.timer);
+  document.getElementById('undo-toast').style.display = 'none';
+  if (selectedProject?.id !== pending.projectId) return;
+  if (!projectVariants.some(v => v.id === pending.variant.id)) projectVariants.splice(pending.index, 0, pending.variant);
+  selectVariant(pending.prevSelectedId).catch(err => {
+    console.error('undo variant selection failed:', err);
+    showToast(variantErrorMessage(), 'error');
+  });
+}
+
+function flushPendingDelete({ keepalive = false } = {}) {
+  if (!pendingDelete) return;
+  const pending = pendingDelete;
+  pendingDelete = null;
+  deletingVariantIds.add(pending.variant.id);
+  clearTimeout(pending.timer);
+  document.getElementById('undo-toast').style.display = 'none';
+  const restore = (body, status) => {
+    deletingVariantIds.delete(pending.variant.id);
+    if (selectedProject?.id === pending.projectId) {
+      if (!projectVariants.some(v => v.id === pending.variant.id)) projectVariants.splice(pending.index, 0, pending.variant);
+      renderVariantBar();
+    }
+    showToast(variantErrorMessage(body?.error, status), 'error');
+  };
+  try {
+    const request = fetch('/api/admin', {
+      method: 'POST', keepalive, headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete-draft-variant', project_id: pending.projectId, variant_id: pending.variant.id, access_token: pending.token }),
+    });
+    if (keepalive) {
+      request.then(response => {
+        if (!response.ok) console.error('pagehide delete variant refused:', pending.variant.id, response.status);
+      }).catch(err => console.error('pagehide delete variant failed:', pending.variant.id, err));
+      return;
+    }
+    return request.then(async response => {
+      if (response.ok) return;
+      const body = await response.json();
+      console.error('delete-draft-variant refused:', response.status, body);
+      restore(body, response.status);
+    }).catch(err => {
+      console.error('delete-draft-variant failed:', err);
+      restore();
+    });
+  } catch (err) {
+    console.error('delete-draft-variant request failed:', err);
+    if (!keepalive) restore();
+  }
+}
+
+window.addEventListener('pagehide', () => flushPendingDelete({ keepalive: true }));
+
+function normalizeVariantName(raw) {
+  const name = raw.trim();
+  return name.length >= 1 && name.length <= 40 ? name : null;
+}
+
+function startRenameVariant() {
+  if (!selectedVariant || renameState) return;
+  const pill = document.querySelector('#variant-bar .variant-pill.active');
+  if (!pill) return;
+  const input = document.createElement('input');
+  input.id = 'variant-rename-input';
+  input.className = 'variant-rename-input';
+  input.maxLength = 40;
+  input.value = variantDisplayLabel(selectedVariant);
+  renameState = { id: selectedVariant.id, original: input.value };
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); endRenameVariant(true); }
+    if (event.key === 'Escape') { event.preventDefault(); endRenameVariant(false); }
+  });
+  input.addEventListener('blur', () => endRenameVariant(true));
+  pill.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+async function endRenameVariant(commit) {
+  if (!renameState) return;
+  const state = renameState;
+  const raw = document.getElementById('variant-rename-input')?.value || '';
+  renameState = null;
+  try {
+    if (!commit) return;
+    const variant_name = normalizeVariantName(raw);
+    if (!variant_name) {
+      showToast('השם צריך להיות באורך 1 עד 40 תווים', 'error');
+      return;
+    }
+    if (variant_name === state.original) return;
+    const { data, error } = await sb.from('project_variants').update({ variant_name }).eq('id', state.id).select();
+    if (error || !data?.length) {
+      console.error('rename variant failed:', error || 'No variant returned');
+      showToast('לא הצלחנו לשנות את השם. נסו שוב', 'error');
+      return;
+    }
+    const variant = projectVariants.find(v => v.id === state.id);
+    if (variant) variant.variant_name = variant_name;
+    if (selectedVariant?.id === state.id) selectedVariant.variant_name = variant_name;
+  } catch (err) {
+    console.error('rename variant error:', err);
+    showToast('לא הצלחנו לשנות את השם. נסו שוב', 'error');
+  } finally {
+    renderVariantBar();
+  }
+}
+
+async function duplicateVariant() {
+  if (dupInFlight || !guardUnsaved()) return;
+  if (!selectedProject || !selectedVariant?.generated_html?.trim()) return;
+  dupInFlight = true;
+  const projectId = selectedProject.id;
+  const sourceVariantId = selectedVariant.id;
+  const button = document.getElementById('btn-duplicate-variant');
+  if (button) {
+    button.textContent = 'משכפל…';
+    button.disabled = true;
+  }
+  document.querySelectorAll('#edit-fields input, #edit-fields textarea').forEach(el => { el.disabled = true; });
+  try {
+    const token = (await sb.auth.getSession())?.data?.session?.access_token;
+    const response = await fetch('/api/admin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'duplicate-variant', project_id: projectId, source_variant_id: sourceVariantId }),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      console.error('duplicate-variant failed:', response.status, body);
+      showToast(variantErrorMessage(body?.error, response.status), 'error');
+      return;
+    }
+    if (selectedProject?.id !== projectId) return;
+    projectVariants.push(body.variant);
+    await selectVariant(body.variant.id);
+    if (selectedProject?.id === projectId && selectedVariant?.id === body.variant.id) {
+      switchTab('edit', document.querySelector('[data-tab="edit"]'));
+      showToast('נוצר עותק! עכשיו שנו בו דבר אחד בלבד', 'success');
+    }
+  } catch (err) {
+    console.error('duplicate-variant error:', err);
+    showToast(variantErrorMessage(), 'error');
+  } finally {
+    dupInFlight = false;
+    document.querySelectorAll('#edit-fields input, #edit-fields textarea').forEach(el => { el.disabled = false; });
+    renderVariantBar();
+  }
 }
 
 async function selectVariant(variantId) {
+  if (renameState) endRenameVariant(false);
   selectedVariant = projectVariants.find(v => v.id === variantId) || null;
   renderVariantBar();
   await Promise.all([
     loadPreview(),
     loadEditableContent(),
     loadAnalytics(),
-    loadLeads()
+    loadLeads(),
+    ...(document.getElementById('tab-images').classList.contains('active') ? [loadImageSlots()] : [])
   ]);
 }
 
 async function showAddVariantModal() {
+  if (!guardUnsaved()) return;
   if (!selectedProject) return;
 
   // Suggest next letter slug
@@ -5481,9 +5812,7 @@ async function showAddVariantModal() {
     }
   }
 
-  selectedVariant = data;
-  renderVariantBar();
-  loadPreview();
+  await selectVariant(data.id);
   showToast('וריאנט חדש נוצר!', 'success');
 }
 
